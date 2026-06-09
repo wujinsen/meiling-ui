@@ -1,0 +1,54 @@
+import type { Component } from 'vue'
+
+const CANDLELIGHT_DRAGON_VIEWS: Record<string, () => Promise<Component>> = {
+  'CandlelightDragon/cockpit/index': () => import('@/views/CandlelightDragon/cockpit/index.vue'),
+  'CandlelightDragon/bi/index': () => import('@/views/CandlelightDragon/bi/index.vue'),
+  'CandlelightDragon/userportrait/index': () => import('@/views/CandlelightDragon/userportrait/index.vue'),
+}
+
+const CRM_VIEWS: Record<string, () => Promise<Component>> = {
+  ...CANDLELIGHT_DRAGON_VIEWS,
+  'meiling/dashboard/index': () => import('@/views/DashboardView.vue'),
+  'meiling/profile/index': () => import('@/views/ProfileView.vue'),
+  'meiling/settings/index': () => import('@/views/SettingsView.vue'),
+  'system/user/profile/index': () => import('@/views/ProfileView.vue'),
+  'meiling/analytics/index': () => import('@/views/CandlelightDragon/bi/index.vue'),
+  'meiling/bi/index': () => import('@/views/CandlelightDragon/bi/index.vue'),
+  'bi/analysis/index': () => import('@/views/CandlelightDragon/bi/index.vue'),
+  'bi/analytics/index': () => import('@/views/CandlelightDragon/bi/index.vue'),
+  'analysis/bi/index': () => import('@/views/CandlelightDragon/bi/index.vue'),
+  'meiling/pulse/index': () => import('@/views/PulseView.vue'),
+  'meiling/workflows/index': () => import('@/views/WorkflowView.vue'),
+  'meiling/reports/index': () => import('@/views/ReportsView.vue'),
+  'meiling/persona/index': () => import('@/views/CandlelightDragon/userportrait/index.vue'),
+  'persona/index': () => import('@/views/CandlelightDragon/userportrait/index.vue'),
+  'bi/persona/index': () => import('@/views/CandlelightDragon/userportrait/index.vue'),
+  'user/persona/index': () => import('@/views/CandlelightDragon/userportrait/index.vue'),
+  'system/menu/index': () => import('@/views/system/MenuManageView.vue'),
+  'system/user/index': () => import('@/views/system/UserManageView.vue'),
+  'system/role/index': () => import('@/views/system/RoleManageView.vue'),
+  'system/post/index': () => import('@/views/system/PostManageView.vue'),
+  'system/dept/index': () => import('@/views/system/DeptManageView.vue'),
+  'system/dict/index': () => import('@/views/system/DictManageView.vue'),
+  'system/operlog/index': () => import('@/views/system/OperLogManageView.vue'),
+  'system/loginlog/index': () => import('@/views/system/LoginLogManageView.vue'),
+  'operation/project/index': () => import('@/views/operation/ProjectManageView.vue'),
+  'operation/server/index': () => import('@/views/operation/ServerManageView.vue'),
+  'operation/platform/index': () => import('@/views/operation/PlatformManageView.vue'),
+  'operation/component/index': () => import('@/views/operation/ComponentManageView.vue'),
+}
+
+const viewModules = import.meta.glob('@/views/**/*.vue')
+
+export function resolveViewComponent(component: string) {
+  if (CRM_VIEWS[component]) {
+    return CRM_VIEWS[component]
+  }
+
+  const viewPath = `/src/views/${component}.vue`
+  if (viewModules[viewPath]) {
+    return viewModules[viewPath] as () => Promise<Component>
+  }
+
+  return () => import('@/views/PlaceholderView.vue')
+}

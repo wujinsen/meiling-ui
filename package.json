@@ -1,0 +1,30 @@
+{
+  "name": "meiling-ui",
+  "description": "梅聆管理系统 — Vue 3 管理后台",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vueuse/motion": "^3.0.3",
+    "echarts": "^5.6.0",
+    "lucide-vue-next": "^0.511.0",
+    "vue": "^3.5.13",
+    "vue-echarts": "^7.0.3",
+    "vue-i18n": "^11.4.5",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.3",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vue-tsc": "^2.2.8"
+  }
+}

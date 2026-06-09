@@ -1,0 +1,213 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { addComponentApi, deleteComponentApi, getComponentApi, listComponentApi, updateComponentApi } from '@/api/operation'
+import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import AppModal from '@/components/ui/AppModal.vue'
+import { confirm } from '@/composables/useConfirm'
+import AppPagination from '@/components/ui/AppPagination.vue'
+import { showToast, formatDateTime } from '@/composables/useToast'
+import { API_SUCCESS_CODE } from '@/types/api'
+import { createEmptyComponent, type OperationComponent } from '@/types/operation'
+import { environmentI18nKey } from '@/utils/operationEnv'
+import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+
+const { t } = useI18n()
+
+const loading = ref(false)
+const saving = ref(false)
+const list = ref<OperationComponent[]>([])
+const total = ref(0)
+const modalOpen = ref(false)
+const modalTitle = ref('')
+const form = ref<OperationComponent>(createEmptyComponent())
+const isEdit = computed(() => form.value.id != null)
+
+const query = reactive({ pageNum: 1, pageSize: 10, componentName: '', serverIp: '', environment: '' as number | '' })
+
+function envLabel(env?: number) {
+  return t(environmentI18nKey(env))
+}
+
+function search() {
+  if (query.pageNum === 1) loadList()
+  else query.pageNum = 1
+}
+
+function resetQuery() {
+  query.componentName = ''
+  query.serverIp = ''
+  query.environment = ''
+  search()
+}
+
+async function loadList() {
+  loading.value = true
+  try {
+    const result = await listComponentApi({
+      pageNum: query.pageNum,
+      pageSize: query.pageSize,
+      componentName: query.componentName || undefined,
+      serverIp: query.serverIp || undefined,
+      environment: query.environment === '' ? undefined : (query.environment as 1 | 2 | 3 | 4),
+    })
+    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.component.loadFailed'))
+    list.value = result.data.list ?? []
+    total.value = result.data.total ?? 0
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.component.loadFailed'))
+  } finally {
+    loading.value = false
+  }
+}
+
+function openCreate() {
+  form.value = createEmptyComponent()
+  modalTitle.value = t('operation.common.add')
+  modalOpen.value = true
+}
+
+async function openEdit(row: OperationComponent) {
+  try {
+    const result = await getComponentApi(row.id!)
+    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.component.loadFailed'))
+    form.value = { ...result.data }
+    modalTitle.value = t('operation.common.edit')
+    modalOpen.value = true
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.component.loadFailed'))
+  }
+}
+
+function closeModal() {
+  modalOpen.value = false
+  form.value = createEmptyComponent()
+}
+
+async function submitForm() {
+  if (!form.value.componentName?.trim()) {
+    showToast('error', t('operation.component.nameRequired'))
+    return
+  }
+  saving.value = true
+  try {
+    const payload: OperationComponent = {
+      ...form.value,
+      componentName: form.value.componentName.trim(),
+      serverIp: form.value.serverIp?.trim() || undefined,
+      account: form.value.account?.trim() || undefined,
+      password: form.value.password || undefined,
+      deployPath: form.value.deployPath?.trim() || undefined,
+      port: form.value.port?.trim() || undefined,
+      version: form.value.version?.trim() || undefined,
+      environment: Number(form.value.environment ?? 1) as 1 | 2 | 3 | 4,
+      remark: form.value.remark?.trim() || undefined,
+    }
+    const result = isEdit.value ? await updateComponentApi(payload) : await addComponentApi(payload)
+    if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.saveFailed'))
+    showToast('success', isEdit.value ? t('operation.common.updateOk') : t('operation.common.createOk'))
+    closeModal()
+    await loadList()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.common.saveFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+async function removeRow(row: OperationComponent) {
+  if (!(await confirm({ message: t('operation.component.deleteConfirm', { name: row.componentName }) }))) return
+  try {
+    const result = await deleteComponentApi(row.id!)
+    if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.deleteFailed'))
+    showToast('success', t('operation.common.deleteOk'))
+    await loadList()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.common.deleteFailed'))
+  }
+}
+
+watch(() => query.pageNum, loadList)
+onMounted(loadList)
+</script>
+
+<template>
+  <div class="page-stack">
+    <div class="card p-5">
+      <div class="mb-4 flex flex-wrap items-end gap-3">
+        <form class="contents" @submit.prevent="search">
+          <label class="flex w-44 shrink-0 flex-col gap-1 text-sm">
+            <span class="text-gray-500">{{ t('operation.component.componentName') }}</span>
+            <input v-model="query.componentName" type="text" class="field-input" />
+          </label>
+          <label class="flex w-44 shrink-0 flex-col gap-1 text-sm">
+            <span class="text-gray-500">{{ t('operation.component.serverIp') }}</span>
+            <input v-model="query.serverIp" type="text" class="field-input" />
+          </label>
+          <label class="flex w-32 shrink-0 flex-col gap-1 text-sm">
+            <span class="text-gray-500">{{ t('operation.common.environment') }}</span>
+            <EnvironmentSelect v-model="query.environment" include-all />
+          </label>
+          <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
+          <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
+        </form>
+        <div class="toolbar-actions">
+          <button type="button" class="btn-primary shrink-0" @click="openCreate"><Plus class="h-4 w-4" /> {{ t('operation.common.add') }}</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
+        <table class="w-full min-w-[1040px] text-left text-sm">
+          <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">
+            <tr>
+              <th class="px-4 py-3">{{ t('operation.component.componentName') }}</th>
+              <th class="px-4 py-3">{{ t('operation.component.serverIp') }}</th>
+              <th class="px-4 py-3">{{ t('operation.component.port') }}</th>
+              <th class="px-4 py-3">{{ t('operation.component.version') }}</th>
+              <th class="px-4 py-3">{{ t('operation.component.deployPath') }}</th>
+              <th class="px-4 py-3">{{ t('operation.common.environment') }}</th>
+              <th class="px-4 py-3">{{ t('operation.common.createTime') }}</th>
+              <th class="px-4 py-3 text-right">{{ t('operation.common.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading"><td colspan="8" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
+            <tr v-else-if="!list.length"><td colspan="8" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
+            <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
+              <td class="px-4 py-3 font-medium">{{ row.componentName }}</td>
+              <td class="px-4 py-3">{{ row.serverIp || '-' }}</td>
+              <td class="px-4 py-3">{{ row.port || '-' }}</td>
+              <td class="px-4 py-3">{{ row.version || '-' }}</td>
+              <td class="max-w-[160px] truncate px-4 py-3">{{ row.deployPath || '-' }}</td>
+              <td class="px-4 py-3"><span class="badge bg-gray-100 dark:bg-white/10">{{ envLabel(row.environment) }}</span></td>
+              <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
+              <td class="px-4 py-3">
+                <div class="btn-action-group">
+                  <button type="button" class="btn-action-edit" @click="openEdit(row)"><Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}</button>
+                  <button type="button" class="btn-action-danger" @click="removeRow(row)"><Trash2 class="h-3.5 w-3.5" />{{ t('operation.common.delete') }}</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-if="total > 0" class="mt-4"><AppPagination v-model:page-num="query.pageNum" :page-size="query.pageSize" :total="total" /></div>
+    </div>
+    <AppModal :open="modalOpen" :title="modalTitle" wide @close="closeModal">
+      <form class="grid grid-cols-1 gap-4 sm:grid-cols-2" @submit.prevent="submitForm">
+        <label class="flex flex-col gap-1 text-sm sm:col-span-2"><span class="text-gray-500">{{ t('operation.component.componentName') }} *</span><input v-model="form.componentName" class="field-input" /></label>
+        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.serverIp') }}</span><input v-model="form.serverIp" class="field-input" /></label>
+        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.port') }}</span><input v-model="form.port" class="field-input" /></label>
+        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.account') }}</span><input v-model="form.account" class="field-input" /></label>
+        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.password') }}</span><input v-model="form.password" type="password" class="field-input" autocomplete="new-password" /></label>
+        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.version') }}</span><input v-model="form.version" class="field-input" /></label>
+        <label class="flex flex-col gap-1 text-sm sm:col-span-2"><span class="text-gray-500">{{ t('operation.component.deployPath') }}</span><input v-model="form.deployPath" class="field-input" /></label>
+        <label class="flex flex-col gap-1 text-sm sm:col-span-2"><span class="text-gray-500">{{ t('operation.common.environment') }}</span><EnvironmentSelect v-model="form.environment" /></label>
+        <label class="flex flex-col gap-1 text-sm sm:col-span-2"><span class="text-gray-500">{{ t('operation.common.remark') }}</span><textarea v-model="form.remark" rows="3" class="field-input resize-y" /></label>
+      </form>
+      <template #footer>
+        <button type="button" class="btn-ghost" @click="closeModal">{{ t('operation.common.cancel') }}</button>
+        <button type="button" class="btn-primary" :disabled="saving" @click="submitForm">{{ saving ? t('operation.common.saving') : t('operation.common.save') }}</button>
+      </template>
+    </AppModal>
+  </div>
+</template>

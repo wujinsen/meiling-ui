@@ -1,0 +1,4 @@
+/* 驾驶舱仅保留全屏时的页面底色，其余复用全局 style.css 组件类 */
+.cockpit-fullscreen {
+  @apply min-h-screen bg-surface-light p-6 dark:bg-surface-dark;
+}
