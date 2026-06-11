@@ -12,7 +12,10 @@ import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import MenuIconPicker from '@/components/system/MenuIconPicker.vue'
 import { confirm } from '@/composables/useConfirm'
+import { guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
+import { PERM } from '@/constants/permissions'
+import { useRouter } from 'vue-router'
 import { useTreeExpand } from '@/composables/useTreeExpand'
 import { loadDynamicRoutes } from '@/composables/usePermission'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -22,6 +25,7 @@ import { getMenuIconLabel, resolveMenuIcon } from '@/utils/menuIcons'
 import { ChevronDown, ChevronRight, FoldVertical, Pencil, Plus, RefreshCw, Search, Trash2, UnfoldVertical } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -63,7 +67,6 @@ const parentOptions = computed(() => {
 function menuTypeLabel(type?: string) {
   if (type === 'M') return t('system.menu.typeDir')
   if (type === 'C') return t('system.menu.typeMenu')
-  if (type === 'F') return t('system.menu.typeButton')
   return type || '-'
 }
 
@@ -96,13 +99,21 @@ function resetQuery() {
   loadMenus()
 }
 
+function openActionCatalog() {
+  router.push('/system/action').catch(() => {
+    showToast('error', t('system.action.routeMissing'))
+  })
+}
+
 function openCreate(parent?: SysMenu) {
+  if (!guardAction(PERM.MENU_ADD)) return
   form.value = createEmptyMenu(parent?.id ?? 0)
   modalTitle.value = t('system.menu.add')
   modalOpen.value = true
 }
 
 async function openEdit(row: SysMenu) {
+  if (!guardAction(PERM.MENU_EDIT)) return
   try {
     const result = await getMenuApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) {
@@ -124,12 +135,13 @@ function closeModal() {
 function validateForm() {
   if (!form.value.menuName?.trim()) return t('system.menu.nameRequired')
   if (form.value.orderNum == null || form.value.orderNum < 0) return t('system.menu.orderRequired')
-  if (form.value.menuType !== 'F' && !form.value.path?.trim()) return t('system.menu.pathRequired')
+  if (!form.value.path?.trim()) return t('system.menu.pathRequired')
   if (form.value.menuType === 'C' && !form.value.component?.trim()) return t('system.menu.componentRequired')
   return null
 }
 
 async function submitForm() {
+  if (!guardAction(form.value.id ? PERM.MENU_EDIT : PERM.MENU_ADD)) return
   const error = validateForm()
   if (error) {
     showToast('error', error)
@@ -141,6 +153,7 @@ async function submitForm() {
     const payload: SysMenu = {
       ...form.value,
       menuName: form.value.menuName.trim(),
+      routeName: form.value.routeName?.trim() || undefined,
       parentId: Number(form.value.parentId) || 0,
       orderNum: Number(form.value.orderNum) || 0,
       status: Number(form.value.status ?? 1),
@@ -165,6 +178,7 @@ async function submitForm() {
 }
 
 async function removeMenu(row: SysMenu) {
+  if (!guardAction(PERM.MENU_REMOVE)) return
   if (!(await confirm({ message: t('system.menu.deleteConfirm', { name: row.menuName }) }))) return
 
   try {
@@ -211,6 +225,9 @@ onMounted(loadMenus)
           </button>
         </form>
         <div class="toolbar-actions">
+          <button type="button" class="btn-ghost shrink-0" @click="openActionCatalog">
+            {{ t('system.action.catalog') }}
+          </button>
           <button type="button" class="btn-primary shrink-0" @click="openCreate()">
             <Plus class="h-4 w-4" /> {{ t('system.menu.add') }}
           </button>
@@ -329,9 +346,6 @@ onMounted(loadMenus)
                 <label class="inline-flex items-center gap-2 text-sm">
                   <input v-model="form.menuType" type="radio" value="C" /> {{ t('system.menu.typeMenu') }}
                 </label>
-                <label class="inline-flex items-center gap-2 text-sm">
-                  <input v-model="form.menuType" type="radio" value="F" /> {{ t('system.menu.typeButton') }}
-                </label>
               </div>
             </FormField>
           </div>
@@ -343,7 +357,7 @@ onMounted(loadMenus)
               <input v-model.number="form.orderNum" type="number" min="0" class="field-input" />
             </FormField>
           </div>
-          <div v-if="form.menuType !== 'F'" class="form-grid-row">
+          <div class="form-grid-row">
             <FormField :label="t('system.menu.icon')" horizontal>
               <MenuIconPicker v-model="form.icon" />
             </FormField>
@@ -356,12 +370,23 @@ onMounted(loadMenus)
               <input v-model="form.component" type="text" class="field-input" placeholder="system/menu/index" />
             </FormField>
           </div>
+          <div v-if="form.menuType === 'M' || form.menuType === 'C'" class="form-grid-row">
+            <FormField :label="t('system.menu.routeName')" horizontal class="form-field-span-2">
+              <input
+                v-model="form.routeName"
+                type="text"
+                class="field-input"
+                :placeholder="t('system.menu.routeNamePlaceholder')"
+              />
+              <p class="mt-1 text-xs text-gray-400">{{ t('system.menu.routeNameHint') }}</p>
+            </FormField>
+          </div>
           <div v-if="form.menuType !== 'M'" class="form-grid-row">
             <FormField :label="t('system.menu.perms')" horizontal class="form-field-span-2">
               <input v-model="form.perms" type="text" class="field-input" placeholder="system:menu:list" />
             </FormField>
           </div>
-          <div v-if="form.menuType !== 'F'" class="form-grid-row">
+          <div class="form-grid-row">
             <FormField :label="t('system.menu.status')" horizontal class="form-field-span-2">
               <div class="form-row-inline">
                 <label class="inline-flex items-center gap-2 text-sm">

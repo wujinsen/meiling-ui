@@ -5,8 +5,11 @@ import { cleanOperLogApi, deleteOperLogApi, listOperLogApi } from '@/api/operlog
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
+import { guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
+import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { BUSINESS_TYPE_OPTIONS, type OperLogQuery, type SysOperationLog } from '@/types/operlog'
 import { Eye, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
@@ -22,7 +25,7 @@ const detailRow = ref<SysOperationLog | null>(null)
 
 const query = reactive({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: DEFAULT_PAGE_SIZE,
   title: '',
   userName: '',
   businessType: '' as OperLogQuery['businessType'],
@@ -127,6 +130,7 @@ function closeDetail() {
 }
 
 async function removeLogs(ids: Array<number | string>) {
+  if (!guardAction(PERM.OPERLOG_REMOVE)) return
   if (!ids.length) return
   try {
     const result = await deleteOperLogApi(ids)
@@ -154,6 +158,7 @@ async function removeSelected() {
 }
 
 async function cleanAll() {
+  if (!guardAction(PERM.OPERLOG_REMOVE)) return
   if (!(await confirm({ message: t('system.operlog.cleanConfirm'), danger: true }))) return
   try {
     const result = await cleanOperLogApi()
@@ -169,7 +174,7 @@ async function cleanAll() {
 }
 
 watch(
-  () => query.pageNum,
+  () => [query.pageNum, query.pageSize],
   () => loadLogs(),
 )
 
@@ -296,7 +301,7 @@ onMounted(loadLogs)
       </div>
 
       <div v-if="total > 0" class="mt-4">
-        <AppPagination v-model:page-num="query.pageNum" :page-size="query.pageSize" :total="total" />
+        <AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" />
       </div>
     </div>
 

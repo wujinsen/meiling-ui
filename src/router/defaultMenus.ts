@@ -103,23 +103,39 @@ function hasMenuPath(menus: MenuVo[], path: string): boolean {
   return false
 }
 
-/** 前端内置、后端菜单通常不包含的侧栏项 */
-const frontendSidebarMenus: MenuVo[] = [settingsMenu]
+function hasFrontendMenu(menus: MenuVo[], extra: MenuVo): boolean {
+  if (extra.name === 'Dashboard' || extra.component === 'meiling/dashboard/index') {
+    return menus.some(
+      (menu) =>
+        menu.name === 'Dashboard' ||
+        menu.component === 'meiling/dashboard/index' ||
+        normalizeMenuPath(menu.path) === '',
+    )
+  }
+  const path = normalizeMenuPath(extra.path)
+  return path ? hasMenuPath(menus, path) : false
+}
 
-/** 侧栏：后端菜单 + 前端内置项（去重） */
+/** 前端内置、后端菜单通常不包含的侧栏项（工作台置顶，设置在末尾） */
+const frontendSidebarMenus: MenuVo[] = [dashboardMenu, settingsMenu]
+
+/** 侧栏：工作台置顶 + 后端菜单 + 设置（去重） */
 export function mergeSidebarMenus(backendMenus: MenuVo[]): MenuVo[] {
   const merged = [...backendMenus]
+  const prepend: MenuVo[] = []
+  const append: MenuVo[] = []
+
   for (const extra of frontendSidebarMenus) {
-    const path = normalizeMenuPath(extra.path)
-    if (path && !hasMenuPath(merged, path)) {
-      merged.push(extra)
-    }
+    if (hasFrontendMenu(merged, extra)) continue
+    if (extra.name === 'Dashboard') prepend.push(extra)
+    else append.push(extra)
   }
-  return merged
+
+  return [...prepend, ...merged, ...append]
 }
 
 /** 已由 staticRoutes 注册的路由，动态菜单里跳过避免重复 */
-export const frontendStaticMenuPaths = new Set(['profile', 'settings'])
+export const frontendStaticMenuPaths = new Set(['', 'profile', 'settings'])
 
 export function excludeStaticMenuRoutes(menus: MenuVo[]): MenuVo[] {
   return menus.filter((menu) => !frontendStaticMenuPaths.has(normalizeMenuPath(menu.path)))

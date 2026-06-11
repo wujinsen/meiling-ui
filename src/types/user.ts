@@ -35,6 +35,7 @@ export type UserRoleVo = {
 export type SysUserVo = UserVo & {
   postNames?: string
   language?: string
+  roleList?: SysRole[]
 }
 
 export type UserQuery = {
@@ -45,6 +46,7 @@ export type UserQuery = {
   status?: number | ''
   deptId?: number | string | ''
   roleId?: number | string
+  systemId?: number | string
   beginTime?: string
   endTime?: string
 }

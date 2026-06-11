@@ -1,0 +1,108 @@
+/** 与后端 PermissionConstants / sys_action 一致 */
+
+export const PERM = {
+
+  USER_LIST: 'system:user:list',
+
+  USER_ADD: 'system:user:add',
+
+  USER_EDIT: 'system:user:edit',
+
+  USER_REMOVE: 'system:user:remove',
+
+  USER_RESET_PWD: 'system:user:resetPwd',
+
+  USER_ASSIGN_ROLE: 'system:user:assignRole',
+
+  USER_ASSIGN_SYSTEM: 'system:user:assignSystem',
+
+  ROLE_LIST: 'system:role:list',
+
+  ROLE_ADD: 'system:role:add',
+
+  ROLE_EDIT: 'system:role:edit',
+
+  ROLE_REMOVE: 'system:role:remove',
+
+  MENU_LIST: 'system:menu:list',
+
+  MENU_ADD: 'system:menu:add',
+
+  MENU_EDIT: 'system:menu:edit',
+
+  MENU_REMOVE: 'system:menu:remove',
+
+  DEPT_LIST: 'system:dept:list',
+
+  DEPT_ADD: 'system:dept:add',
+
+  DEPT_EDIT: 'system:dept:edit',
+
+  DEPT_REMOVE: 'system:dept:remove',
+
+  POST_LIST: 'system:post:list',
+
+  POST_ADD: 'system:post:add',
+
+  POST_EDIT: 'system:post:edit',
+
+  POST_REMOVE: 'system:post:remove',
+
+  DICT_LIST: 'system:dict:list',
+
+  DICT_ADD: 'system:dict:add',
+
+  DICT_EDIT: 'system:dict:edit',
+
+  DICT_REMOVE: 'system:dict:remove',
+
+  SYSTEM_LIST: 'system:system:list',
+
+  SYSTEM_ADD: 'system:system:add',
+
+  SYSTEM_EDIT: 'system:system:edit',
+
+  SYSTEM_REMOVE: 'system:system:remove',
+
+  OPERLOG_LIST: 'system:operlog:list',
+
+  OPERLOG_REMOVE: 'system:operlog:remove',
+
+  LOGINLOG_LIST: 'system:loginlog:list',
+
+  LOGINLOG_REMOVE: 'system:loginlog:remove',
+
+  OP_PLATFORM_LIST: 'operation:platform:list',
+
+  OP_PLATFORM_ADD: 'operation:platform:add',
+
+  OP_PLATFORM_EDIT: 'operation:platform:edit',
+
+  OP_PLATFORM_REMOVE: 'operation:platform:remove',
+
+  OP_SERVER_LIST: 'operation:server:list',
+
+  OP_SERVER_ADD: 'operation:server:add',
+
+  OP_SERVER_EDIT: 'operation:server:edit',
+
+  OP_SERVER_REMOVE: 'operation:server:remove',
+
+  OP_PROJECT_LIST: 'operation:project:list',
+
+  OP_PROJECT_ADD: 'operation:project:add',
+
+  OP_PROJECT_EDIT: 'operation:project:edit',
+
+  OP_PROJECT_REMOVE: 'operation:project:remove',
+
+  OP_COMPONENT_LIST: 'operation:component:list',
+
+  OP_COMPONENT_ADD: 'operation:component:add',
+
+  OP_COMPONENT_EDIT: 'operation:component:edit',
+
+  OP_COMPONENT_REMOVE: 'operation:component:remove',
+
+} as const
+

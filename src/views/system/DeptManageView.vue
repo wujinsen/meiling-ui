@@ -12,7 +12,9 @@ import {
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
+import { guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
+import { PERM } from '@/constants/permissions'
 import { useTreeExpand } from '@/composables/useTreeExpand'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyDept, type DeptQuery, type DeptVo, type SysDept } from '@/types/dept'
@@ -141,12 +143,14 @@ function resetQuery() {
 }
 
 function openCreate(parent?: SysDept) {
+  if (!guardAction(PERM.DEPT_ADD)) return
   form.value = createEmptyDept(parent?.id ?? 0)
   modalTitle.value = t('system.dept.add')
   modalOpen.value = true
 }
 
 async function openEdit(row: SysDept) {
+  if (!guardAction(PERM.DEPT_EDIT)) return
   try {
     const result = await getDeptApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) {
@@ -172,6 +176,7 @@ function validateForm() {
 }
 
 async function submitForm() {
+  if (!guardAction(form.value.id ? PERM.DEPT_EDIT : PERM.DEPT_ADD)) return
   const error = validateForm()
   if (error) {
     showToast('error', error)
@@ -206,6 +211,7 @@ async function submitForm() {
 }
 
 async function removeDept(row: SysDept) {
+  if (!guardAction(PERM.DEPT_REMOVE)) return
   if (!(await confirm({ message: t('system.dept.deleteConfirm', { name: row.deptName }) }))) return
 
   try {

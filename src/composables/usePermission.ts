@@ -6,7 +6,8 @@ import { getDefaultMenus, mergeSidebarMenus, excludeStaticMenuRoutes } from '@/r
 import { LAYOUT_ROUTE_NAME } from '@/router/constants'
 import { STATIC_ROUTE_NAMES } from '@/router/staticRoutes'
 import { generateRoutesFromMenus, filterSidebarMenus } from '@/router/routeGenerator'
-import { clearMenus, getStoredMenus, getToken, saveMenus } from '@/utils/authSession'
+import { sortMenuTree } from '@/utils/tree'
+import { clearMenus, getToken, saveMenus } from '@/utils/authSession'
 
 /** 侧栏菜单（来自 getRouters） */
 const menus = ref<MenuVo[]>(resolveInitialMenus())
@@ -17,9 +18,9 @@ const usingBackendMenus = ref(false)
 let loadingPromise: Promise<boolean> | null = null
 
 function resolveInitialMenus() {
-  const stored = getStoredMenus()
-  if (stored.length) return stored
-  return getToken() ? [] : getDefaultMenus()
+  // 已登录时不在本地缓存中恢复旧菜单，避免菜单结构调整后侧栏不更新
+  if (getToken()) return []
+  return getDefaultMenus()
 }
 
 function collectRouteNames(routeList: RouteRecordRaw[], names: string[] = []) {
@@ -45,49 +46,94 @@ function filterBackendOnlyRoutes(routeList: RouteRecordRaw[]): RouteRecordRaw[] 
     if (isStaticRoute(route)) continue
 
     const children = route.children?.length ? filterBackendOnlyRoutes(route.children) : undefined
-    if (children?.length || route.component) {
-      filtered.push(children?.length ? { ...route, children } : route)
+
+    if (children?.length) {
+      let redirect = route.redirect
+      if (redirect && typeof redirect === 'object' && 'name' in redirect && redirect.name) {
+        const childNames = new Set(children.map((child) => child.name).filter(Boolean) as string[])
+        if (!childNames.has(redirect.name as string)) {
+          redirect = children[0]?.name ? { name: children[0].name as string } : undefined
+        }
+      }
+      filtered.push({ ...route, children, redirect })
+      continue
+    }
+
+    if (route.component) {
+      filtered.push(route)
     }
   }
 
   return filtered
 }
 
+function addDynamicRoutesSafely(router: import('vue-router').Router, routeList: RouteRecordRaw[]) {
+  for (const route of routeList) {
+    try {
+      router.addRoute(LAYOUT_ROUTE_NAME, route)
+    } catch (error) {
+      console.error('[routes] failed to register route:', route.name ?? route.path, error)
+    }
+  }
+}
+
 export function initPermission() {
   menus.value = resolveInitialMenus()
+}
+
+async function applyMenusToRouter(menuSource: MenuVo[], options: { fromBackend: boolean; isFallback?: boolean }) {
+  const { router } = await import('@/router')
+  const isFallback = options.isFallback ?? false
+  usingBackendMenus.value = options.fromBackend && !isFallback
+
+  const orderedSource = isFallback ? menuSource : sortMenuTree(menuSource)
+  const sidebarSource = isFallback ? getDefaultMenus() : mergeSidebarMenus(orderedSource)
+  menus.value = filterSidebarMenus(sidebarSource)
+  saveMenus(menus.value)
+
+  const dynamicRoutes = isFallback
+    ? generateRoutesFromMenus(excludeStaticMenuRoutes(getDefaultMenus()))
+    : filterBackendOnlyRoutes(generateRoutesFromMenus(orderedSource))
+
+  const names = collectRouteNames(dynamicRoutes)
+
+  for (const name of addedRouteNames.value) {
+    if (router.hasRoute(name)) router.removeRoute(name)
+  }
+
+  for (const route of dynamicRoutes) {
+    addDynamicRoutesSafely(router, [route])
+  }
+
+  addedRouteNames.value = names
+  routesLoaded.value = true
+}
+
+export async function loadDynamicRoutesFromMenus(menuList: MenuVo[]) {
+  clearMenus()
+  const { router } = await import('@/router')
+  for (const name of addedRouteNames.value) {
+    if (router.hasRoute(name)) router.removeRoute(name)
+  }
+  addedRouteNames.value = []
+  routesLoaded.value = false
+  await applyMenusToRouter(menuList, { fromBackend: true })
+  return true
 }
 
 export async function loadDynamicRoutes(force = false) {
   if (routesLoaded.value && !force) return true
   if (loadingPromise && !force) return loadingPromise
 
+  if (force) {
+    clearMenus()
+  }
+
   loadingPromise = (async () => {
-    const { router } = await import('@/router')
     const result = await getRoutersApi()
-
     const isFallback = result.msg === '使用前端默认菜单'
-    usingBackendMenus.value = !isFallback
-
-    const menuSource = isFallback ? getDefaultMenus() : mergeSidebarMenus(result.data ?? [])
-    menus.value = filterSidebarMenus(menuSource)
-    saveMenus(menus.value)
-
-    const dynamicRoutes = isFallback
-      ? generateRoutesFromMenus(excludeStaticMenuRoutes(getDefaultMenus()))
-      : filterBackendOnlyRoutes(generateRoutesFromMenus(result.data ?? []))
-
-    const names = collectRouteNames(dynamicRoutes)
-
-    for (const name of addedRouteNames.value) {
-      if (router.hasRoute(name)) router.removeRoute(name)
-    }
-
-    for (const route of dynamicRoutes) {
-      router.addRoute(LAYOUT_ROUTE_NAME, route)
-    }
-
-    addedRouteNames.value = names
-    routesLoaded.value = true
+    const menuSource = isFallback ? getDefaultMenus() : (result.data ?? [])
+    await applyMenusToRouter(menuSource, { fromBackend: true, isFallback })
     return true
   })().finally(() => {
     loadingPromise = null
@@ -122,6 +168,7 @@ export function usePermission() {
     routesLoaded,
     usingBackendMenus,
     loadDynamicRoutes,
+    loadDynamicRoutesFromMenus,
     resetDynamicRoutes,
   }
 }

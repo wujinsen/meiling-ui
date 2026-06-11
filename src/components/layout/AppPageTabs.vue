@@ -4,10 +4,13 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { CopyMinus, X, XCircle } from 'lucide-vue-next'
 import { usePageTabs } from '@/composables/usePageTabs'
-import { normalizePath } from '@/utils/breadcrumb'
+import { usePermission } from '@/composables/usePermission'
+import { normalizePath, findMenuByPath } from '@/utils/breadcrumb'
+import { resolveMenuLabel } from '@/utils/menuLabel'
 
 const route = useRoute()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const { menus } = usePermission()
 const { tabs, switchTab, closeTab, closeOtherTabs, closeAllTabs } = usePageTabs()
 
 const scrollerRef = ref<HTMLElement | null>(null)
@@ -16,6 +19,8 @@ const activeKey = computed(() => route.fullPath)
 
 function tabLabel(tab: (typeof tabs.value)[number]) {
   if (tab.titleKey) return t(tab.titleKey)
+  const menu = findMenuByPath(menus.value, tab.path)
+  if (menu) return resolveMenuLabel(menu, t, locale.value)
   return tab.title || t('nav.dashboard')
 }
 

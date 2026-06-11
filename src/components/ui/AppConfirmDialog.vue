@@ -21,6 +21,7 @@ const cancelText = computed(() => state.options.cancelText ?? t('confirm.cancel'
   <AppModal
     :open="state.open"
     :title="title"
+    elevated
     close-on-backdrop
     @close="settle(false)"
   >

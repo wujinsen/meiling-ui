@@ -1,9 +1,15 @@
 import type { RouteRecordRaw } from 'vue-router'
 
 /** 不依赖后端菜单、所有登录用户均可访问的路由 */
-export const STATIC_ROUTE_NAMES = new Set(['profile', 'settings'])
+export const STATIC_ROUTE_NAMES = new Set(['Dashboard', 'profile', 'settings'])
 
 export const staticAppRoutes: RouteRecordRaw[] = [
+  {
+    path: '',
+    name: 'Dashboard',
+    component: () => import('@/views/DashboardView.vue'),
+    meta: { titleKey: 'nav.dashboard' },
+  },
   {
     path: 'profile',
     name: 'profile',

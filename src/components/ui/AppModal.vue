@@ -7,10 +7,14 @@ const props = withDefaults(
     open: boolean
     title: string
     wide?: boolean
+    /** 列表类弹窗，比 wide 更宽 */
+    extraWide?: boolean
     /** 点击遮罩是否关闭，表单弹窗建议 false */
     closeOnBackdrop?: boolean
+    /** 嵌套在其它弹窗之上（如确认框） */
+    elevated?: boolean
   }>(),
-  { closeOnBackdrop: false },
+  { closeOnBackdrop: false, elevated: false, extraWide: false },
 )
 
 const emit = defineEmits<{
@@ -25,13 +29,16 @@ useEscapeClose(toRef(props, 'open'), () => emit('close'))
     <Transition name="palette">
       <div
         v-if="open"
-        class="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-8 backdrop-blur-sm"
+        :class="[
+          'fixed inset-0 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-8 backdrop-blur-sm',
+          elevated ? 'z-[90]' : 'z-[80]',
+        ]"
         @click.self="closeOnBackdrop && emit('close')"
       >
         <div
           :class="[
             'w-full rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-surface-dark-card',
-            wide ? 'max-w-3xl' : 'max-w-lg',
+            extraWide ? 'max-w-6xl' : wide ? 'max-w-3xl' : 'max-w-lg',
           ]"
           role="dialog"
           aria-modal="true"

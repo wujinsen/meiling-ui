@@ -1,4 +1,4 @@
-export type MenuType = 'M' | 'C' | 'F'
+export type MenuType = 'M' | 'C'
 
 export type SysMenu = {
   id?: number | string
@@ -8,6 +8,8 @@ export type SysMenu = {
   menuNameJa?: string
   path?: string
   component?: string
+  /** Vue Router name，对应后端 route_name */
+  routeName?: string
   menuType: MenuType | string
   perms?: string
   status?: number
@@ -31,6 +33,7 @@ export function createEmptyMenu(parentId: number | string = 0): SysMenu {
     menuType: 'M',
     path: '',
     component: '',
+    routeName: '',
     perms: '',
     icon: '',
     orderNum: 0,

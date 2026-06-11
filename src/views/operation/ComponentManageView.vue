@@ -5,7 +5,10 @@ import { addComponentApi, deleteComponentApi, getComponentApi, listComponentApi,
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import { confirm } from '@/composables/useConfirm'
+import { guardAction } from '@/composables/useActionPermissions'
+import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyComponent, type OperationComponent } from '@/types/operation'
@@ -23,7 +26,7 @@ const modalTitle = ref('')
 const form = ref<OperationComponent>(createEmptyComponent())
 const isEdit = computed(() => form.value.id != null)
 
-const query = reactive({ pageNum: 1, pageSize: 10, componentName: '', serverIp: '', environment: '' as number | '' })
+const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, componentName: '', serverIp: '', environment: '' as number | '' })
 
 function envLabel(env?: number) {
   return t(environmentI18nKey(env))
@@ -62,12 +65,14 @@ async function loadList() {
 }
 
 function openCreate() {
+  if (!guardAction(PERM.OP_COMPONENT_ADD)) return
   form.value = createEmptyComponent()
   modalTitle.value = t('operation.common.add')
   modalOpen.value = true
 }
 
 async function openEdit(row: OperationComponent) {
+  if (!guardAction(PERM.OP_COMPONENT_EDIT)) return
   try {
     const result = await getComponentApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.component.loadFailed'))
@@ -85,6 +90,7 @@ function closeModal() {
 }
 
 async function submitForm() {
+  if (!guardAction(isEdit.value ? PERM.OP_COMPONENT_EDIT : PERM.OP_COMPONENT_ADD)) return
   if (!form.value.componentName?.trim()) {
     showToast('error', t('operation.component.nameRequired'))
     return
@@ -116,6 +122,7 @@ async function submitForm() {
 }
 
 async function removeRow(row: OperationComponent) {
+  if (!guardAction(PERM.OP_COMPONENT_REMOVE)) return
   if (!(await confirm({ message: t('operation.component.deleteConfirm', { name: row.componentName }) }))) return
   try {
     const result = await deleteComponentApi(row.id!)
@@ -127,7 +134,7 @@ async function removeRow(row: OperationComponent) {
   }
 }
 
-watch(() => query.pageNum, loadList)
+watch(() => [query.pageNum, query.pageSize], loadList)
 onMounted(loadList)
 </script>
 
@@ -190,7 +197,7 @@ onMounted(loadList)
           </tbody>
         </table>
       </div>
-      <div v-if="total > 0" class="mt-4"><AppPagination v-model:page-num="query.pageNum" :page-size="query.pageSize" :total="total" /></div>
+      <div v-if="total > 0" class="mt-4"><AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" /></div>
     </div>
     <AppModal :open="modalOpen" :title="modalTitle" wide @close="closeModal">
       <form class="grid grid-cols-1 gap-4 sm:grid-cols-2" @submit.prevent="submitForm">

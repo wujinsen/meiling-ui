@@ -28,14 +28,23 @@ async function onSubmit() {
 
   loading.value = true
   try {
-    await login({
+    const result = await login({
       userName: userName.value.trim(),
       password: password.value,
     })
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-    await router.replace(redirect || '/')
+    const nextPath =
+      'nextPath' in result && typeof result.nextPath === 'string'
+        ? result.nextPath
+        : typeof route.query.redirect === 'string'
+          ? route.query.redirect
+          : '/'
+    await router.replace(nextPath || '/')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : t('auth.failed')
+    if (e instanceof Error && e.message === 'NO_SYSTEM_ASSIGNED') {
+      error.value = t('system.portal.noSystem')
+    } else {
+      error.value = e instanceof Error ? e.message : t('auth.failed')
+    }
   } finally {
     loading.value = false
   }

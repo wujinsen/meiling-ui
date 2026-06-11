@@ -57,6 +57,11 @@ function findMenuChain(
   return null
 }
 
+export function findMenuByPath(menus: MenuVo[], targetPath: string): MenuVo | undefined {
+  const chain = findMenuChain(menus, targetPath)
+  return chain?.[chain.length - 1]?.menu
+}
+
 function buildFromMatched(
   route: RouteLocationNormalizedLoaded,
   t: (key: string) => string,
@@ -103,7 +108,7 @@ export function buildBreadcrumbs(
     return chain.map((node, index) => {
       const isLast = index === chain.length - 1
       return {
-        label: isLast ? resolveRouteTitle(route, t) : menuLabel(node.menu, t, locale),
+        label: menuLabel(node.menu, t, locale),
         to: isLast ? undefined : normalizePath(node.path),
       }
     })

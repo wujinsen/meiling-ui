@@ -1,27 +1,94 @@
 <script setup lang="ts">
-import { Languages } from 'lucide-vue-next'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { Check, ChevronDown, Languages } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 import { setLocale, useLocale, type AppLocale } from '@/i18n'
 
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 const { options } = useLocale()
 
-function onChange(e: Event) {
-  setLocale((e.target as HTMLSelectElement).value as AppLocale)
+const open = ref(false)
+const rootRef = ref<HTMLElement | null>(null)
+
+const currentOption = computed(() => options.find((opt) => opt.value === locale.value) ?? options[0])
+
+function toggle() {
+  open.value = !open.value
 }
+
+function close() {
+  open.value = false
+}
+
+function pick(value: AppLocale) {
+  if (value !== locale.value) setLocale(value)
+  close()
+}
+
+function onDocClick(e: MouseEvent) {
+  if (!open.value || !rootRef.value) return
+  if (!rootRef.value.contains(e.target as Node)) close()
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') close()
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocClick)
+  document.addEventListener('keydown', onKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
+  document.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <template>
-  <div class="relative">
-    <Languages class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-    <select
-      :value="locale"
-      class="h-9 appearance-none rounded-lg border border-gray-200 bg-white py-0 pl-8 pr-7 text-sm font-medium text-gray-700 outline-none transition hover:bg-gray-50 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 dark:border-white/10 dark:bg-surface-dark-elevated dark:text-gray-200 dark:hover:bg-white/5 dark:focus:border-brand-500 dark:focus:ring-brand-500/20"
-      @change="onChange"
+  <div ref="rootRef" class="relative">
+    <button
+      type="button"
+      class="lang-switcher-trigger"
+      :aria-expanded="open"
+      aria-haspopup="listbox"
+      @click.stop="toggle"
     >
-      <option v-for="opt in options" :key="opt.value" :value="opt.value">
-        {{ opt.label }}
-      </option>
-    </select>
+      <span class="lang-switcher-icon">
+        <Languages class="h-4 w-4" />
+      </span>
+      <span class="lang-switcher-label">{{ currentOption.label }}</span>
+      <ChevronDown class="lang-switcher-chevron" :class="open && 'rotate-180'" />
+    </button>
+
+    <Transition name="lang-menu">
+      <div
+        v-if="open"
+        class="lang-switcher-menu"
+        role="listbox"
+        :aria-activedescendant="`locale-${locale}`"
+        @click.stop
+      >
+        <p class="lang-switcher-menu-title">{{ t('settings.appearance.language') }}</p>
+        <ul class="lang-switcher-options">
+          <li v-for="opt in options" :key="opt.value">
+            <button
+              :id="`locale-${opt.value}`"
+              type="button"
+              role="option"
+              :aria-selected="locale === opt.value"
+              :class="['lang-switcher-option', locale === opt.value && 'lang-switcher-option-active']"
+              @click="pick(opt.value)"
+            >
+              <span class="lang-switcher-option-main">
+                <span class="lang-switcher-option-label">{{ opt.label }}</span>
+                <span class="lang-switcher-option-hint">{{ opt.hint }}</span>
+              </span>
+              <Check v-if="locale === opt.value" class="lang-switcher-check h-4 w-4 shrink-0" />
+            </button>
+          </li>
+        </ul>
+      </div>
+    </Transition>
   </div>
 </template>

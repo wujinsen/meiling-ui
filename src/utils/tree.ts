@@ -1,3 +1,25 @@
+import type { MenuVo } from '@/types/api'
+
+function menuOrderNum(menu: { orderNum?: number }) {
+  return menu.orderNum ?? 0
+}
+
+/** 按 orderNum 递归排序菜单树（侧栏、路由与库表顺序一致） */
+export function sortMenuTreeByOrderNum<T extends { orderNum?: number; children?: T[] | null }>(
+  menus: T[],
+): T[] {
+  return [...menus]
+    .sort((a, b) => menuOrderNum(a) - menuOrderNum(b))
+    .map((menu) => {
+      if (!menu.children?.length) return menu
+      return { ...menu, children: sortMenuTreeByOrderNum(menu.children) }
+    })
+}
+
+export function sortMenuTree(menus: MenuVo[]): MenuVo[] {
+  return sortMenuTreeByOrderNum(menus)
+}
+
 export function buildTree<T extends Record<string, unknown>>(
   items: T[],
   options: { idKey?: string; parentKey?: string; rootId?: number | string } = {},

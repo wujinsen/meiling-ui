@@ -16,6 +16,7 @@ import LanguageSwitcher from '@/components/ui/LanguageSwitcher.vue'
 
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import AppUserMenu from '@/components/layout/AppUserMenu.vue'
+import SystemSwitcher from '@/components/layout/SystemSwitcher.vue'
 
 import { useCommandPalette } from '@/composables/useCommandPalette'
 
@@ -115,7 +116,7 @@ const isPulse = computed(() => route.name === 'pulse')
 
         >
 
-          {{ t('common.search') }}
+          {{ t('command.placeholder') }}
 
         </span>
 
@@ -148,6 +149,8 @@ const isPulse = computed(() => route.name === 'pulse')
         <Search class="h-5 w-5" />
 
       </button>
+
+      <SystemSwitcher />
 
       <LanguageSwitcher />
 

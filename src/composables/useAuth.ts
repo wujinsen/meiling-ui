@@ -2,9 +2,11 @@ import { computed, ref } from 'vue'
 import { loginApi, logoutApi } from '@/api/auth'
 import type { LoginPayload } from '@/types/api'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { loadDynamicRoutes, resetDynamicRoutes } from '@/composables/usePermission'
+import { useSystemPortal } from '@/composables/useSystemPortal'
+import { resetDynamicRoutes } from '@/composables/usePermission'
 import { resetPageTabs } from '@/composables/usePageTabs'
 import { resetToast } from '@/composables/useToast'
+import { clearActionPermissions } from '@/composables/useActionPermissions'
 import { clearAuthSession, getStoredUser, getToken, saveAuthSession } from '@/utils/authSession'
 
 const token = ref<string | null>(getToken())
@@ -29,9 +31,9 @@ export function useAuth() {
     token.value = result.data.token
     user.value = result.data.user
     saveAuthSession(result.data.token, result.data.user)
-    await resetDynamicRoutes()
-    await loadDynamicRoutes(true)
-    return result
+    const { handlePostLogin } = useSystemPortal()
+    const nextPath = await handlePostLogin(result.data)
+    return { ...result, nextPath }
   }
 
   async function logout() {
@@ -41,6 +43,8 @@ export function useAuth() {
       token.value = null
       user.value = null
       clearAuthSession()
+      clearActionPermissions()
+      useSystemPortal().clearPortalState()
       resetPageTabs()
       resetToast()
       await resetDynamicRoutes()

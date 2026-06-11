@@ -51,9 +51,9 @@ export function useLocale() {
     locale,
     setLocale,
     options: [
-      { value: 'zh' as const, label: '中文' },
-      { value: 'en' as const, label: 'EN' },
-      { value: 'ja' as const, label: '日本語' },
+      { value: 'zh' as const, label: '中文', hint: '简体中文' },
+      { value: 'en' as const, label: 'English', hint: 'English' },
+      { value: 'ja' as const, label: '日本語', hint: 'Japanese' },
     ],
   }
 }

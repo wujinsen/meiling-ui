@@ -5,7 +5,10 @@ import { addProjectApi, deleteProjectApi, getProjectApi, listProjectApi, updateP
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import { confirm } from '@/composables/useConfirm'
+import { guardAction } from '@/composables/useActionPermissions'
+import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyProject, type OperationProject } from '@/types/operation'
@@ -23,7 +26,7 @@ const modalTitle = ref('')
 const form = ref<OperationProject>(createEmptyProject())
 const isEdit = computed(() => form.value.id != null)
 
-const query = reactive({ pageNum: 1, pageSize: 10, projectName: '', serverIp: '', environment: '' as number | '' })
+const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, projectName: '', serverIp: '', environment: '' as number | '' })
 
 function envLabel(env?: number) {
   return t(environmentI18nKey(env))
@@ -62,12 +65,14 @@ async function loadList() {
 }
 
 function openCreate() {
+  if (!guardAction(PERM.OP_PROJECT_ADD)) return
   form.value = createEmptyProject()
   modalTitle.value = t('operation.common.add')
   modalOpen.value = true
 }
 
 async function openEdit(row: OperationProject) {
+  if (!guardAction(PERM.OP_PROJECT_EDIT)) return
   try {
     const result = await getProjectApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.project.loadFailed'))
@@ -85,6 +90,7 @@ function closeModal() {
 }
 
 async function submitForm() {
+  if (!guardAction(isEdit.value ? PERM.OP_PROJECT_EDIT : PERM.OP_PROJECT_ADD)) return
   if (!form.value.projectName?.trim()) {
     showToast('error', t('operation.project.nameRequired'))
     return
@@ -115,6 +121,7 @@ async function submitForm() {
 }
 
 async function removeRow(row: OperationProject) {
+  if (!guardAction(PERM.OP_PROJECT_REMOVE)) return
   if (!(await confirm({ message: t('operation.project.deleteConfirm', { name: row.projectName }) }))) return
   try {
     const result = await deleteProjectApi(row.id!)
@@ -126,7 +133,7 @@ async function removeRow(row: OperationProject) {
   }
 }
 
-watch(() => query.pageNum, loadList)
+watch(() => [query.pageNum, query.pageSize], loadList)
 onMounted(loadList)
 </script>
 
@@ -191,7 +198,7 @@ onMounted(loadList)
           </tbody>
         </table>
       </div>
-      <div v-if="total > 0" class="mt-4"><AppPagination v-model:page-num="query.pageNum" :page-size="query.pageSize" :total="total" /></div>
+      <div v-if="total > 0" class="mt-4"><AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" /></div>
     </div>
     <AppModal :open="modalOpen" :title="modalTitle" wide @close="closeModal">
       <form class="grid grid-cols-1 gap-4 sm:grid-cols-2" @submit.prevent="submitForm">

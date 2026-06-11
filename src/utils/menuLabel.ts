@@ -26,6 +26,11 @@ const MENU_COMPONENT_TITLE_KEYS: Record<string, string> = {
   'system/post/index': 'menu.navPost',
   'system/dept/index': 'menu.navDept',
   'system/dict/index': 'menu.navDict',
+  'system/action/index': 'system.action.catalog',
+  'system/operlog/index': 'menu.navOperlog',
+  'system/loginlog/index': 'menu.navLoginlog',
+  'system/system/index': 'system.manage.title',
+  'system/system-user/index': 'system.userAssign.title',
   'operation/project/index': 'operation.project.title',
   'operation/server/index': 'operation.server.title',
   'operation/platform/index': 'operation.platform.title',
@@ -54,11 +59,17 @@ const MENU_NAME_TITLE_KEYS: Record<string, string> = {
   部门管理: 'menu.navDept',
   岗位管理: 'menu.navPost',
   字典管理: 'menu.navDict',
+  系统注册: 'system.manage.title',
+  系统用户分配: 'system.userAssign.title',
+  分配系统: 'system.userAssign.title',
   运维管理: 'menu.navOperation',
   项目管理: 'operation.project.title',
   服务器管理: 'operation.server.title',
   平台管理: 'operation.platform.title',
   组件管理: 'operation.component.title',
+  动作目录: 'system.action.catalog',
+  操作日志: 'menu.navOperlog',
+  登录日志: 'menu.navLoginlog',
   数据驾驶舱: 'cockpit.title',
   数据分析: 'nav.analytics',
   用户画像: 'persona.title',
@@ -75,7 +86,7 @@ function pickLocalizedName(menu: LocalizedMenu, locale: string) {
   return undefined
 }
 
-function resolveTitleKey(menu: MenuVo) {
+export function resolveTitleKey(menu: MenuVo) {
   const meta = menu.meta as MenuMeta | undefined
   if (meta?.titleKey) return meta.titleKey
 

@@ -1,16 +1,22 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { mySystemsApi } from '@/api/system'
 import {
   getUserProfileApi,
   resetUserPasswordApi,
   updateUserLanguageApi,
   updateUserProfileApi,
 } from '@/api/user'
+import { isMockAuthEnabled } from '@/api/auth'
 import { useAuth } from '@/composables/useAuth'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
+import type { SysRole } from '@/types/role'
+import type { SystemVo } from '@/types/system'
 import type { SysUserVo } from '@/types/user'
 import { setLocale, type AppLocale } from '@/i18n'
+import { getStoredSystemList } from '@/utils/authSession'
+import { hasFullPermission } from '@/utils/privilege'
 
 export type ProfileTab = 'info' | 'password'
 
@@ -41,6 +47,26 @@ export function useProfile() {
   const profile = ref<SysUserVo | null>(null)
   const form = ref<SysUserVo>(createProfileForm())
   const passwordForm = ref(createPasswordForm())
+  const roles = ref<SysRole[]>([])
+  const systems = ref<SystemVo[]>([])
+
+  const isFullAccess = computed(() => hasFullPermission(profile.value?.userName ?? user.value?.userName))
+
+  function applyRoles(data: SysUserVo) {
+    if (data.roleList?.length) {
+      roles.value = data.roleList.filter((role) => role.roleName)
+      return
+    }
+    if (data.roleNames?.trim()) {
+      roles.value = data.roleNames
+        .split(/[,，]/)
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .map((roleName) => ({ roleName }))
+      return
+    }
+    roles.value = []
+  }
 
   function applyProfile(data: SysUserVo) {
     profile.value = data
@@ -57,6 +83,17 @@ export function useProfile() {
       status: data.status,
       createTime: data.createTime,
     }
+    applyRoles(data)
+  }
+
+  async function loadSystems() {
+    if (isMockAuthEnabled()) {
+      systems.value = getStoredSystemList()
+      return
+    }
+
+    const systemResult = await mySystemsApi()
+    systems.value = systemResult.code === API_SUCCESS_CODE ? (systemResult.data ?? []) : []
   }
 
   async function load() {
@@ -67,6 +104,7 @@ export function useProfile() {
         throw new Error(result.msg || t('profile.loadFailed'))
       }
       applyProfile(result.data)
+      await loadSystems()
     } catch (e) {
       const fallback: SysUserVo = {
         id: user.value?.id,
@@ -78,6 +116,7 @@ export function useProfile() {
         language: 'zh',
       }
       applyProfile(fallback)
+      await loadSystems()
       showToast('error', e instanceof Error ? e.message : t('profile.loadFailed'))
     } finally {
       loading.value = false
@@ -192,6 +231,9 @@ export function useProfile() {
     profile,
     form,
     passwordForm,
+    roles,
+    systems,
+    isFullAccess,
     load,
     saveBasic,
     changePassword,

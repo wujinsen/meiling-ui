@@ -1,3 +1,5 @@
+import type { SystemVo } from '@/types/system'
+
 export type MoliResult<T = unknown> = {
   code: number
   msg?: string
@@ -24,7 +26,9 @@ export type MenuVo = {
   menuName?: string
   menuNameEn?: string
   menuNameJa?: string
+  /** Vue Router name，来自后端 route_name */
   name?: string
+  routeName?: string
   parentId?: number | string
   path?: string
   component?: string
@@ -45,7 +49,16 @@ export type LoginVo = {
   token: string
   user: SysUser
   menuVoList?: MenuVo[]
+  systemList?: SystemVo[]
+  currentSystem?: SystemVo | null
+  systemPortalEnabled?: boolean
+  /** 超管登录时为 true，拥有全部菜单与 *:*:* 权限 */
+  fullPermission?: boolean
+  /** 有效权限码 */
+  permissions?: string[]
 }
+
+export const API_AUTH_ERROR_CODE = 10009
 
 export type LoginPayload = {
   userName: string

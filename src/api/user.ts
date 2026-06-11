@@ -1,6 +1,7 @@
 import { request } from '@/api/http'
 import { isMockAuthEnabled } from '@/api/auth'
 import type { PageRes } from '@/types/page'
+import type { UserSystemVo } from '@/types/system'
 import type { SysUserVo, UserQuery, UserRoleVo, UserVo } from '@/types/user'
 import type { SysUser } from '@/types/api'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -74,6 +75,7 @@ function buildMockProfile(): SysUserVo {
     sex: 1,
     deptName: '梅聆科技',
     postNames: '系统管理员',
+    roleList: [{ id: 2, roleName: '系统管理员' }],
     status: 1,
     language: 'zh',
     createTime: Date.now() - 86400000 * 90,
@@ -112,6 +114,17 @@ export async function insertUserRoleApi(data: { userId: number | string; roleIds
   })
 }
 
+export async function getSystemByUserIdApi(userId: number | string) {
+  return request<UserSystemVo>(`/user/getSystemByUserId/${userId}`, { method: 'GET' })
+}
+
+export async function insertUserSystemApi(data: { userId: number | string; systemIds: Array<number | string> }) {
+  return request<boolean>('/user/insertUserSystem', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  })
+}
+
 export async function getUserByRoleApi(params?: UserQuery) {
   return request<PageRes<UserVo>>(
     `/user/getUserByRole${buildQuery(params as Record<string, string | number | undefined>)}`,
@@ -122,6 +135,20 @@ export async function getUserByRoleApi(params?: UserQuery) {
 export async function unauthorizedUsersApi(params?: UserQuery) {
   return request<PageRes<UserVo>>(
     `/user/unauthorizedUsers${buildQuery(params as Record<string, string | number | undefined>)}`,
+    { method: 'GET' },
+  )
+}
+
+export async function getUserBySystemApi(params?: UserQuery) {
+  return request<PageRes<UserVo>>(
+    `/user/getUserBySystem${buildQuery(params as Record<string, string | number | undefined>)}`,
+    { method: 'GET' },
+  )
+}
+
+export async function unauthorizedUsersBySystemApi(params?: UserQuery) {
+  return request<PageRes<UserVo>>(
+    `/user/unauthorizedUsersBySystem${buildQuery(params as Record<string, string | number | undefined>)}`,
     { method: 'GET' },
   )
 }

@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getToken, clearAuthSession } from '@/utils/authSession'
+import { ensurePermissionsLoaded } from '@/composables/useActionPermissions'
+import { getToken, clearAuthSession, getStoredCurrentSystem, isPortalEnabledStored } from '@/utils/authSession'
+import { useSystemPortal } from '@/composables/useSystemPortal'
 import {
   getPermissionMenus,
   isUsingBackendMenus,
@@ -21,6 +23,12 @@ export const router = createRouter({
       meta: { public: true, titleKey: 'auth.signIn' },
     },
     {
+      path: '/system-select',
+      name: 'system-select',
+      component: () => import('@/views/SystemSelectView.vue'),
+      meta: { requiresAuth: true, titleKey: 'system.portal.title', skipMenuGuard: true },
+    },
+    {
       path: '/',
       name: LAYOUT_ROUTE_NAME,
       component: () => import('@/layouts/AppLayout.vue'),
@@ -39,6 +47,9 @@ router.beforeEach(async (to) => {
 
   if (to.meta.public) {
     if (loggedIn && to.name === 'login') {
+      if (isPortalEnabledStored() && !getStoredCurrentSystem()) {
+        return { path: '/system-select' }
+      }
       return { path: '/' }
     }
     return true
@@ -51,12 +62,33 @@ router.beforeEach(async (to) => {
     }
   }
 
-  try {
-    await loadDynamicRoutes()
-  } catch {
-    clearAuthSession()
-    await resetDynamicRoutes()
-    return { name: 'login' }
+  if (isPortalEnabledStored()) {
+    const { syncPortalAccess } = useSystemPortal()
+    const sync = await syncPortalAccess()
+    if (!sync.allowed && to.name !== 'system-select') {
+      return { path: '/system-select' }
+    }
+  }
+
+  // 门户未选系统：先跳转，避免在 getRouters 上长时间阻塞
+  if (isPortalEnabledStored() && !getStoredCurrentSystem() && to.name !== 'system-select') {
+    return { path: '/system-select' }
+  }
+
+  // 选系统页不依赖动态菜单路由
+  if (to.name !== 'system-select') {
+    try {
+      await ensurePermissionsLoaded()
+      await loadDynamicRoutes()
+    } catch {
+      clearAuthSession()
+      await resetDynamicRoutes()
+      return { name: 'login' }
+    }
+  }
+
+  if (to.meta.skipMenuGuard) {
+    return true
   }
 
   if (isUsingBackendMenus()) {
@@ -68,8 +100,11 @@ router.beforeEach(async (to) => {
     const allowedMenus = getPermissionMenus()
     if (!isPathAllowed(to.path, allowedMenus)) {
       const fallback = resolveDefaultPath(allowedMenus)
-      if (to.path !== fallback) {
+      if (to.path !== fallback && isPathAllowed(fallback, allowedMenus)) {
         return { path: fallback }
+      }
+      if (to.path !== '/profile') {
+        return { path: '/profile' }
       }
     }
   }

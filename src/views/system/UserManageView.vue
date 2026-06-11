@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { listDeptApi, getDeptTreeListApi } from '@/api/dept'
 import { allPostApi, listPostApi } from '@/api/post'
 import {
@@ -18,9 +19,12 @@ import { getRoleAllApi } from '@/api/role'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppStatusPill from '@/components/ui/AppStatusPill.vue'
 import FormField from '@/components/ui/FormField.vue'
+import { PERM } from '@/constants/permissions'
+import { guardActionWithRefresh } from '@/composables/useActionPermissions'
 import { confirm } from '@/composables/useConfirm'
 import { showToast } from '@/composables/useToast'
 import AppPagination from '@/components/ui/AppPagination.vue'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import DeptTreePanel from '@/components/system/DeptTreePanel.vue'
 import DeptTreeSelect from '@/components/system/DeptTreeSelect.vue'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -29,9 +33,10 @@ import type { SysPost } from '@/types/post'
 import type { SysRole } from '@/types/role'
 import { createEmptyUser, type UserQuery, type UserVo } from '@/types/user'
 import { buildTree, collectTreeIds, normalizeNestedTree, sortTreeByOrderNum } from '@/utils/tree'
-import { KeyRound, Pencil, Plus, RefreshCw, Search, Shield, Trash2 } from 'lucide-vue-next'
+import { KeyRound, LayoutGrid, Pencil, Plus, RefreshCw, Search, Shield, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const loading = ref(false)
 const deptLoading = ref(false)
@@ -59,7 +64,7 @@ const roleAssignSaving = ref(false)
 
 const query = reactive({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: DEFAULT_PAGE_SIZE,
   userName: '',
   telephone: '',
   status: '' as UserQuery['status'],
@@ -271,6 +276,46 @@ async function removeSelected() {
   await removeUsers(ids)
 }
 
+async function onAddClick() {
+  if (!(await guardActionWithRefresh(PERM.USER_ADD))) return
+  void openCreate()
+}
+
+async function onEditClick(row: UserVo) {
+  if (!(await guardActionWithRefresh(PERM.USER_EDIT))) return
+  void openEdit(row)
+}
+
+async function onDeleteClick(row: UserVo) {
+  if (!(await guardActionWithRefresh(PERM.USER_REMOVE))) return
+  void removeUser(row)
+}
+
+async function onBatchDeleteClick() {
+  if (!(await guardActionWithRefresh(PERM.USER_REMOVE))) return
+  void removeSelected()
+}
+
+async function onResetPwdClick(row: UserVo) {
+  if (!(await guardActionWithRefresh(PERM.USER_RESET_PWD))) return
+  openResetPwd(row)
+}
+
+async function onAssignRolesClick(row: UserVo) {
+  if (!(await guardActionWithRefresh(PERM.USER_ASSIGN_ROLE))) return
+  void openAssignRoles(row)
+}
+
+async function onAssignSystemsClick(row: UserVo) {
+  if (!(await guardActionWithRefresh(PERM.USER_ASSIGN_SYSTEM))) return
+  void openAssignSystems(row)
+}
+
+async function onToggleStatusClick(row: UserVo) {
+  if (!(await guardActionWithRefresh(PERM.USER_EDIT))) return
+  void toggleStatus(row)
+}
+
 async function openCreate() {
   form.value = createEmptyUser()
   if (query.deptId) form.value.deptId = query.deptId
@@ -477,6 +522,11 @@ function toggleRoleCheck(roleId: number | string, checked: boolean) {
   checkedRoleIds.value = next
 }
 
+function openAssignSystems(row: UserVo) {
+  if (!row.id) return
+  router.push({ name: 'SystemUserAssign', query: { userId: String(row.id) } })
+}
+
 async function submitAssignRoles() {
   if (!roleAssignTarget.value?.id) return
 
@@ -500,7 +550,7 @@ async function submitAssignRoles() {
 }
 
 watch(
-  () => query.pageNum,
+  () => [query.pageNum, query.pageSize],
   () => loadUsers(),
 )
 
@@ -554,10 +604,10 @@ onMounted(async () => {
           </button>
         </form>
         <div class="toolbar-actions">
-          <button type="button" class="btn-ghost shrink-0" :disabled="!hasSelection" @click="removeSelected">
+          <button type="button" class="btn-ghost shrink-0" :disabled="!hasSelection" @click="onBatchDeleteClick">
             <Trash2 class="h-4 w-4" /> {{ t('system.user.deleteBatch') }}
           </button>
-          <button type="button" class="btn-primary shrink-0" @click="openCreate">
+          <button type="button" class="btn-primary shrink-0" @click="onAddClick">
             <Plus class="h-4 w-4" /> {{ t('system.user.add') }}
           </button>
         </div>
@@ -624,21 +674,25 @@ onMounted(async () => {
                   :active="row.status === 1"
                   :disabled="isProtectedUser(row)"
                   :label="t('system.user.status')"
-                  @click="toggleStatus(row)"
+                  @click="onToggleStatusClick(row)"
                 />
               </td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ formatTime(row.createTime) }}</td>
               <td class="px-4 py-3">
                 <div class="btn-action-group">
-                  <button type="button" class="btn-action-edit" @click="openEdit(row)">
+                  <button type="button" class="btn-action-edit" @click="onEditClick(row)">
                     <Pencil class="h-3.5 w-3.5" />
                     {{ t('system.user.edit') }}
                   </button>
-                  <button type="button" class="btn-action-add" @click="openAssignRoles(row)">
+                  <button type="button" class="btn-action-add" @click="onAssignRolesClick(row)">
                     <Shield class="h-3.5 w-3.5" />
                     {{ t('system.user.assignRole') }}
                   </button>
-                  <button type="button" class="btn-action-add" @click="openResetPwd(row)">
+                  <button type="button" class="btn-action-add" @click="onAssignSystemsClick(row)">
+                    <LayoutGrid class="h-3.5 w-3.5" />
+                    {{ t('system.user.assignSystem') }}
+                  </button>
+                  <button type="button" class="btn-action-add" @click="onResetPwdClick(row)">
                     <KeyRound class="h-3.5 w-3.5" />
                     {{ t('system.user.resetPwd') }}
                   </button>
@@ -646,7 +700,7 @@ onMounted(async () => {
                     v-if="!isProtectedUser(row)"
                     type="button"
                     class="btn-action-danger"
-                    @click="removeUser(row)"
+                    @click="onDeleteClick(row)"
                   >
                     <Trash2 class="h-3.5 w-3.5" />
                     {{ t('system.user.delete') }}
@@ -659,7 +713,7 @@ onMounted(async () => {
       </div>
 
       <div v-if="total > 0" class="mt-4">
-        <AppPagination v-model:page-num="query.pageNum" :page-size="query.pageSize" :total="total" />
+        <AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" />
       </div>
       </div>
     </div>

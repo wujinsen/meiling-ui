@@ -16,8 +16,11 @@ import {
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
+import { guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
+import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { API_SUCCESS_CODE } from '@/types/api'
 import {
   createEmptyDictData,
@@ -53,7 +56,7 @@ const isDataEdit = computed(() => dataForm.value.id != null)
 
 const query = reactive({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: DEFAULT_PAGE_SIZE,
   dictName: '',
   dictType: '',
   status: '' as DictTypeQuery['status'],
@@ -61,7 +64,7 @@ const query = reactive({
 
 const dataQuery = reactive({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: DEFAULT_PAGE_SIZE,
   dictType: '',
   dictValue: '',
   status: '' as DictDataQuery['status'],
@@ -112,12 +115,14 @@ async function loadTypes() {
 }
 
 function openTypeCreate() {
+  if (!guardAction(PERM.DICT_ADD)) return
   typeForm.value = createEmptyDictType()
   typeModalTitle.value = t('system.dict.addType')
   typeModalOpen.value = true
 }
 
 async function openTypeEdit(row: SysDictType) {
+  if (!guardAction(PERM.DICT_EDIT)) return
   try {
     const result = await getDictTypeApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) {
@@ -143,6 +148,7 @@ function validateTypeForm() {
 }
 
 async function submitTypeForm() {
+  if (!guardAction(isTypeEdit.value ? PERM.DICT_EDIT : PERM.DICT_ADD)) return
   const error = validateTypeForm()
   if (error) {
     showToast('error', error)
@@ -175,6 +181,7 @@ async function submitTypeForm() {
 }
 
 async function removeType(row: SysDictType) {
+  if (!guardAction(PERM.DICT_REMOVE)) return
   if (!(await confirm({ message: t('system.dict.deleteTypeConfirm', { name: row.dictName }) }))) return
 
   try {
@@ -241,12 +248,14 @@ async function loadDataList() {
 }
 
 function openDataCreate() {
+  if (!guardAction(PERM.DICT_ADD)) return
   dataForm.value = createEmptyDictData(dataQuery.dictType)
   dataFormTitle.value = t('system.dict.addData')
   dataFormModalOpen.value = true
 }
 
 async function openDataEdit(row: SysDictData) {
+  if (!guardAction(PERM.DICT_EDIT)) return
   try {
     const result = await getDictDataApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) {
@@ -273,6 +282,7 @@ function validateDataForm() {
 }
 
 async function submitDataForm() {
+  if (!guardAction(isDataEdit.value ? PERM.DICT_EDIT : PERM.DICT_ADD)) return
   const error = validateDataForm()
   if (error) {
     showToast('error', error)
@@ -309,6 +319,7 @@ async function submitDataForm() {
 }
 
 async function removeData(row: SysDictData) {
+  if (!guardAction(PERM.DICT_REMOVE)) return
   if (!(await confirm({ message: t('system.dict.deleteDataConfirm', { name: row.dictKey }) }))) return
 
   try {
@@ -324,12 +335,12 @@ async function removeData(row: SysDictData) {
 }
 
 watch(
-  () => query.pageNum,
+  () => [query.pageNum, query.pageSize],
   () => loadTypes(),
 )
 
 watch(
-  () => dataQuery.pageNum,
+  () => [dataQuery.pageNum, dataQuery.pageSize],
   () => {
     if (dataModalOpen.value) loadDataList()
   },
@@ -441,7 +452,7 @@ onMounted(loadTypes)
       </div>
 
       <div v-if="total > 0" class="mt-4">
-        <AppPagination v-model:page-num="query.pageNum" :page-size="query.pageSize" :total="total" />
+        <AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" />
       </div>
     </div>
 
@@ -486,7 +497,7 @@ onMounted(loadTypes)
     <AppModal
       :open="dataModalOpen"
       :title="t('system.dict.dataTitle', { name: selectedType?.dictName, type: selectedType?.dictType })"
-      wide
+      extra-wide
       @close="closeDataModal"
     >
       <form class="form-search-toolbar mb-4" @submit.prevent="searchData">
@@ -514,7 +525,7 @@ onMounted(loadTypes)
       </form>
 
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-        <table class="w-full min-w-[760px] text-left text-sm">
+        <table class="w-full text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-white/5">
             <tr>
               <th class="px-4 py-3">{{ t('system.dict.dictKey') }}</th>
@@ -572,7 +583,7 @@ onMounted(loadTypes)
       </div>
 
       <div v-if="dataTotal > 0" class="mt-4">
-        <AppPagination v-model:page-num="dataQuery.pageNum" :page-size="dataQuery.pageSize" :total="dataTotal" />
+        <AppPagination v-model:page-num="dataQuery.pageNum" v-model:page-size="dataQuery.pageSize" :total="dataTotal" />
       </div>
     </AppModal>
 

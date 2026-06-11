@@ -5,7 +5,10 @@ import { addServerApi, deleteServerApi, getServerApi, listServerApi, updateServe
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import { confirm } from '@/composables/useConfirm'
+import { guardAction } from '@/composables/useActionPermissions'
+import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyServer, type OperationServer } from '@/types/operation'
@@ -23,7 +26,7 @@ const modalTitle = ref('')
 const form = ref<OperationServer>(createEmptyServer())
 const isEdit = computed(() => form.value.id != null)
 
-const query = reactive({ pageNum: 1, pageSize: 10, serverName: '', ip: '', environment: '' as number | '' })
+const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, serverName: '', ip: '', environment: '' as number | '' })
 
 function envLabel(env?: number) {
   return t(environmentI18nKey(env))
@@ -62,12 +65,14 @@ async function loadList() {
 }
 
 function openCreate() {
+  if (!guardAction(PERM.OP_SERVER_ADD)) return
   form.value = createEmptyServer()
   modalTitle.value = t('operation.common.add')
   modalOpen.value = true
 }
 
 async function openEdit(row: OperationServer) {
+  if (!guardAction(PERM.OP_SERVER_EDIT)) return
   try {
     const result = await getServerApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.loadFailed'))
@@ -85,6 +90,7 @@ function closeModal() {
 }
 
 async function submitForm() {
+  if (!guardAction(isEdit.value ? PERM.OP_SERVER_EDIT : PERM.OP_SERVER_ADD)) return
   if (!form.value.serverName?.trim()) {
     showToast('error', t('operation.server.nameRequired'))
     return
@@ -113,6 +119,7 @@ async function submitForm() {
 }
 
 async function removeRow(row: OperationServer) {
+  if (!guardAction(PERM.OP_SERVER_REMOVE)) return
   if (!(await confirm({ message: t('operation.server.deleteConfirm', { name: row.serverName }) }))) return
   try {
     const result = await deleteServerApi(row.id!)
@@ -124,7 +131,7 @@ async function removeRow(row: OperationServer) {
   }
 }
 
-watch(() => query.pageNum, loadList)
+watch(() => [query.pageNum, query.pageSize], loadList)
 onMounted(loadList)
 </script>
 
@@ -187,7 +194,7 @@ onMounted(loadList)
           </tbody>
         </table>
       </div>
-      <div v-if="total > 0" class="mt-4"><AppPagination v-model:page-num="query.pageNum" :page-size="query.pageSize" :total="total" /></div>
+      <div v-if="total > 0" class="mt-4"><AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" /></div>
     </div>
     <AppModal :open="modalOpen" :title="modalTitle" @close="closeModal">
       <form class="grid grid-cols-1 gap-4 sm:grid-cols-2" @submit.prevent="submitForm">

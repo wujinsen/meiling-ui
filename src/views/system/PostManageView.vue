@@ -11,8 +11,11 @@ import {
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
+import { guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
+import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyPost, type PostQuery, type SysPost } from '@/types/post'
 import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
@@ -30,7 +33,7 @@ const isEdit = computed(() => form.value.id != null)
 
 const query = reactive({
   pageNum: 1,
-  pageSize: 10,
+  pageSize: DEFAULT_PAGE_SIZE,
   postCode: '',
   postName: '',
   status: '' as PostQuery['status'],
@@ -81,12 +84,14 @@ async function loadPosts() {
 }
 
 function openCreate() {
+  if (!guardAction(PERM.POST_ADD)) return
   form.value = createEmptyPost()
   modalTitle.value = t('system.post.add')
   modalOpen.value = true
 }
 
 async function openEdit(row: SysPost) {
+  if (!guardAction(PERM.POST_EDIT)) return
   try {
     const result = await getPostApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) {
@@ -113,6 +118,7 @@ function validateForm() {
 }
 
 async function submitForm() {
+  if (!guardAction(isEdit.value ? PERM.POST_EDIT : PERM.POST_ADD)) return
   const error = validateForm()
   if (error) {
     showToast('error', error)
@@ -146,6 +152,7 @@ async function submitForm() {
 }
 
 async function removePost(row: SysPost) {
+  if (!guardAction(PERM.POST_REMOVE)) return
   if (!(await confirm({ message: t('system.post.deleteConfirm', { name: row.postName }) }))) return
 
   try {
@@ -161,7 +168,7 @@ async function removePost(row: SysPost) {
 }
 
 watch(
-  () => query.pageNum,
+  () => [query.pageNum, query.pageSize],
   () => loadPosts(),
 )
 
@@ -271,7 +278,7 @@ onMounted(loadPosts)
       </div>
 
       <div v-if="total > 0" class="mt-4">
-        <AppPagination v-model:page-num="query.pageNum" :page-size="query.pageSize" :total="total" />
+        <AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" />
       </div>
     </div>
 

@@ -22,6 +22,25 @@ async function mockLogin(payload: LoginPayload): Promise<MoliResult<LoginVo>> {
           nickName: '管理员',
         },
         menuVoList: undefined,
+        fullPermission: true,
+        permissions: ['*:*:*'],
+      },
+    }
+  }
+  if (payload.userName === 'zhangsan' && payload.password === '123456') {
+    return {
+      code: API_SUCCESS_CODE,
+      msg: '登录成功',
+      data: {
+        token: `mock-token-${Date.now()}`,
+        user: {
+          id: 2,
+          userName: 'zhangsan',
+          nickName: '张三',
+        },
+        systemPortalEnabled: false,
+        fullPermission: false,
+        permissions: ['system:user:list'],
       },
     }
   }
@@ -55,4 +74,23 @@ export async function logoutApi() {
     return mockLogout()
   }
   return request<null>('/logout', { method: 'POST' })
+}
+
+export type CapabilitiesVo = {
+  permissions?: string[]
+  fullPermission?: boolean
+}
+
+export async function getCapabilitiesApi() {
+  if (USE_MOCK) {
+    await delay(200)
+    return {
+      code: API_SUCCESS_CODE,
+      data: {
+        permissions: ['*:*:*'],
+        fullPermission: true,
+      },
+    } satisfies MoliResult<CapabilitiesVo>
+  }
+  return request<CapabilitiesVo>('/auth/capabilities', { method: 'GET' })
 }

@@ -1,53 +1,17 @@
 <script setup lang="ts">
-import { reactive } from 'vue'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import BrandMark from '@/components/ui/BrandMark.vue'
+import AppSidebarMenu from '@/components/layout/AppSidebarMenu.vue'
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
 import { usePermission } from '@/composables/usePermission'
-import { menuFullPath } from '@/router/routeGenerator'
-import { resolveMenuIcon } from '@/utils/menuIcons'
-import { resolveMenuLabel } from '@/utils/menuLabel'
 import type { MenuVo } from '@/types/api'
-import { ChevronDown } from 'lucide-vue-next'
 
-const route = useRoute()
-const { t, locale } = useI18n()
-const { isOpen: mobileOpen, close: closeMobile } = useMobileSidebar()
+const { t } = useI18n()
+const { isOpen: mobileOpen } = useMobileSidebar()
 const { menus } = usePermission()
-
-const sectionOpen = reactive<Record<string, boolean>>({})
 
 function sectionKey(menu: MenuVo) {
   return String(menu.id ?? menu.path ?? menu.name)
-}
-
-function isSectionOpen(menu: MenuVo) {
-  const key = sectionKey(menu)
-  if (sectionOpen[key] === undefined) sectionOpen[key] = true
-  return sectionOpen[key]
-}
-
-function toggleSection(menu: MenuVo) {
-  const key = sectionKey(menu)
-  sectionOpen[key] = !isSectionOpen(menu)
-}
-
-function linkPath(menu: MenuVo, parentPath = '') {
-  return menuFullPath(menu, parentPath)
-}
-
-function isActive(path: string) {
-  if (path === '/') return route.path === '/'
-  return route.path === path || route.path.startsWith(`${path}/`)
-}
-
-function onNavClick() {
-  closeMobile()
-}
-
-function menuLabel(menu: MenuVo) {
-  return resolveMenuLabel(menu, t, locale.value)
 }
 </script>
 
@@ -65,43 +29,11 @@ function menuLabel(menu: MenuVo) {
 
     <nav class="flex-1 space-y-3 overflow-y-auto p-3">
       <template v-if="menus.length">
-        <template v-for="menu in menus" :key="sectionKey(menu)">
-          <div v-if="menu.children?.length" class="nav-section">
-            <button type="button" class="nav-section-title" @click="toggleSection(menu)">
-              <component
-                :is="resolveMenuIcon(menu.icon || menu.meta?.icon)"
-                class="h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400"
-              />
-              <span class="min-w-0 flex-1 truncate text-left">{{ menuLabel(menu) }}</span>
-              <ChevronDown class="h-4 w-4 shrink-0 text-gray-400 transition" :class="isSectionOpen(menu) && 'rotate-180'" />
-            </button>
-            <div v-show="isSectionOpen(menu)" class="nav-section-children">
-              <RouterLink
-                v-for="child in menu.children"
-                :key="sectionKey(child)"
-                :to="linkPath(child, menu.path ? linkPath(menu) : '')"
-                :class="[
-                  'nav-item nav-item-child',
-                  isActive(linkPath(child, menu.path ? linkPath(menu) : '')) && 'nav-item-active',
-                ]"
-                @click="onNavClick"
-              >
-                <component :is="resolveMenuIcon(child.icon || child.meta?.icon)" class="h-3.5 w-3.5 shrink-0 opacity-80" />
-                <span class="truncate">{{ menuLabel(child) }}</span>
-              </RouterLink>
-            </div>
-          </div>
-
-          <RouterLink
-            v-else
-            :to="linkPath(menu)"
-            :class="['nav-item nav-item-top', isActive(linkPath(menu)) && 'nav-item-active']"
-            @click="onNavClick"
-          >
-            <component :is="resolveMenuIcon(menu.icon || menu.meta?.icon)" class="h-4 w-4 shrink-0" />
-            <span class="truncate">{{ menuLabel(menu) }}</span>
-          </RouterLink>
-        </template>
+        <AppSidebarMenu
+          v-for="menu in menus"
+          :key="sectionKey(menu)"
+          :menu="menu"
+        />
       </template>
 
       <p v-else class="px-3 py-6 text-center text-sm text-gray-400">{{ t('menu.empty') }}</p>

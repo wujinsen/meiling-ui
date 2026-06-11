@@ -7,8 +7,14 @@ export type SysRole = {
   createTime?: string | number
 }
 
+export type RoleAuthVo = {
+  menuIds?: (number | string)[]
+  actionCodes?: string[]
+}
+
 export type RoleVo = SysRole & {
   menuIds?: (number | string)[]
+  actionCodes?: string[]
   beginTime?: string
   endTime?: string
 }

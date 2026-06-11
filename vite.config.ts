@@ -1,9 +1,29 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
+import type { IncomingMessage } from 'node:http'
 
-export default defineConfig({
-  base: process.env.VITE_BASE || '/',
+/** 浏览器地址栏导航走 Vue Router；XHR/fetch 仍转发后端 */
+function spaBypass(req: IncomingMessage) {
+  const accept = req.headers.accept ?? ''
+  if (req.method === 'GET' && accept.includes('text/html')) {
+    return '/index.html'
+  }
+}
+
+const backendTarget = 'http://127.0.0.1:8888'
+
+function apiProxy() {
+  return {
+    target: backendTarget,
+    changeOrigin: true,
+    bypass: spaBypass,
+  } as const
+}
+
+export default defineConfig(({ command }) => ({
+  // GitHub Pages 构建时通过 VITE_BASE 注入；本地 dev 始终用根路径
+  base: command === 'build' && process.env.VITE_BASE ? process.env.VITE_BASE : '/',
   plugins: [vue()],
   resolve: {
     alias: {
@@ -11,30 +31,30 @@ export default defineConfig({
     },
   },
   server: {
-    host: '127.0.0.1',
+    /** 同时支持 localhost 与 127.0.0.1；避免仅绑定 127.0.0.1 时部分环境无法访问 */
+    host: true,
     port: 5173,
+    /** 端口被占用时直接报错，避免静默切到 5174/5175 导致仍访问 5173 失败 */
+    strictPort: true,
     proxy: {
-      // 仅代理 API 请求；GET /login 留给 Vue 登录页，避免与后端 POST /login 冲突
-      '/login': {
-        target: 'http://127.0.0.1:8888',
-        changeOrigin: true,
-        bypass(req) {
-          if (req.method !== 'POST') return '/index.html'
-        },
-      },
-      '/logout': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/captchaImage': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/menu': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/user': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/dept': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/post': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/role': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/dict': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/log': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/operation': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/cockpit': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/bi': { target: 'http://127.0.0.1:8888', changeOrigin: true },
-      '/persona': { target: 'http://127.0.0.1:8888', changeOrigin: true },
+      '/login': apiProxy(),
+      '/logout': apiProxy(),
+      '/captchaImage': apiProxy(),
+      '/menu': apiProxy(),
+      '/user': apiProxy(),
+      '/system': apiProxy(),
+      '/sso': apiProxy(),
+      '/dept': apiProxy(),
+      '/post': apiProxy(),
+      '/role': apiProxy(),
+      '/action': apiProxy(),
+      '/auth': apiProxy(),
+      '/dict': apiProxy(),
+      '/log': apiProxy(),
+      '/operation': apiProxy(),
+      '/cockpit': apiProxy(),
+      '/bi': apiProxy(),
+      '/persona': apiProxy(),
     },
   },
-})
+}))
