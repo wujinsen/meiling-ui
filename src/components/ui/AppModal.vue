@@ -5,7 +5,7 @@ import { useEscapeClose } from '@/composables/useEscapeClose'
 const props = withDefaults(
   defineProps<{
     open: boolean
-    title: string
+    title?: string
     wide?: boolean
     /** 列表类弹窗，比 wide 更宽 */
     extraWide?: boolean
@@ -13,8 +13,10 @@ const props = withDefaults(
     closeOnBackdrop?: boolean
     /** 嵌套在其它弹窗之上（如确认框） */
     elevated?: boolean
+    /** 不显示标题栏（用于温馨提示等） */
+    hideHeader?: boolean
   }>(),
-  { closeOnBackdrop: false, elevated: false, extraWide: false },
+  { closeOnBackdrop: false, elevated: false, extraWide: false, hideHeader: false },
 )
 
 const emit = defineEmits<{
@@ -44,8 +46,12 @@ useEscapeClose(toRef(props, 'open'), () => emit('close'))
           aria-modal="true"
           @click.stop
         >
-          <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-white/5">
-            <h3 class="page-title text-base">{{ title }}</h3>
+          <div
+            v-if="!hideHeader"
+            class="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-white/5"
+          >
+            <h3 v-if="title" class="page-title text-base">{{ title }}</h3>
+            <div v-else class="flex-1" />
             <button
               type="button"
               class="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/5"
@@ -54,7 +60,7 @@ useEscapeClose(toRef(props, 'open'), () => emit('close'))
               ✕
             </button>
           </div>
-          <div class="px-5 py-5">
+          <div :class="hideHeader ? 'px-6 py-6' : 'px-5 py-5'">
             <slot />
           </div>
           <div v-if="$slots.footer" class="flex justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-white/5">

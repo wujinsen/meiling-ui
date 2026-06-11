@@ -6,6 +6,8 @@ export interface ConfirmOptions {
   confirmText?: string
   cancelText?: string
   danger?: boolean
+  /** 温馨告别样式：无标题栏、无警告图标 */
+  warm?: boolean
 }
 
 const state = reactive({

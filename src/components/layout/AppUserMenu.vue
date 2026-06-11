@@ -37,11 +37,10 @@ function handleOpenProfile() {
 async function handleSignOut() {
   close()
   const ok = await confirm({
-    title: t('auth.signOutTitle'),
     message: t('auth.signOutMessage'),
-    confirmText: t('auth.signOut'),
-    cancelText: t('confirm.cancel'),
-    danger: true,
+    confirmText: t('auth.signOutConfirm'),
+    cancelText: t('auth.signOutStay'),
+    warm: true,
   })
   if (!ok) return
 

@@ -96,9 +96,10 @@ export default {
   auth: {
     signIn: 'Sign in',
     signOut: 'Sign out',
-    signOutTitle: 'Sign out',
-    signOutMessage: 'Are you sure you want to sign out? You will need to sign in again.',
-    signOutSuccess: 'Signed out successfully',
+    signOutMessage: 'Thank you for your contribution to all humanity. See you next time.',
+    signOutConfirm: 'See you',
+    signOutStay: 'Stay a bit longer',
+    signOutSuccess: 'See you — rest well!',
     signOutFailed: 'Sign out failed. Please try again.',
     signingIn: 'Signing in…',
     signingOut: 'Signing out…',
@@ -109,7 +110,7 @@ export default {
     passwordPlaceholder: 'Enter password',
     required: 'Username and password are required',
     failed: 'Sign in failed. Please try again.',
-    mockHint: 'Mock mode: admin / 123456',
+    mockHint: 'Mock mode: test / 123456',
   },
   sections: {
     insightControl: 'Insight & Control',

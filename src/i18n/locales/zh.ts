@@ -96,9 +96,10 @@ export default {
   auth: {
     signIn: '登录',
     signOut: '退出登录',
-    signOutTitle: '退出登录',
-    signOutMessage: '确定要退出当前账号吗？退出后需重新登录。',
-    signOutSuccess: '已安全退出',
+    signOutMessage: '感谢你为全人类做出的贡献，下次见。',
+    signOutConfirm: '下次见',
+    signOutStay: '再待一会儿',
+    signOutSuccess: '下次见，好好休息～',
     signOutFailed: '退出失败，请重试',
     signingIn: '登录中…',
     signingOut: '退出中…',
@@ -109,7 +110,7 @@ export default {
     passwordPlaceholder: '请输入密码',
     required: '请输入用户名和密码',
     failed: '登录失败，请重试',
-    mockHint: 'Mock 模式：admin / 123456',
+    mockHint: 'Mock 模式：test / 123456',
   },
   sections: {
     insightControl: '洞察与控制',

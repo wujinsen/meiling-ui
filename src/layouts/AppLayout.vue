@@ -14,8 +14,6 @@ import PerspectiveStage from '@/components/layout/PerspectiveStage.vue'
 
 import CommandPalette from '@/components/ui/CommandPalette.vue'
 
-import AppConfirmDialog from '@/components/ui/AppConfirmDialog.vue'
-
 import AppToast from '@/components/ui/AppToast.vue'
 
 import AnalyticsFilterPanel from '@/components/ui/AnalyticsFilterPanel.vue'
@@ -119,7 +117,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
     </div>
 
     <CommandPalette />
-    <AppConfirmDialog />
     <AppToast />
 
   </PerspectiveStage>

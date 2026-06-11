@@ -8,15 +8,16 @@ import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher.vue'
 import { filterPortalSystems, groupPortalSystems, portalGroupDomId } from '@/constants/systemGroup'
 import { useAuth } from '@/composables/useAuth'
+import { confirm } from '@/composables/useConfirm'
 import { usePortalGreeting } from '@/composables/usePortalGreeting'
 import { useSystemPortal } from '@/composables/useSystemPortal'
 import { showToast } from '@/composables/useToast'
 import { hasFullPermission } from '@/utils/privilege'
-import { Loader2, Rocket, Search, ShieldCheck, Sparkles } from 'lucide-vue-next'
+import { Loader2, LogOut, Rocket, Search, ShieldCheck, Sparkles } from 'lucide-vue-next'
 
 const router = useRouter()
 const { t } = useI18n()
-const { displayName, user } = useAuth()
+const { displayName, user, logout } = useAuth()
 const { greeting } = usePortalGreeting()
 const { systemList, enterSystem, refreshSystemList } = useSystemPortal()
 
@@ -25,6 +26,7 @@ const isSuperAdmin = computed(() => hasFullPermission(user.value?.userName))
 
 const loadingId = ref<number | string | null>(null)
 const booting = ref(false)
+const signingOut = ref(false)
 const keyword = ref('')
 const activeGroup = ref('')
 
@@ -53,6 +55,27 @@ async function scrollToGroup(key: string) {
   document.getElementById(portalGroupDomId(key as never))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
+async function handleSignOut() {
+  const ok = await confirm({
+    message: t('auth.signOutMessage'),
+    confirmText: t('auth.signOutConfirm'),
+    cancelText: t('auth.signOutStay'),
+    warm: true,
+  })
+  if (!ok) return
+
+  signingOut.value = true
+  try {
+    await logout()
+    showToast('success', t('auth.signOutSuccess'))
+    await router.replace({ name: 'login' })
+  } catch {
+    showToast('error', t('auth.signOutFailed'))
+  } finally {
+    signingOut.value = false
+  }
+}
+
 onMounted(async () => {
   booting.value = true
   try {
@@ -70,6 +93,16 @@ onMounted(async () => {
   <div class="flex min-h-screen flex-col bg-surface-light dark:bg-surface-dark">
     <header class="flex shrink-0 items-center justify-end border-b border-gray-100 px-4 py-3 dark:border-white/5 sm:px-6">
       <div class="flex items-center gap-2">
+        <button
+          type="button"
+          class="flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 transition hover:bg-gray-100 disabled:opacity-60 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5 sm:px-3"
+          :title="t('auth.signOut')"
+          :disabled="signingOut"
+          @click="handleSignOut"
+        >
+          <LogOut class="h-4 w-4 shrink-0" />
+          <span class="hidden sm:inline">{{ signingOut ? t('auth.signingOut') : t('auth.signOut') }}</span>
+        </button>
         <LanguageSwitcher />
         <ThemeToggle />
       </div>

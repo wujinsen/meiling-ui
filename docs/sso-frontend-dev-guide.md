@@ -402,6 +402,30 @@ Session 有效、内存 permissions 空 → `ensurePermissionsLoaded()`（不重
 
 ---
 
+## 9.1 生产部署（nginx 405 排查）
+
+开发时 Vite 会把 `/login`、`/logout`、`/system` 等代理到 `8888`；**打包后没有 Vite**，若 nginx 只托管 `dist` 静态文件，浏览器 `POST /login` 会收到 **405 Not Allowed**。
+
+**推荐：同域反代**（见仓库 `deploy/nginx.conf.example`）
+
+1. `npm run build`，上传 `dist/` 到服务器  
+2. nginx 对 API 路径 `proxy_pass http://127.0.0.1:8888`  
+3. **浏览器 GET 页面**（如 `/system/user`）须回退 `index.html`，不能整段 `/system` 都反代，否则未登录时只会看到 JSON `请登录` 而不会跳转（配置里用 `418 + @spa`，与 Vite `spaBypass` 同理）  
+4. 静态页 `try_files ... /index.html`  
+5. 确认 moli-server 在本机 8888 已启动  
+
+**备选：前后端不同域**
+
+构建时指定后端地址：
+
+```bash
+VITE_API_BASE_URL=http://你的后端:8888 npm run build
+```
+
+后端 `CORSConfiguration` 已允许跨域；`.env.production` 中 `VITE_API_BASE_URL` 留空表示同域反代。
+
+---
+
 ## 10. 相关文档
 
 | 文档 | 位置 |

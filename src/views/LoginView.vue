@@ -14,8 +14,8 @@ const route = useRoute()
 const { t } = useI18n()
 const { login } = useAuth()
 
-const userName = ref('admin')
-const password = ref('')
+const userName = ref('test')
+const password = ref('123456')
 const loading = ref(false)
 const error = ref('')
 

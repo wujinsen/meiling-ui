@@ -44,13 +44,32 @@ export async function request<T>(
   try {
     result = await response.json()
   } catch {
+    if (response.status === 405) {
+      throw new Error(
+        '接口 405：nginx 未将 API 转发到后端。请配置反向代理（见 deploy/nginx.conf.example），或构建时设置 VITE_API_BASE_URL 指向 moli-server',
+      )
+    }
+    const contentType = response.headers.get('content-type') ?? ''
+    if (contentType.includes('text/html')) {
+      throw new Error(
+        `接口返回 HTML（HTTP ${response.status}），请检查部署：静态站点需反代 /login 等到后端 8888`,
+      )
+    }
     throw new Error('Invalid response')
   }
 
   if (result.code === API_TOKEN_INVALID_CODE) {
     clearAuthSession()
-    if (!window.location.pathname.startsWith('/login')) {
-      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`
+    const base = import.meta.env.BASE_URL.replace(/\/?$/, '')
+    const loginPrefix = `${base}/login`
+    if (!window.location.pathname.startsWith(loginPrefix)) {
+      const { default: router } = await import('@/router')
+      const path = window.location.pathname + window.location.search
+      const home = base || '/'
+      await router.replace({
+        name: 'login',
+        query: path !== home && path !== `${home}/` ? { redirect: path } : undefined,
+      })
     }
   }
 

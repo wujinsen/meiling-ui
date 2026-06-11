@@ -96,9 +96,10 @@ export default {
   auth: {
     signIn: 'ログイン',
     signOut: 'ログアウト',
-    signOutTitle: 'ログアウト',
-    signOutMessage: 'ログアウトしますか？再度ログインが必要です。',
-    signOutSuccess: 'ログアウトしました',
+    signOutMessage: '全人類へのご貢献、ありがとうございました。またお会いしましょう。',
+    signOutConfirm: 'またね',
+    signOutStay: 'もう少し',
+    signOutSuccess: 'またね、ゆっくり休んでください',
     signOutFailed: 'ログアウトに失敗しました。もう一度お試しください。',
     signingIn: 'ログイン中…',
     signingOut: 'ログアウト中…',
@@ -109,7 +110,7 @@ export default {
     passwordPlaceholder: 'パスワードを入力',
     required: 'ユーザー名とパスワードを入力してください',
     failed: 'ログインに失敗しました',
-    mockHint: 'Mock モード: admin / 123456',
+    mockHint: 'Mock モード: test / 123456',
   },
   sections: {
     insightControl: 'インサイトと管理',

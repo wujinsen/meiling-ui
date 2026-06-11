@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted } from 'vue'
 import { RouterView, useRouter } from 'vue-router'
 import AppToast from '@/components/ui/AppToast.vue'
+import AppConfirmDialog from '@/components/ui/AppConfirmDialog.vue'
 import { useSystemPortal } from '@/composables/useSystemPortal'
 import { getToken, isPortalEnabledStored } from '@/utils/authSession'
 
@@ -22,5 +23,6 @@ onUnmounted(() => window.removeEventListener('focus', onWindowFocus))
 
 <template>
   <RouterView />
+  <AppConfirmDialog />
   <AppToast />
 </template>

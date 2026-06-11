@@ -10,6 +10,23 @@ function delay(ms: number) {
 
 async function mockLogin(payload: LoginPayload): Promise<MoliResult<LoginVo>> {
   await delay(450)
+  if (payload.userName === 'test' && payload.password === '123456') {
+    return {
+      code: API_SUCCESS_CODE,
+      msg: '登录成功',
+      data: {
+        token: `mock-token-${Date.now()}`,
+        user: {
+          id: 1,
+          userName: 'test',
+          nickName: '测试用户',
+        },
+        menuVoList: undefined,
+        fullPermission: true,
+        permissions: ['*:*:*'],
+      },
+    }
+  }
   if (payload.userName === 'admin' && payload.password === '123456') {
     return {
       code: API_SUCCESS_CODE,
