@@ -73,7 +73,7 @@ function buildMockProfile(): SysUserVo {
     telephone: '13800138000',
     email: 'admin@meiling.io',
     sex: 1,
-    deptName: '梅聆科技',
+    deptName: '美玲科技',
     postNames: '系统管理员',
     roleList: [{ id: 2, roleName: '系统管理员' }],
     status: 1,

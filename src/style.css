@@ -174,6 +174,19 @@
     @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium;
   }
 
+  .user-role-tags {
+    @apply flex max-w-[15rem] flex-wrap items-center gap-1;
+  }
+
+  .user-role-tag {
+    @apply inline-flex max-w-[6.25rem] truncate rounded-md bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700;
+    @apply dark:bg-brand-500/15 dark:text-brand-300;
+  }
+
+  .user-role-tag-more {
+    @apply max-w-none shrink-0 bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300;
+  }
+
   .status-switch {
     @apply relative inline-flex shrink-0 cursor-pointer items-center border-0 bg-transparent p-0;
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 focus-visible:ring-offset-2;
@@ -230,19 +243,53 @@
     @apply text-sm text-gray-500 dark:text-gray-400;
   }
 
+  .brand-logo-icon {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+  }
+
+  .brand-logo-full {
+    display: block;
+    width: min(100%, 8.5rem);
+    height: auto;
+    object-fit: contain;
+  }
+
   .brand-wordmark {
-    font-family: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
-    @apply font-semibold text-gray-900 dark:text-white;
-    letter-spacing: 0.1em;
+    font-family: 'ZCOOL XiaoWei', 'Noto Serif SC', 'Songti SC', 'STSong', serif;
+    @apply font-normal text-emerald-950 dark:text-emerald-50;
+    letter-spacing: 0.14em;
   }
 
   .brand-wordmark-sidebar {
-    @apply text-base;
+    font-family: SimSun, 'Songti SC', 'STSong', serif;
+    @apply text-[1.125rem] font-normal leading-tight text-black dark:text-white;
+    letter-spacing: 0;
+  }
+
+  .brand-mark-icon {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      0 1px 2px rgba(27, 67, 50, 0.08);
   }
 
   .brand-wordmark-hero {
-    @apply text-2xl;
-    letter-spacing: 0.06em;
+    @apply text-3xl;
+    letter-spacing: 0.2em;
+    background: linear-gradient(135deg, #1b4332 0%, #2d6a4f 45%, #b08968 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  :is(.dark) .brand-wordmark-hero {
+    background: linear-gradient(135deg, #d8f3dc 0%, #95d5b2 42%, #e9c46a 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 
   .page-stack {

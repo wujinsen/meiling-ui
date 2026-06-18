@@ -1,5 +1,5 @@
 export default {
-  app: { name: '梅聆', title: 'Mei Ling Management System' },
+  app: { name: 'Meiling System', title: 'Meiling System' },
   lang: { zh: '中文', en: 'English', ja: '日本語' },
   theme: { toLight: 'Switch to light mode', toDark: 'Switch to dark mode' },
   perspective: {
@@ -30,7 +30,7 @@ export default {
   user: { name: 'Tanjim', role: 'Manager' },
   settings: {
     title: 'Settings',
-    subtitle: 'Customize your Meiling workspace',
+    subtitle: 'Customize your Meiling System',
     saveOk: 'Settings saved',
     appearance: {
       title: 'Appearance',
@@ -59,8 +59,8 @@ export default {
       sub: 'Profile, password, and account details',
     },
     about: {
-      title: 'About Meiling',
-      sub: 'Meiling management system',
+      title: 'About Meiling System',
+      sub: 'Meiling System',
     },
   },
   profile: {
@@ -103,7 +103,7 @@ export default {
     signOutFailed: 'Sign out failed. Please try again.',
     signingIn: 'Signing in…',
     signingOut: 'Signing out…',
-    subtitle: 'Sign in to Mei Ling',
+    subtitle: 'Sign in to Meiling System',
     username: 'Username',
     password: 'Password',
     usernamePlaceholder: 'Enter username',
@@ -304,7 +304,7 @@ export default {
       avgSession: { label: 'Avg Session' },
     },
     openPulseAi: 'Pulse AI',
-    workspace: 'Mei Ling Workspace',
+    workspace: 'Meiling System',
     traffic: { organic: 'Organic', paid: 'Paid', referral: 'Referral', direct: 'Direct' },
     revenueUsers: { title: 'Revenue & Users', sub: 'Dual-axis performance' },
     churnByRegion: { title: 'Churn by Region', sub: 'Weekly breakdown' },

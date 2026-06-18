@@ -24,6 +24,10 @@ export const PERM = {
 
   ROLE_REMOVE: 'system:role:remove',
 
+  ROLE_ASSIGN_PERM: 'system:role:assignPerm',
+
+  ROLE_ASSIGN_USER: 'system:role:assignUser',
+
   MENU_LIST: 'system:menu:list',
 
   MENU_ADD: 'system:menu:add',

@@ -23,8 +23,8 @@ function sectionKey(menu: MenuVo) {
       mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
     ]"
   >
-    <div class="flex h-14 items-center border-b border-gray-100 px-4 dark:border-white/5">
-      <BrandMark />
+    <div class="flex h-16 items-center border-b border-gray-100 px-3.5 dark:border-white/5">
+      <BrandMark class="w-full min-w-0" />
     </div>
 
     <nav class="flex-1 space-y-3 overflow-y-auto p-3">

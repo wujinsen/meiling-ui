@@ -1,0 +1,44 @@
+# BioScope3D 纯静态前端（无后端 API）
+#
+# 域名：bioscope3d.wu-jinsen.com
+# 目录：/opt/bioscope3d/page-dist
+#
+# 部署步骤：
+#   1. DNS：bioscope3d.wu-jinsen.com → EC2 公网 IP（Cloudflare 橙云可开）
+#   2. sudo mkdir -p /opt/bioscope3d/page-dist
+#   3. 上传构建产物到 page-dist（需含 index.html）
+#   4. sudo cp deploy/nginx.bioscope3d.conf.example /etc/nginx/conf.d/bioscope3d.conf
+#   5. sudo nginx -t && sudo nginx -s reload
+#   6. curl -I http://127.0.0.1/ -H 'Host: bioscope3d.wu-jinsen.com'
+#
+# 前端打包：VITE_BASE 留空或 /（不要带子路径，除非刻意部署在子目录）
+
+server {
+    listen 80;
+    server_name bioscope3d.wu-jinsen.com;
+
+    root /opt/bioscope3d/page-dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2?|wasm|mp4|webm|json|glb|gltf)$ {
+        expires 7d;
+        access_log off;
+        add_header Cache-Control "public, immutable";
+    }
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/xml
+        image/svg+xml;
+}

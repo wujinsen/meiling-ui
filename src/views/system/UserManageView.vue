@@ -27,11 +27,13 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import DeptTreePanel from '@/components/system/DeptTreePanel.vue'
 import DeptTreeSelect from '@/components/system/DeptTreeSelect.vue'
+import UserRoleTags from '@/components/system/UserRoleTags.vue'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { DeptVo } from '@/types/dept'
 import type { SysPost } from '@/types/post'
 import type { SysRole } from '@/types/role'
 import { createEmptyUser, type UserQuery, type UserVo } from '@/types/user'
+import { filterAssignableRoles, isBuiltinSuperAdminRole } from '@/utils/role'
 import { buildTree, collectTreeIds, normalizeNestedTree, sortTreeByOrderNum } from '@/utils/tree'
 import { KeyRound, LayoutGrid, Pencil, Plus, RefreshCw, Search, Shield, Trash2 } from 'lucide-vue-next'
 
@@ -486,7 +488,7 @@ function toggleFormStatus() {
 async function loadRoleOptions() {
   const result = await getRoleAllApi()
   if (result.code === API_SUCCESS_CODE && result.data) {
-    roleOptions.value = result.data
+    roleOptions.value = filterAssignableRoles(result.data)
   } else {
     roleOptions.value = []
   }
@@ -499,7 +501,10 @@ async function openAssignRoles(row: UserVo) {
     if (result.code !== API_SUCCESS_CODE) {
       throw new Error(result.msg || t('system.user.loadFailed'))
     }
-    const roleIds = result.data?.roleList?.map((role) => String(role.id)) ?? []
+    const roleIds =
+      result.data?.roleList
+        ?.filter((role) => !isBuiltinSuperAdminRole(role))
+        .map((role) => String(role.id)) ?? []
     checkedRoleIds.value = new Set(roleIds)
     roleAssignTarget.value = row
     roleAssignOpen.value = true
@@ -534,7 +539,12 @@ async function submitAssignRoles() {
   try {
     const result = await insertUserRoleApi({
       userId: roleAssignTarget.value.id,
-      roleIds: [...checkedRoleIds.value].map((id) => Number(id)),
+      roleIds: [...checkedRoleIds.value]
+        .map((id) => Number(id))
+        .filter((id) => {
+          const role = roleOptions.value.find((item) => Number(item.id) === id)
+          return role != null && !isBuiltinSuperAdminRole(role)
+        }),
     })
     if (result.code !== API_SUCCESS_CODE) {
       throw new Error(result.msg || t('system.user.assignRoleFailed'))
@@ -633,7 +643,7 @@ onMounted(async () => {
               <th class="px-4 py-3">{{ t('system.user.userName') }}</th>
               <th class="px-4 py-3">{{ t('system.user.nickName') }}</th>
               <th class="px-4 py-3">{{ t('system.user.dept') }}</th>
-              <th class="px-4 py-3">{{ t('system.user.roles') }}</th>
+              <th class="min-w-[11rem] px-4 py-3">{{ t('system.user.roles') }}</th>
               <th class="px-4 py-3">{{ t('system.user.telephone') }}</th>
               <th class="px-4 py-3">{{ t('system.user.status') }}</th>
               <th class="px-4 py-3">{{ t('system.user.createTime') }}</th>
@@ -665,8 +675,8 @@ onMounted(async () => {
               <td class="px-4 py-3 font-medium text-gray-900 dark:text-white">{{ row.userName }}</td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.nickName || '-' }}</td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.deptName || '-' }}</td>
-              <td class="max-w-[160px] truncate px-4 py-3 text-gray-600 dark:text-gray-300">
-                {{ row.roleNames || t('system.user.rolesNone') }}
+              <td class="px-4 py-3">
+                <UserRoleTags :role-names="row.roleNames" />
               </td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.telephone || '-' }}</td>
               <td class="px-4 py-3">

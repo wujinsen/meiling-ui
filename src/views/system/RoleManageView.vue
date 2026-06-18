@@ -486,7 +486,7 @@ async function loadRoleAuthMenuTree() {
 }
 
 async function openPermissions(row: SysRole) {
-  if (!guardAction(PERM.ROLE_EDIT)) return
+  if (!guardAction(PERM.ROLE_ASSIGN_PERM)) return
   try {
     const roleId = row.id
     if (roleId == null || roleId === '') {
@@ -539,7 +539,7 @@ function closePermModal() {
 }
 
 async function submitPermissions() {
-  if (!guardAction(PERM.ROLE_EDIT)) return
+  if (!guardAction(PERM.ROLE_ASSIGN_PERM)) return
   if (!form.value.id) return
 
   saving.value = true
@@ -641,6 +641,7 @@ function searchUnauthorizedUsers() {
 }
 
 async function openAssignUsers(row: SysRole) {
+  if (!guardAction(PERM.ROLE_ASSIGN_USER)) return
   assignRoleId.value = row.id!
   assignRoleName.value = row.roleName ?? ''
   authorizedQuery.pageNum = 1
@@ -664,6 +665,7 @@ function closeAssignUsers() {
 }
 
 async function addSelectedUsers() {
+  if (!guardAction(PERM.ROLE_ASSIGN_USER)) return
   const ids = [...selectedUnauthorizedIds.value]
   if (!ids.length || !assignRoleId.value) return
 
@@ -687,6 +689,7 @@ async function addSelectedUsers() {
 }
 
 async function removeSelectedUsers() {
+  if (!guardAction(PERM.ROLE_ASSIGN_USER)) return
   const ids = [...selectedAuthorizedIds.value]
   if (!ids.length || !assignRoleId.value) return
   if (!(await confirm({ message: t('system.role.removeUserConfirm', { count: ids.length }) }))) return

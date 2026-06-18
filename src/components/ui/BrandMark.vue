@@ -16,27 +16,19 @@ const { t } = useI18n()
   <div
     :class="[
       'flex items-center',
-      variant === 'hero' ? 'flex-col items-center gap-4 text-center' : 'min-w-0 gap-2.5',
+      variant === 'hero' ? 'flex-col items-center gap-3 text-center' : 'min-w-0 gap-3',
     ]"
   >
+    <MeilingLogo v-if="variant === 'hero'" variant="full" />
     <div
-      :class="[
-        'flex shrink-0 items-center justify-center bg-gradient-to-br from-[#F0D4D0] via-[#E0B888] to-[#C49A6C]',
-        variant === 'hero'
-          ? 'h-14 w-14 rounded-2xl shadow-[0_0_20px_rgba(196,154,108,0.35)]'
-          : 'h-8 w-8 rounded-[9px] shadow-[0_0_12px_rgba(196,154,108,0.32)]',
-      ]"
+      v-else
+      class="brand-mark-icon flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#f7f3ea] ring-1 ring-emerald-900/10 dark:bg-[#1a2420] dark:ring-emerald-100/10"
       :title="t('app.title')"
       :aria-label="t('app.title')"
     >
-      <MeilingLogo :size="variant === 'hero' ? 32 : 20" />
+      <MeilingLogo :size="40" variant="icon" />
     </div>
-    <span
-      :class="[
-        'brand-wordmark truncate',
-        variant === 'hero' ? 'brand-wordmark-hero' : 'brand-wordmark-sidebar',
-      ]"
-    >
+    <span v-if="variant !== 'hero'" class="brand-wordmark-sidebar min-w-0 truncate">
       {{ t('app.name') }}
     </span>
   </div>

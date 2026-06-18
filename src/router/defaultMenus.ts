@@ -86,7 +86,7 @@ const insightMenu: MenuVo = {
   ],
 }
 
-/** 梅聆业务侧栏菜单（后端不可用时兜底） */
+/** 美玲业务侧栏菜单（后端不可用时兜底） */
 export function getDefaultMenus(): MenuVo[] {
   return [dashboardMenu, insightMenu, settingsMenu]
 }

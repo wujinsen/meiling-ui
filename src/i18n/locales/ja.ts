@@ -1,5 +1,5 @@
 export default {
-  app: { name: '梅聆', title: '梅聆管理システム' },
+  app: { name: '美玲システム', title: '美玲システム' },
   lang: { zh: '中文', en: 'English', ja: '日本語' },
   theme: { toLight: 'ライトモードに切替', toDark: 'ダークモードに切替' },
   perspective: {
@@ -30,7 +30,7 @@ export default {
   user: { name: 'Tanjim', role: 'マネージャー' },
   settings: {
     title: '設定',
-    subtitle: '梅聆ワークスペースをカスタマイズ',
+    subtitle: '美玲システムをカスタマイズ',
     saveOk: '設定を保存しました',
     appearance: {
       title: '外観',
@@ -59,8 +59,8 @@ export default {
       sub: 'プロフィール、パスワードなど',
     },
     about: {
-      title: '梅聆について',
-      sub: '梅聆管理システム',
+      title: '美玲システムについて',
+      sub: '美玲システム',
     },
   },
   profile: {
@@ -103,7 +103,7 @@ export default {
     signOutFailed: 'ログアウトに失敗しました。もう一度お試しください。',
     signingIn: 'ログイン中…',
     signingOut: 'ログアウト中…',
-    subtitle: '梅聆管理システムにログイン',
+    subtitle: '美玲システムにログイン',
     username: 'ユーザー名',
     password: 'パスワード',
     usernamePlaceholder: 'ユーザー名を入力',
@@ -304,7 +304,7 @@ export default {
       avgSession: { label: '平均セッション' },
     },
     openPulseAi: 'Pulse AI',
-    workspace: '梅聆ワークスペース',
+    workspace: '美玲システム',
     traffic: { organic: 'オーガニック', paid: '有料', referral: '紹介', direct: '直接' },
     revenueUsers: { title: '売上とユーザー', sub: 'デュアル軸パフォーマンス' },
     churnByRegion: { title: '地域別解約', sub: '週次内訳' },

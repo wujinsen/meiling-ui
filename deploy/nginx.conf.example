@@ -1,9 +1,11 @@
 # meiling-ui 生产部署（nginx）
 #
-# 要点：
-# 1. GET /login、/system-select → 必须返回 index.html（后端 /login 只支持 POST）
-# 2. GET /system/user 等页面路由 → Accept: text/html 时走 SPA，不能整段反代 /system
-# 3. POST /login、fetch API → 反代 8888
+# 部署后验证（在 EC2 上执行，绕过 Cloudflare）：
+#   curl -I http://127.0.0.1/ -H 'Host: moli-ui.wu-jinsen.com'
+#   curl -I http://127.0.0.1/login -H 'Host: moli-ui.wu-jinsen.com'
+#   curl -I -X POST http://127.0.0.1/login -H 'Host: moli-ui.wu-jinsen.com'
+#
+# 若 / 200 但 /login 404：确认已 reload，且 login 块使用 return 419 → @login_spa → rewrite /
 
 upstream moli_backend {
     server 127.0.0.1:8888;
@@ -17,26 +19,24 @@ server {
     root /opt/moli/frontend/dist;
     index index.html;
 
-    # --- 纯前端路由（精确匹配，优先于下方 API 正则）---
+    error_page 405 = @moli_backend;
+    error_page 419 = @login_spa;
 
+    # GET/HEAD /login → 与首页相同走法；POST → 后端
     location = /login {
-        error_page 405 = @moli_backend;
-
-        set $login_spa 0;
-        if ($request_method = GET) {
-            set $login_spa 1;
-        }
-        if ($request_method = HEAD) {
-            set $login_spa 1;
-        }
-        if ($login_spa = 0) {
+        if ($request_method = POST) {
             return 405;
         }
-        try_files /index.html =404;
+        return 419;
     }
 
     location = /system-select {
-        try_files /index.html =404;
+        return 419;
+    }
+
+    # 内部跳转到 /，复用 location / 的 try_files（不要 rewrite 到 /index.html）
+    location @login_spa {
+        rewrite ^ / last;
     }
 
     location @moli_backend {
@@ -51,9 +51,8 @@ server {
         proxy_set_header Accept-Language $http_accept_language;
     }
 
-    # --- API（与 vite.config.ts proxy 一致）---
-
-    location ~ ^/(login|logout|captchaImage|menu|user|system|sso|dept|post|role|action|auth|dict|log|operation|cockpit|bi|persona)(/|$) {
+    # API（不含 login）
+    location ~ ^/(logout|captchaImage|menu|user|system|sso|dept|post|role|action|auth|dict|log|operation|cockpit|bi|persona)(/|$) {
         set $spa_fallback 0;
         if ($request_method ~ ^(GET|HEAD)$) {
             set $spa_fallback 1;
@@ -62,7 +61,7 @@ server {
             set $spa_fallback "${spa_fallback}1";
         }
         if ($spa_fallback = 11) {
-            return 418;
+            return 419;
         }
 
         proxy_pass http://moli_backend;
@@ -76,13 +75,12 @@ server {
         proxy_set_header Accept-Language $http_accept_language;
     }
 
-    error_page 418 = @spa;
-
-    location @spa {
-        try_files /index.html =404;
-    }
-
     location / {
         try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|webp|woff2?)$ {
+        expires 7d;
+        access_log off;
     }
 }

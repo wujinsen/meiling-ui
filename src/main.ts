@@ -10,6 +10,7 @@ import { initAuth } from './composables/useAuth'
 import { initPermission } from './composables/usePermission'
 import { initSystemPortal } from './composables/useSystemPortal'
 import './style.css'
+import logoIconUrl from '@/assets/logo-icon.webp'
 
 initTheme()
 initPerspective()
@@ -18,4 +19,8 @@ initSystemPortal()
 initActionPermissions()
 setupPermissionsAutoRefresh()
 initPermission()
+
+const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
+if (favicon) favicon.href = logoIconUrl
+
 createApp(App).use(i18n).use(MotionPlugin).use(router).mount('#app')

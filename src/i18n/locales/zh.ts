@@ -1,5 +1,5 @@
 export default {
-  app: { name: '梅聆', title: '梅聆管理系统' },
+  app: { name: '美玲系统', title: '美玲系统' },
   lang: { zh: '中文', en: 'English', ja: '日本語' },
   theme: { toLight: '切换浅色模式', toDark: '切换深色模式' },
   perspective: {
@@ -30,7 +30,7 @@ export default {
   user: { name: 'Tanjim', role: '经理' },
   settings: {
     title: '设置',
-    subtitle: '个性化你的梅聆工作区',
+    subtitle: '个性化你的美玲系统',
     saveOk: '设置已保存',
     appearance: {
       title: '外观',
@@ -59,8 +59,8 @@ export default {
       sub: '修改资料、密码等账号信息',
     },
     about: {
-      title: '关于梅聆',
-      sub: '梅聆管理系统',
+      title: '关于美玲系统',
+      sub: '美玲系统',
     },
   },
   profile: {
@@ -103,7 +103,7 @@ export default {
     signOutFailed: '退出失败，请重试',
     signingIn: '登录中…',
     signingOut: '退出中…',
-    subtitle: '登录梅聆管理系统',
+    subtitle: '登录美玲系统',
     username: '用户名',
     password: '密码',
     usernamePlaceholder: '请输入用户名',
@@ -304,7 +304,7 @@ export default {
       avgSession: { label: '平均会话' },
     },
     openPulseAi: 'Pulse AI',
-    workspace: '梅聆工作区',
+    workspace: '美玲系统',
     traffic: { organic: '自然流量', paid: '付费', referral: '转介绍', direct: '直接' },
     revenueUsers: { title: '营收与用户', sub: '双轴业绩表现' },
     churnByRegion: { title: '各区域流失', sub: '周度分布' },
