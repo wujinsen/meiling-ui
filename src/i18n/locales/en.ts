@@ -87,7 +87,7 @@ export default {
     passwordRequired: 'Enter a new password',
     passwordMismatch: 'Passwords do not match',
     changePassword: 'Update password',
-    passwordOk: 'Password updated',
+    passwordOk: 'Password updated. Please sign in again with your new password.',
     passwordFailed: 'Failed to update password',
     roles: 'Roles',
     rolesNone: 'No roles assigned',

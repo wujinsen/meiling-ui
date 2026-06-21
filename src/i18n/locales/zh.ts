@@ -87,7 +87,7 @@ export default {
     passwordRequired: '请输入新密码',
     passwordMismatch: '两次输入的密码不一致',
     changePassword: '更新密码',
-    passwordOk: '密码已更新',
+    passwordOk: '密码已更新，请使用新密码重新登录',
     passwordFailed: '密码更新失败',
     roles: '角色',
     rolesNone: '未分配角色',

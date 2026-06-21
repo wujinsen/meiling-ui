@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { mySystemsApi } from '@/api/system'
 import {
   changeSelfPasswordApi,
@@ -40,7 +41,8 @@ export function createPasswordForm() {
 
 export function useProfile() {
   const { t } = useI18n()
-  const { user, updateStoredUser } = useAuth()
+  const router = useRouter()
+  const { user, updateStoredUser, logout } = useAuth()
 
   const loading = ref(false)
   const saving = ref(false)
@@ -212,6 +214,8 @@ export function useProfile() {
       }
       passwordForm.value = createPasswordForm()
       showToast('success', t('profile.passwordOk'))
+      await logout()
+      await router.replace({ name: 'login' })
       return true
     } catch (e) {
       showToast('error', e instanceof Error ? e.message : t('profile.passwordFailed'))

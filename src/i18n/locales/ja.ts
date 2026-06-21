@@ -87,7 +87,7 @@ export default {
     passwordRequired: '新しいパスワードを入力してください',
     passwordMismatch: 'パスワードが一致しません',
     changePassword: 'パスワードを更新',
-    passwordOk: 'パスワードを更新しました',
+    passwordOk: 'パスワードを更新しました。新しいパスワードで再ログインしてください。',
     passwordFailed: 'パスワードの更新に失敗しました',
     roles: 'ロール',
     rolesNone: 'ロール未割当',

@@ -58,13 +58,7 @@ onMounted(() => {
 })
 
 async function onChangePassword() {
-  const ok = await changePassword()
-  if (ok) {
-    showOldPassword.value = false
-    showNewPassword.value = false
-    showConfirmPassword.value = false
-    activeTab.value = 'info'
-  }
+  await changePassword()
 }
 </script>
 

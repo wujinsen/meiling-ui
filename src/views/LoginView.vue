@@ -9,6 +9,8 @@ import { useAuth } from '@/composables/useAuth'
 import { isMockAuthEnabled } from '@/api/auth'
 import { Loader2 } from 'lucide-vue-next'
 
+const loginBgUrl = `${import.meta.env.BASE_URL}images/login-bg.jpg?v=4k`
+
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
@@ -52,67 +54,68 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="login-page flex min-h-screen flex-col bg-surface-light dark:bg-surface-dark">
-    <header class="flex items-center justify-end gap-2 px-6 py-4">
-      <LanguageSwitcher />
-      <ThemeToggle />
-    </header>
+  <div class="login-page">
+    <img class="login-page-bg" :src="loginBgUrl" alt="" fetchpriority="high" />
+    <div class="login-page-scrim" aria-hidden="true" />
 
-    <div class="flex flex-1 items-center justify-center px-4 pb-16">
-      <div class="w-full max-w-md">
-        <div class="mb-8">
-          <BrandMark variant="hero" />
-          <p class="mt-3 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('auth.subtitle') }}</p>
-        </div>
+    <div class="login-page-content flex min-h-screen flex-col">
+      <header class="login-page-header flex items-center justify-end gap-2 px-6 py-4">
+        <LanguageSwitcher />
+        <ThemeToggle on-media />
+      </header>
 
-        <form class="card p-6 shadow-card" @submit.prevent="onSubmit">
-          <div class="space-y-4">
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="username">
-                {{ t('auth.username') }}
-              </label>
-              <input
-                id="username"
-                v-model="userName"
-                type="text"
-                autocomplete="username"
-                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20"
-                :placeholder="t('auth.usernamePlaceholder')"
-              />
-            </div>
-
-            <div>
-              <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="password">
-                {{ t('auth.password') }}
-              </label>
-              <input
-                id="password"
-                v-model="password"
-                type="password"
-                autocomplete="current-password"
-                class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20"
-                :placeholder="t('auth.passwordPlaceholder')"
-              />
-            </div>
+      <div class="flex flex-1 items-center justify-center px-4 pb-16">
+        <div class="w-full max-w-md">
+          <div class="mb-8">
+            <BrandMark variant="hero" />
+            <p class="login-page-subtitle mt-3 text-center text-sm">{{ t('auth.subtitle') }}</p>
           </div>
 
-          <p v-if="error" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
-            {{ error }}
-          </p>
+          <form class="login-card card p-6 shadow-card" @submit.prevent="onSubmit">
+            <div class="space-y-4">
+              <div>
+                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="username">
+                  {{ t('auth.username') }}
+                </label>
+                <input
+                  id="username"
+                  v-model="userName"
+                  type="text"
+                  autocomplete="username"
+                  class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20"
+                  :placeholder="t('auth.usernamePlaceholder')"
+                />
+              </div>
 
-          <button
-            type="submit"
-            class="btn-primary mt-6 w-full justify-center py-2.5"
-            :disabled="loading"
-          >
-            <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
-            {{ loading ? t('auth.signingIn') : t('auth.signIn') }}
-          </button>
+              <div>
+                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="password">
+                  {{ t('auth.password') }}
+                </label>
+                <input
+                  id="password"
+                  v-model="password"
+                  type="password"
+                  autocomplete="current-password"
+                  class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20"
+                  :placeholder="t('auth.passwordPlaceholder')"
+                />
+              </div>
+            </div>
 
-          <p v-if="isMockAuthEnabled()" class="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
-            {{ t('auth.mockHint') }}
-          </p>
-        </form>
+            <p v-if="error" class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-400">
+              {{ error }}
+            </p>
+
+            <button type="submit" class="btn-primary mt-6 w-full justify-center py-2.5" :disabled="loading">
+              <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
+              {{ loading ? t('auth.signingIn') : t('auth.signIn') }}
+            </button>
+
+            <p v-if="isMockAuthEnabled()" class="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
+              {{ t('auth.mockHint') }}
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   </div>

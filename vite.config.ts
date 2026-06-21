@@ -38,8 +38,8 @@ export default defineConfig(({ command }) => ({
     /** 端口被占用时直接报错，避免静默切到 5174/5175 导致仍访问 5173 失败 */
     strictPort: true,
     proxy: {
-      '/login': apiProxy(),
-      '/logout': apiProxy(),
+      '^/login$': apiProxy(),
+      '^/logout$': apiProxy(),
       '/captchaImage': apiProxy(),
       '/menu': apiProxy(),
       '/user': apiProxy(),
