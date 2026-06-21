@@ -2,8 +2,8 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { mySystemsApi } from '@/api/system'
 import {
+  changeSelfPasswordApi,
   getUserProfileApi,
-  resetUserPasswordApi,
   updateUserLanguageApi,
   updateUserProfileApi,
 } from '@/api/user'
@@ -32,6 +32,7 @@ export function createProfileForm(): SysUserVo {
 
 export function createPasswordForm() {
   return {
+    oldPassword: '',
     newPassword: '',
     confirmPassword: '',
   }
@@ -184,6 +185,7 @@ export function useProfile() {
   }
 
   function validatePassword() {
+    if (!passwordForm.value.oldPassword.trim()) return t('profile.oldPasswordRequired')
     const pwd = passwordForm.value.newPassword.trim()
     const confirm = passwordForm.value.confirmPassword.trim()
     if (!pwd) return t('profile.passwordRequired')
@@ -198,14 +200,13 @@ export function useProfile() {
       showToast('error', error)
       return false
     }
-    if (!profile.value?.id) {
-      showToast('error', t('profile.loadFailed'))
-      return false
-    }
 
     saving.value = true
     try {
-      const result = await resetUserPasswordApi(profile.value.id, passwordForm.value.newPassword.trim())
+      const result = await changeSelfPasswordApi(
+        passwordForm.value.oldPassword.trim(),
+        passwordForm.value.newPassword.trim(),
+      )
       if (result.code !== API_SUCCESS_CODE) {
         throw new Error(result.msg || t('profile.passwordFailed'))
       }

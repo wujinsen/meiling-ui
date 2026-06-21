@@ -78,8 +78,7 @@ router.beforeEach(async (to) => {
   // 选系统页不依赖动态菜单路由
   if (to.name !== 'system-select') {
     try {
-      await ensurePermissionsLoaded()
-      await loadDynamicRoutes()
+      await Promise.all([ensurePermissionsLoaded(), loadDynamicRoutes()])
     } catch {
       clearAuthSession()
       await resetDynamicRoutes()

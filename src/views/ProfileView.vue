@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ExternalLink, LayoutGrid, ShieldCheck, Star } from 'lucide-vue-next'
+import { ExternalLink, Eye, EyeOff, LayoutGrid, ShieldCheck, Star } from 'lucide-vue-next'
 import FormField from '@/components/ui/FormField.vue'
 import { groupPortalSystems, type SystemGroup } from '@/constants/systemGroup'
 import { useProfile } from '@/composables/useProfile'
@@ -13,6 +13,10 @@ const { t } = useI18n()
 const { displayName } = useAuth()
 const { currentSystem } = useSystemPortal()
 const { options: localeOptions } = useLocale()
+
+const showOldPassword = ref(false)
+const showNewPassword = ref(false)
+const showConfirmPassword = ref(false)
 
 const {
   loading,
@@ -55,7 +59,12 @@ onMounted(() => {
 
 async function onChangePassword() {
   const ok = await changePassword()
-  if (ok) activeTab.value = 'info'
+  if (ok) {
+    showOldPassword.value = false
+    showNewPassword.value = false
+    showConfirmPassword.value = false
+    activeTab.value = 'info'
+  }
 }
 </script>
 
@@ -224,23 +233,65 @@ async function onChangePassword() {
             <p class="profile-form-hint">{{ t('profile.passwordHint') }}</p>
 
             <div class="profile-form-grid profile-form-grid-narrow">
+              <FormField :label="t('profile.oldPassword')" required>
+                <div class="relative">
+                  <input
+                    v-model="passwordForm.oldPassword"
+                    class="field-input w-full pr-10"
+                    :type="showOldPassword ? 'text' : 'password'"
+                    autocomplete="current-password"
+                    maxlength="20"
+                  />
+                  <button
+                    type="button"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    :title="showOldPassword ? t('profile.hidePassword') : t('profile.showPassword')"
+                    @click="showOldPassword = !showOldPassword"
+                  >
+                    <EyeOff v-if="showOldPassword" class="h-4 w-4" />
+                    <Eye v-else class="h-4 w-4" />
+                  </button>
+                </div>
+              </FormField>
               <FormField :label="t('profile.newPassword')" required>
-                <input
-                  v-model="passwordForm.newPassword"
-                  class="field-input w-full"
-                  type="password"
-                  autocomplete="new-password"
-                  maxlength="20"
-                />
+                <div class="relative">
+                  <input
+                    v-model="passwordForm.newPassword"
+                    class="field-input w-full pr-10"
+                    :type="showNewPassword ? 'text' : 'password'"
+                    autocomplete="new-password"
+                    maxlength="20"
+                  />
+                  <button
+                    type="button"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    :title="showNewPassword ? t('profile.hidePassword') : t('profile.showPassword')"
+                    @click="showNewPassword = !showNewPassword"
+                  >
+                    <EyeOff v-if="showNewPassword" class="h-4 w-4" />
+                    <Eye v-else class="h-4 w-4" />
+                  </button>
+                </div>
               </FormField>
               <FormField :label="t('profile.confirmPassword')" required>
-                <input
-                  v-model="passwordForm.confirmPassword"
-                  class="field-input w-full"
-                  type="password"
-                  autocomplete="new-password"
-                  maxlength="20"
-                />
+                <div class="relative">
+                  <input
+                    v-model="passwordForm.confirmPassword"
+                    class="field-input w-full pr-10"
+                    :type="showConfirmPassword ? 'text' : 'password'"
+                    autocomplete="new-password"
+                    maxlength="20"
+                  />
+                  <button
+                    type="button"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    :title="showConfirmPassword ? t('profile.hidePassword') : t('profile.showPassword')"
+                    @click="showConfirmPassword = !showConfirmPassword"
+                  >
+                    <EyeOff v-if="showConfirmPassword" class="h-4 w-4" />
+                    <Eye v-else class="h-4 w-4" />
+                  </button>
+                </div>
               </FormField>
             </div>
 

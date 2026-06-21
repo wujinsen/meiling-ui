@@ -17,6 +17,7 @@ import {
 } from '@/api/user'
 import { getRoleAllApi } from '@/api/role'
 import AppModal from '@/components/ui/AppModal.vue'
+import AppDatePicker from '@/components/ui/AppDatePicker.vue'
 import AppStatusPill from '@/components/ui/AppStatusPill.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { PERM } from '@/constants/permissions'
@@ -34,6 +35,7 @@ import type { SysPost } from '@/types/post'
 import type { SysRole } from '@/types/role'
 import { createEmptyUser, type UserQuery, type UserVo } from '@/types/user'
 import { filterAssignableRoles, isBuiltinSuperAdminRole } from '@/utils/role'
+import { toEntityId } from '@/utils/id'
 import { buildTree, collectTreeIds, normalizeNestedTree, sortTreeByOrderNum } from '@/utils/tree'
 import { KeyRound, LayoutGrid, Pencil, Plus, RefreshCw, Search, Shield, Trash2 } from 'lucide-vue-next'
 
@@ -212,7 +214,10 @@ async function loadUsers() {
     if (result.code !== API_SUCCESS_CODE || !result.data) {
       throw new Error(result.msg || t('system.user.loadFailed'))
     }
-    userList.value = result.data.list ?? []
+    userList.value = (result.data.list ?? []).map((row) => ({
+      ...row,
+      id: row.id != null ? String(row.id) : row.id,
+    }))
     total.value = result.data.total ?? 0
     selectedIds.value = new Set(
       [...selectedIds.value].filter((id) => userList.value.some((row) => String(row.id) === id)),
@@ -437,7 +442,7 @@ async function toggleStatus(row: UserVo) {
 }
 
 function openResetPwd(row: UserVo) {
-  resetTarget.value = row
+  resetTarget.value = { ...row, id: row.id != null ? String(row.id) : row.id }
   resetPassword.value = ''
   resetOpen.value = true
 }
@@ -454,11 +459,12 @@ async function submitResetPwd() {
     showToast('error', t('system.user.passwordLength'))
     return
   }
-  if (!resetTarget.value?.id) return
+  const userId = toEntityId(resetTarget.value?.id)
+  if (!userId) return
 
   resetting.value = true
   try {
-    const result = await resetUserPasswordApi(resetTarget.value.id, pwd)
+    const result = await resetUserPasswordApi(userId, pwd)
     if (result.code !== API_SUCCESS_CODE) {
       throw new Error(result.msg || t('system.user.resetFailed'))
     }
@@ -488,7 +494,10 @@ function toggleFormStatus() {
 async function loadRoleOptions() {
   const result = await getRoleAllApi()
   if (result.code === API_SUCCESS_CODE && result.data) {
-    roleOptions.value = filterAssignableRoles(result.data)
+    roleOptions.value = filterAssignableRoles(result.data).map((role) => ({
+      ...role,
+      id: role.id != null ? String(role.id) : role.id,
+    }))
   } else {
     roleOptions.value = []
   }
@@ -497,7 +506,9 @@ async function loadRoleOptions() {
 async function openAssignRoles(row: UserVo) {
   try {
     await loadRoleOptions()
-    const result = await getRoleByUserIdApi(row.id!)
+    const userId = toEntityId(row.id)
+    if (!userId) throw new Error(t('system.user.loadFailed'))
+    const result = await getRoleByUserIdApi(userId)
     if (result.code !== API_SUCCESS_CODE) {
       throw new Error(result.msg || t('system.user.loadFailed'))
     }
@@ -506,7 +517,7 @@ async function openAssignRoles(row: UserVo) {
         ?.filter((role) => !isBuiltinSuperAdminRole(role))
         .map((role) => String(role.id)) ?? []
     checkedRoleIds.value = new Set(roleIds)
-    roleAssignTarget.value = row
+    roleAssignTarget.value = { ...row, id: userId }
     roleAssignOpen.value = true
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('system.user.loadFailed'))
@@ -533,19 +544,16 @@ function openAssignSystems(row: UserVo) {
 }
 
 async function submitAssignRoles() {
-  if (!roleAssignTarget.value?.id) return
+  const userId = toEntityId(roleAssignTarget.value?.id)
+  if (!userId) return
 
   roleAssignSaving.value = true
   try {
-    const result = await insertUserRoleApi({
-      userId: roleAssignTarget.value.id,
-      roleIds: [...checkedRoleIds.value]
-        .map((id) => Number(id))
-        .filter((id) => {
-          const role = roleOptions.value.find((item) => Number(item.id) === id)
-          return role != null && !isBuiltinSuperAdminRole(role)
-        }),
+    const roleIds = [...checkedRoleIds.value].filter((id) => {
+      const role = roleOptions.value.find((item) => String(item.id) === String(id))
+      return role != null && !isBuiltinSuperAdminRole(role)
     })
+    const result = await insertUserRoleApi({ userId, roleIds })
     if (result.code !== API_SUCCESS_CODE) {
       throw new Error(result.msg || t('system.user.assignRoleFailed'))
     }
@@ -601,10 +609,10 @@ onMounted(async () => {
             </select>
           </FormField>
           <FormField :label="t('system.user.beginTime')" horizontal class="form-field-search">
-            <input v-model="query.beginTime" type="date" class="field-input" />
+            <AppDatePicker v-model="query.beginTime" />
           </FormField>
           <FormField :label="t('system.user.endTime')" horizontal class="form-field-search">
-            <input v-model="query.endTime" type="date" class="field-input" />
+            <AppDatePicker v-model="query.endTime" />
           </FormField>
           <button type="submit" class="btn-primary shrink-0">
             <Search class="h-4 w-4" /> {{ t('system.user.search') }}
@@ -628,7 +636,7 @@ onMounted(async () => {
       </p>
 
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-        <table class="w-full min-w-[1100px] text-left text-sm">
+        <table class="w-full min-w-[72rem] text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-white/5">
             <tr>
               <th class="w-10 px-4 py-3">
@@ -643,11 +651,11 @@ onMounted(async () => {
               <th class="px-4 py-3">{{ t('system.user.userName') }}</th>
               <th class="px-4 py-3">{{ t('system.user.nickName') }}</th>
               <th class="px-4 py-3">{{ t('system.user.dept') }}</th>
-              <th class="min-w-[11rem] px-4 py-3">{{ t('system.user.roles') }}</th>
+              <th class="min-w-[12rem] px-4 py-3">{{ t('system.user.roles') }}</th>
               <th class="px-4 py-3">{{ t('system.user.telephone') }}</th>
               <th class="px-4 py-3">{{ t('system.user.status') }}</th>
               <th class="px-4 py-3">{{ t('system.user.createTime') }}</th>
-              <th class="px-4 py-3 text-right">{{ t('system.user.actions') }}</th>
+              <th class="min-w-[26rem] px-4 py-3 text-right">{{ t('system.user.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -675,7 +683,7 @@ onMounted(async () => {
               <td class="px-4 py-3 font-medium text-gray-900 dark:text-white">{{ row.userName }}</td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.nickName || '-' }}</td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.deptName || '-' }}</td>
-              <td class="px-4 py-3">
+              <td class="min-w-[12rem] px-4 py-3 align-top">
                 <UserRoleTags :role-names="row.roleNames" />
               </td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.telephone || '-' }}</td>
@@ -688,7 +696,7 @@ onMounted(async () => {
                 />
               </td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ formatTime(row.createTime) }}</td>
-              <td class="px-4 py-3">
+              <td class="min-w-[26rem] px-4 py-3 text-right align-middle">
                 <div class="btn-action-group">
                   <button type="button" class="btn-action-edit" @click="onEditClick(row)">
                     <Pencil class="h-3.5 w-3.5" />
@@ -875,8 +883,17 @@ onMounted(async () => {
 
     <AppModal :open="resetOpen" :title="t('system.user.resetPwd')" @close="closeResetPwd">
       <form class="form-modal form-modal-compact" novalidate @submit.prevent="submitResetPwd">
+        <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+          {{ t('system.user.resetPwdHint', { name: resetTarget?.userName ?? '' }) }}
+        </p>
         <FormField :label="t('system.user.password')" horizontal>
-          <input v-model="resetPassword" type="password" class="field-input" autocomplete="new-password" />
+          <input
+            v-model="resetPassword"
+            type="text"
+            class="field-input"
+            autocomplete="new-password"
+            maxlength="20"
+          />
         </FormField>
       </form>
       <template #footer>

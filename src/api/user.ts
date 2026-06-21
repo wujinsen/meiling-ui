@@ -6,6 +6,7 @@ import type { SysUserVo, UserQuery, UserRoleVo, UserVo } from '@/types/user'
 import type { SysUser } from '@/types/api'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { getStoredUser } from '@/utils/authSession'
+import { toEntityId } from '@/utils/id'
 
 function buildQuery(params?: Record<string, string | number | undefined>) {
   if (!params) return ''
@@ -57,10 +58,24 @@ export async function changeUserStatusApi(id: number | string, status: number) {
   })
 }
 
-export async function resetUserPasswordApi(id: number | string, password: string) {
-  return request<boolean>('/user/resetPassword', {
+export async function changeSelfPasswordApi(oldPassword: string, password: string) {
+  return request<string>('/user/changePassword', {
     method: 'PUT',
-    body: JSON.stringify({ id, password }),
+    body: JSON.stringify({ oldPassword, password }),
+  })
+}
+
+export async function resetUserPasswordApi(id: number | string, password?: string) {
+  const entityId = toEntityId(id)
+  if (!entityId) {
+    return { code: 500, msg: '用户ID无效' } as const
+  }
+  const payload: { id: string; password?: string } = { id: entityId }
+  const trimmed = password?.trim()
+  if (trimmed) payload.password = trimmed
+  return request<string>('/user/resetPassword', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
   })
 }
 
@@ -108,9 +123,16 @@ export async function getRoleByUserIdApi(userId: number | string) {
 }
 
 export async function insertUserRoleApi(data: { userId: number | string; roleIds: Array<number | string> }) {
+  const userId = toEntityId(data.userId)
+  if (!userId) {
+    return { code: 500, msg: '用户ID无效' } as const
+  }
+  const roleIds = data.roleIds
+    .map((id) => toEntityId(id))
+    .filter((id): id is string => id != null)
   return request<boolean>('/user/insertUserRole', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify({ userId, roleIds }),
   })
 }
 

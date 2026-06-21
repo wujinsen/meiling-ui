@@ -23,7 +23,7 @@ import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import AppStatusPill from '@/components/ui/AppStatusPill.vue'
 import { confirm } from '@/composables/useConfirm'
-import { guardAction } from '@/composables/useActionPermissions'
+import { guardAction, guardActionWithRefresh } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
 import { PERM } from '@/constants/permissions'
 import { useTreeExpand } from '@/composables/useTreeExpand'
@@ -486,7 +486,7 @@ async function loadRoleAuthMenuTree() {
 }
 
 async function openPermissions(row: SysRole) {
-  if (!guardAction(PERM.ROLE_ASSIGN_PERM)) return
+  if (!(await guardActionWithRefresh(PERM.ROLE_ASSIGN_PERM))) return
   try {
     const roleId = row.id
     if (roleId == null || roleId === '') {
@@ -539,7 +539,7 @@ function closePermModal() {
 }
 
 async function submitPermissions() {
-  if (!guardAction(PERM.ROLE_ASSIGN_PERM)) return
+  if (!(await guardActionWithRefresh(PERM.ROLE_ASSIGN_PERM))) return
   if (!form.value.id) return
 
   saving.value = true
@@ -641,7 +641,7 @@ function searchUnauthorizedUsers() {
 }
 
 async function openAssignUsers(row: SysRole) {
-  if (!guardAction(PERM.ROLE_ASSIGN_USER)) return
+  if (!(await guardActionWithRefresh(PERM.ROLE_ASSIGN_USER))) return
   assignRoleId.value = row.id!
   assignRoleName.value = row.roleName ?? ''
   authorizedQuery.pageNum = 1
@@ -665,7 +665,7 @@ function closeAssignUsers() {
 }
 
 async function addSelectedUsers() {
-  if (!guardAction(PERM.ROLE_ASSIGN_USER)) return
+  if (!(await guardActionWithRefresh(PERM.ROLE_ASSIGN_USER))) return
   const ids = [...selectedUnauthorizedIds.value]
   if (!ids.length || !assignRoleId.value) return
 
@@ -689,7 +689,7 @@ async function addSelectedUsers() {
 }
 
 async function removeSelectedUsers() {
-  if (!guardAction(PERM.ROLE_ASSIGN_USER)) return
+  if (!(await guardActionWithRefresh(PERM.ROLE_ASSIGN_USER))) return
   const ids = [...selectedAuthorizedIds.value]
   if (!ids.length || !assignRoleId.value) return
   if (!(await confirm({ message: t('system.role.removeUserConfirm', { count: ids.length }) }))) return

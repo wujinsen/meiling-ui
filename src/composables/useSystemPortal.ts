@@ -66,14 +66,16 @@ export function useSystemPortal() {
     persistPortalState(systemList.value, data.currentSystem, portalEnabled.value)
     if (hasPermissionsPayload(data.permissions, data.fullPermission)) {
       savePermissions(data.permissions, data.fullPermission)
-    } else {
-      await ensurePermissionsLoaded()
     }
     await resetDynamicRoutes()
     resetPageTabs()
     try {
-      // 始终从 getRouters 拉最新菜单树，避免登录/进入系统快照与库表不一致
-      await loadDynamicRoutes(true)
+      await Promise.all([
+        hasPermissionsPayload(data.permissions, data.fullPermission)
+          ? Promise.resolve()
+          : ensurePermissionsLoaded(),
+        loadDynamicRoutes(true),
+      ])
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : '加载系统菜单失败')
     }
@@ -93,9 +95,11 @@ export function useSystemPortal() {
     }
 
     if (!enabled) {
-      if (!hasPayload) await ensurePermissionsLoaded()
       await resetDynamicRoutes()
-      await loadDynamicRoutes(true)
+      await Promise.all([
+        hasPayload ? Promise.resolve() : ensurePermissionsLoaded(),
+        loadDynamicRoutes(true),
+      ])
       return '/'
     }
 
@@ -104,9 +108,11 @@ export function useSystemPortal() {
     }
 
     if (loginData.currentSystem) {
-      if (!hasPayload) await ensurePermissionsLoaded()
       await resetDynamicRoutes()
-      await loadDynamicRoutes(true)
+      await Promise.all([
+        hasPayload ? Promise.resolve() : ensurePermissionsLoaded(),
+        loadDynamicRoutes(true),
+      ])
       return resolveDefaultPath(getPermissionMenus())
     }
 

@@ -12,6 +12,7 @@ function spaBypass(req: IncomingMessage) {
 }
 
 const backendTarget = 'http://127.0.0.1:8888'
+// const backendTarget = 'http://localhost:21000/UserCenter'
 
 function apiProxy() {
   return {

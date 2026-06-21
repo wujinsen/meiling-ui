@@ -1,5 +1,5 @@
 import type { MoliResult } from '@/types/api'
-import { API_AUTH_ERROR_CODE, API_TOKEN_INVALID_CODE } from '@/types/api'
+import { API_AUTH_ERROR_CODE, API_SUCCESS_CODE, API_TOKEN_INVALID_CODE } from '@/types/api'
 import { showToast } from '@/composables/useToast'
 import { clearAuthSession, getToken } from '@/utils/authSession'
 
@@ -77,6 +77,12 @@ export async function request<T>(
     const generic = ['无访问权限', '无权限操作']
     const msg = generic.includes(result.msg ?? '') ? '无权限操作' : (result.msg || '无权限操作')
     showToast('error', msg)
+  }
+
+  if (result.code === API_SUCCESS_CODE) {
+    void import('@/composables/useActionPermissions').then(({ refreshPermissionsIfApiHint }) => {
+      refreshPermissionsIfApiHint(result.msg)
+    })
   }
 
   return result

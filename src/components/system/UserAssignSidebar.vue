@@ -41,7 +41,7 @@ const pageSizeModel = computed({
   },
 })
 
-const showPagination = computed(() => props.total > props.pageSize)
+const showPagination = computed(() => props.total > 0)
 const listHint = computed(() =>
   props.total > props.pageSize ? t('system.userAssign.userListLargeHint', { total: props.total }) : '',
 )
@@ -137,7 +137,7 @@ function submitSearch() {
 }
 
 .user-assign-sidebar-list {
-  @apply max-h-[520px] space-y-0.5 overflow-y-auto;
+  @apply space-y-0.5;
 }
 
 .user-assign-sidebar-item {
