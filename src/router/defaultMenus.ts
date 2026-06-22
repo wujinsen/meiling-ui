@@ -86,83 +86,9 @@ const insightMenu: MenuVo = {
   ],
 }
 
-/** 企业知识库（前端内置模块，后续可由茉莉后台菜单管理接管；同 path=knowledge 自动去重） */
-const knowledgeMenu: MenuVo = {
-  id: 'meiling-knowledge',
-  menuName: '企业知识库',
-  menuNameEn: 'Knowledge Base',
-  menuNameJa: 'ナレッジベース',
-  name: 'Knowledge',
-  parentId: 0,
-  path: 'knowledge',
-  component: 'Layout',
-  menuType: 'M',
-  icon: 'knowledge',
-  hidden: false,
-  meta: { titleKey: 'knowledge.title', icon: 'knowledge' },
-  children: [
-    {
-      id: 'meiling-knowledge-browse',
-      menuName: '文档浏览',
-      menuNameEn: 'Browse',
-      menuNameJa: 'ドキュメント',
-      name: 'KnowledgeBrowse',
-      parentId: 'meiling-knowledge',
-      path: 'browse',
-      component: 'knowledge/browse/index',
-      menuType: 'C',
-      icon: 'documentation',
-      hidden: false,
-      meta: { titleKey: 'knowledge.browse.title', icon: 'documentation' },
-    },
-    {
-      id: 'meiling-knowledge-ask',
-      menuName: '智能问答',
-      menuNameEn: 'Ask',
-      menuNameJa: 'Q&A',
-      name: 'KnowledgeAsk',
-      parentId: 'meiling-knowledge',
-      path: 'ask',
-      component: 'knowledge/ask/index',
-      menuType: 'C',
-      icon: 'query',
-      hidden: false,
-      meta: { titleKey: 'knowledge.ask.title', icon: 'query' },
-    },
-    {
-      id: 'meiling-knowledge-graph',
-      menuName: '关系图谱',
-      menuNameEn: 'Graph',
-      menuNameJa: 'グラフ',
-      name: 'KnowledgeGraph',
-      parentId: 'meiling-knowledge',
-      path: 'graph',
-      component: 'knowledge/graph/index',
-      menuType: 'C',
-      icon: 'graph',
-      hidden: false,
-      meta: { titleKey: 'knowledge.graph.title', icon: 'graph' },
-    },
-    {
-      id: 'meiling-knowledge-lint',
-      menuName: '健康体检',
-      menuNameEn: 'Health',
-      menuNameJa: 'ヘルス',
-      name: 'KnowledgeLint',
-      parentId: 'meiling-knowledge',
-      path: 'lint',
-      component: 'knowledge/lint/index',
-      menuType: 'C',
-      icon: 'health',
-      hidden: false,
-      meta: { titleKey: 'knowledge.lint.title', icon: 'health' },
-    },
-  ],
-}
-
 /** 美玲业务侧栏菜单（后端不可用时兜底） */
 export function getDefaultMenus(): MenuVo[] {
-  return [dashboardMenu, insightMenu, knowledgeMenu, settingsMenu]
+  return [dashboardMenu, insightMenu, settingsMenu]
 }
 
 function normalizeMenuPath(path?: string) {
@@ -190,8 +116,8 @@ function hasFrontendMenu(menus: MenuVo[], extra: MenuVo): boolean {
   return path ? hasMenuPath(menus, path) : false
 }
 
-/** 前端内置、后端菜单通常不包含的侧栏项（工作台置顶，知识库 + 设置在末尾） */
-const frontendSidebarMenus: MenuVo[] = [dashboardMenu, knowledgeMenu, settingsMenu]
+/** 前端内置、后端菜单通常不包含的侧栏项（工作台置顶，设置在末尾） */
+const frontendSidebarMenus: MenuVo[] = [dashboardMenu, settingsMenu]
 
 /** 侧栏：工作台置顶 + 后端菜单 + 设置（去重） */
 export function mergeSidebarMenus(backendMenus: MenuVo[]): MenuVo[] {
@@ -209,7 +135,7 @@ export function mergeSidebarMenus(backendMenus: MenuVo[]): MenuVo[] {
 }
 
 /** 已由 staticRoutes 注册的路由，动态菜单里跳过避免重复 */
-export const frontendStaticMenuPaths = new Set(['', 'profile', 'settings', 'knowledge'])
+export const frontendStaticMenuPaths = new Set(['', 'profile', 'settings'])
 
 export function excludeStaticMenuRoutes(menus: MenuVo[]): MenuVo[] {
   return menus.filter((menu) => !frontendStaticMenuPaths.has(normalizeMenuPath(menu.path)))

@@ -1,13 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { CheckCircle2, FileWarning, Link2Off, Loader2, RefreshCw, ScanLine } from 'lucide-vue-next'
+import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
+import KbSyncPanel from '@/components/knowledge/KbSyncPanel.vue'
 import { getKbLintApi, getKbLintIssuesApi, scanKbLintApi, updateKbLintIssueApi } from '@/api/knowledge'
+import { useKbSpace } from '@/composables/useKbSpace'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { showToast } from '@/composables/useToast'
 import type { KbLintIssue, KbLintIssueStatus, KbLintReport } from '@/types/knowledge'
 
 const { t } = useI18n()
+const { selectedSpaceId, ensureSpacesLoaded, kbQuerySpaceId } = useKbSpace()
+
+const activeTab = ref<'lint' | 'sync'>('lint')
 
 const loading = ref(false)
 const scanning = ref(false)
@@ -29,7 +35,7 @@ const healthScore = computed(() => {
 async function loadReport() {
   loading.value = true
   try {
-    const res = await getKbLintApi()
+    const res = await getKbLintApi(kbQuerySpaceId())
     if (res.code === API_SUCCESS_CODE) report.value = res.data ?? null
   } finally {
     loading.value = false
@@ -39,7 +45,7 @@ async function loadReport() {
 async function scan() {
   scanning.value = true
   try {
-    const res = await scanKbLintApi()
+    const res = await scanKbLintApi(kbQuerySpaceId())
     if (res.code === API_SUCCESS_CODE && res.data) {
       report.value = res.data
       showToast('success', t('knowledge.lint.scanOk'))
@@ -58,6 +64,7 @@ async function loadIssues() {
   issuesLoading.value = true
   try {
     const res = await getKbLintIssuesApi({
+      spaceId: kbQuerySpaceId(),
       status: statusFilter.value === '' ? undefined : statusFilter.value,
     })
     if (res.code === API_SUCCESS_CODE) issues.value = res.data ?? []
@@ -88,6 +95,13 @@ function statusLabel(status: KbLintIssueStatus) {
 }
 
 onMounted(async () => {
+  await ensureSpacesLoaded()
+  await loadReport()
+  await loadIssues()
+})
+
+watch(selectedSpaceId, async () => {
+  if (activeTab.value !== 'lint') return
   await loadReport()
   await loadIssues()
 })
@@ -100,7 +114,32 @@ onMounted(async () => {
         <h1 class="page-title text-xl">{{ t('knowledge.lint.title') }}</h1>
         <p class="page-subtitle">{{ t('knowledge.lint.subtitle') }}</p>
       </div>
-      <div class="flex items-center gap-2">
+      <KbSpaceSelector />
+    </div>
+
+    <div class="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+      <button
+        type="button"
+        class="px-4 py-2 text-sm transition"
+        :class="activeTab === 'lint' ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'"
+        @click="activeTab = 'lint'"
+      >
+        {{ t('knowledge.lint.tabLint') }}
+      </button>
+      <button
+        type="button"
+        class="px-4 py-2 text-sm transition"
+        :class="activeTab === 'sync' ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800'"
+        @click="activeTab = 'sync'"
+      >
+        {{ t('knowledge.lint.tabSync') }}
+      </button>
+    </div>
+
+    <KbSyncPanel v-if="activeTab === 'sync'" />
+
+    <template v-else>
+      <div class="flex flex-wrap items-center justify-end gap-2">
         <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadReport">
           <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.lint.recheck') }}
         </button>
@@ -110,7 +149,6 @@ onMounted(async () => {
           {{ t('knowledge.lint.scan') }}
         </button>
       </div>
-    </div>
 
     <p v-if="loading && !report" class="card p-16 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
 
@@ -233,6 +271,7 @@ onMounted(async () => {
           </table>
         </div>
       </div>
+    </template>
     </template>
   </div>
 </template>

@@ -14,8 +14,10 @@ function spaBypass(req: IncomingMessage) {
 const backendTarget = 'http://127.0.0.1:8888'
 // const backendTarget = 'http://localhost:21000/UserCenter'
 
-/** 知识库经网关访问：网关 :21000 StripPrefix 去掉 /KnowledgeServer 转发到 moli-knowledge-server(:8090) */
+/** 知识库：默认直连 :8090（StripPrefix 在 rewrite 里做）；设 VITE_KB_PROXY_GATEWAY=true 走网关 :21000 */
+const knowledgeDirectTarget = 'http://127.0.0.1:8090'
 const knowledgeGatewayTarget = 'http://127.0.0.1:21000'
+const knowledgeTarget = process.env.VITE_KB_PROXY_GATEWAY === 'true' ? knowledgeGatewayTarget : knowledgeDirectTarget
 
 function apiProxy() {
   return {
@@ -26,9 +28,11 @@ function apiProxy() {
 }
 
 function knowledgeProxy() {
+  const useGateway = knowledgeTarget === knowledgeGatewayTarget
   return {
-    target: knowledgeGatewayTarget,
+    target: knowledgeTarget,
     changeOrigin: true,
+    ...(useGateway ? {} : { rewrite: (path: string) => path.replace(/^\/KnowledgeServer/, '') }),
     bypass: spaBypass,
   } as const
 }

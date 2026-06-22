@@ -1,21 +1,42 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, FileText, Link2, Search } from 'lucide-vue-next'
+import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
+import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
+import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import { getKbIndexApi, getKbPageApi } from '@/api/knowledge'
+import { useKbSpace } from '@/composables/useKbSpace'
+import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
 import type { KbIndex, KbPage } from '@/types/knowledge'
 
 const { t } = useI18n()
+const route = useRoute()
+const { selectedSpaceId, selectedSpace, spaces, loadError: spaceLoadError, loading: spaceLoading, ensureSpacesLoaded, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
+
+const noAccessibleSpaces = computed(
+  () => !spaceLoading.value && spaces.value.length === 0 && !spaceLoadError.value,
+)
+const accessDeniedMessage = computed(() => {
+  const msg = loadError.value || spaceLoadError.value
+  if (msg && (msg.includes('无权') || msg.includes('access'))) return msg
+  return ''
+})
+
+const canEdit = computed(() => selectedSpace.value?.canEdit === true)
 
 const loading = ref(false)
+const loadError = ref('')
 const detailLoading = ref(false)
 const index = ref<KbIndex>({ total: 0, groups: [] })
 const keyword = ref('')
 const page = ref<KbPage | null>(null)
 const activeSlug = ref('')
 const openGroups = ref<Record<string, boolean>>({})
+const detailRef = ref<HTMLElement | null>(null)
 
 const filteredGroups = computed(() => {
   const kw = keyword.value.trim().toLowerCase()
@@ -44,27 +65,67 @@ function formatTime(value?: string) {
   return value || '-'
 }
 
-async function loadIndex() {
+async function loadIndex(preferredSlug?: string) {
   loading.value = true
+  loadError.value = ''
+  if (!preferredSlug) {
+    page.value = null
+    activeSlug.value = ''
+  }
   try {
-    const res = await getKbIndexApi()
+    const res = await getKbIndexApi(kbQuerySpaceId())
     if (res.code === API_SUCCESS_CODE && res.data) {
       index.value = res.data
-      const first = index.value.groups.find((g) => g.items.length)?.items[0]
-      if (first) void openSlug(first.slug)
+      const slugFromRoute =
+        preferredSlug ?? (typeof route.query.slug === 'string' ? route.query.slug : '')
+      if (slugFromRoute) {
+        await openSlug(slugFromRoute)
+      } else {
+        const first = index.value.groups.find((g) => g.items.length)?.items[0]
+        if (first) void openSlug(first.slug)
+      }
+    } else if (res.code !== API_SUCCESS_CODE) {
+      loadError.value = res.msg || `接口异常(code=${res.code})`
     }
+  } catch (e) {
+    loadError.value = e instanceof Error ? e.message : '加载失败，请确认知识库服务(8090)与网关(21000)已启动'
   } finally {
     loading.value = false
   }
 }
 
-async function openSlug(slug: string) {
+/** wiki [[短名]] 解析为目录中的完整 slug（如 guides/故障排查指南） */
+function resolveSlug(slug: string) {
+  for (const g of index.value.groups) {
+    for (const it of g.items) {
+      if (it.slug === slug) return it.slug
+    }
+  }
+  for (const g of index.value.groups) {
+    for (const it of g.items) {
+      const stem = it.slug.includes('/') ? it.slug.split('/').pop()! : it.slug
+      if (stem === slug) return it.slug
+    }
+  }
+  return slug
+}
+
+async function openSlug(slug: string, spaceId?: number | string) {
   if (!slug) return
-  activeSlug.value = slug
+  const resolved = resolveSlug(slug)
+  activeSlug.value = resolved
   detailLoading.value = true
   try {
-    const res = await getKbPageApi(slug)
-    if (res.code === API_SUCCESS_CODE) page.value = res.data ?? null
+    const res = await getKbPageApi(resolved, resolvePageSpaceId(spaceId))
+    if (res.code === API_SUCCESS_CODE && res.data) {
+      page.value = res.data
+      await nextTick()
+      detailRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    } else {
+      showToast('error', res.msg || t('knowledge.browse.pageNotFound'))
+    }
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.browse.pageLoadFailed'))
   } finally {
     detailLoading.value = false
   }
@@ -79,17 +140,44 @@ function onContentClick(event: MouseEvent) {
   }
 }
 
-onMounted(() => loadIndex())
+onMounted(async () => {
+  await ensureSpacesLoaded()
+  await loadIndex()
+})
+
+watch(selectedSpaceId, () => loadIndex())
+watch(
+  () => route.query.slug,
+  (slug) => {
+    if (typeof slug === 'string' && slug && slug !== activeSlug.value) void openSlug(slug)
+  },
+)
 </script>
 
 <template>
   <div class="page-stack">
-    <div>
-      <h1 class="page-title text-xl">{{ t('knowledge.browse.title') }}</h1>
-      <p class="page-subtitle">{{ t('knowledge.browse.subtitle') }}</p>
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="page-title text-xl">{{ t('knowledge.browse.title') }}</h1>
+        <p class="page-subtitle">{{ t('knowledge.browse.subtitle') }}</p>
+      </div>
+      <KbSpaceSelector />
     </div>
 
-    <div class="flex flex-col gap-4 xl:flex-row xl:items-start">
+    <KbAccessDenied
+      v-if="noAccessibleSpaces"
+      :title="t('knowledge.accessDenied.emptyTitle')"
+      :message="t('knowledge.accessDenied.emptyMessage')"
+      :hint="t('knowledge.accessDenied.emptyHint')"
+    />
+
+    <KbAccessDenied
+      v-else-if="accessDeniedMessage"
+      :title="t('knowledge.accessDenied.title')"
+      :message="accessDeniedMessage"
+    />
+
+    <div v-else class="flex flex-col gap-4 xl:flex-row xl:items-start">
       <!-- 左：分组目录树 -->
       <aside class="card w-full p-4 xl:w-[22rem] xl:shrink-0 xl:sticky xl:top-20 xl:self-start">
         <div class="relative mb-3">
@@ -98,6 +186,7 @@ onMounted(() => loadIndex())
         </div>
 
         <p v-if="loading" class="py-8 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
+        <p v-else-if="loadError" class="py-8 text-center text-sm text-red-500">{{ loadError }}</p>
         <p v-else-if="!filteredGroups.length" class="py-8 text-center text-sm text-gray-400">{{ t('knowledge.browse.empty') }}</p>
 
         <div v-else class="space-y-1">
@@ -122,7 +211,7 @@ onMounted(() => loadIndex())
                     ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
                     : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5',
                 ]"
-                @click="openSlug(item.slug)"
+                @click="openSlug(item.slug, item.spaceId)"
               >
                 <FileText class="h-3.5 w-3.5 shrink-0 opacity-70" />
                 <span class="truncate">{{ item.title }}</span>
@@ -133,7 +222,7 @@ onMounted(() => loadIndex())
       </aside>
 
       <!-- 右：单页详情 -->
-      <div class="card min-w-0 flex-1 p-6">
+      <div ref="detailRef" class="card min-w-0 flex-1 p-6">
         <p v-if="detailLoading" class="py-16 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
         <div v-else-if="!page" class="flex flex-col items-center justify-center py-20 text-gray-400">
           <FileText class="mb-3 h-10 w-10 opacity-40" />
@@ -166,7 +255,7 @@ onMounted(() => loadIndex())
               </h3>
               <ul class="space-y-1.5">
                 <li v-for="l in page.outLinks" :key="l.slug">
-                  <button type="button" class="kb-linkrow" @click="openSlug(l.slug)">
+                  <button type="button" class="kb-linkrow" @click="openSlug(l.slug, page?.spaceId)">
                     <span class="truncate">{{ l.title }}</span>
                     <span v-if="l.relationType" class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400">{{ l.relationType }}</span>
                   </button>
@@ -179,7 +268,7 @@ onMounted(() => loadIndex())
               </h3>
               <ul class="space-y-1.5">
                 <li v-for="l in page.backLinks" :key="l.slug">
-                  <button type="button" class="kb-linkrow" @click="openSlug(l.slug)">
+                  <button type="button" class="kb-linkrow" @click="openSlug(l.slug, page?.spaceId)">
                     <span class="truncate">{{ l.title }}</span>
                     <span v-if="l.relationType" class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400">{{ l.relationType }}</span>
                   </button>
@@ -187,6 +276,8 @@ onMounted(() => loadIndex())
               </ul>
             </div>
           </section>
+
+          <KbAttachmentsPanel :document-id="page.docId" :can-edit="canEdit" />
         </article>
       </div>
     </div>

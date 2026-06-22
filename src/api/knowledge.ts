@@ -1,15 +1,24 @@
 import { request } from '@/api/http'
 import { API_SUCCESS_CODE, type MoliResult } from '@/types/api'
 import type {
+  KbAccessibleSpace,
   KbAskRequest,
   KbAskResponse,
+  KbAttachment,
+  KbDocumentDetail,
   KbGraph,
   KbIndex,
   KbLintIssue,
   KbLintIssueStatus,
   KbLintReport,
   KbPage,
+  KbQaHistory,
+  KbSyncLog,
+  KbSyncStatus,
+  KbSyncTrigger,
+  MoliPage,
 } from '@/types/knowledge'
+import { getToken } from '@/utils/authSession'
 
 /**
  * 网关前缀：网关 StripPrefix=1 去掉 /KnowledgeServer 后转发到 moli-knowledge-server。
@@ -139,18 +148,40 @@ function toIndexItem(p: KbPage) {
 }
 
 function mockGraph(): KbGraph {
-  return {
-    nodes: [
-      { id: '90001', title: '本地启动指南', type: 'guide', deg: 2 },
-      { id: '90010', title: '用户中心', type: 'service', deg: 6 },
-      { id: '90011', title: 'RBAC 权限模型', type: 'concept', deg: 3 },
-      { id: '90020', title: 'Spring 事务', type: 'interview', deg: 1 },
-    ],
-    links: [
-      { source: '90001', target: '90010', type: 'links_to' },
-      { source: '90010', target: '90011', type: 'related' },
-    ],
+  const types = ['service', 'concept', 'guide', 'interview', 'api', 'config']
+  const relations = ['links_to', 'related', 'same_tag', 'depends_on', 'ref', 'contradiction', 'inference']
+  const titles = [
+    '用户中心', 'RBAC 权限模型', '本地启动指南', 'Spring 事务', '网关路由', '鉴权流程',
+    '知识库索引', '向量检索', '问答编排', '体检规则', '断链扫描', '孤儿页清理',
+    '缓存设计', '分库分表', '消息队列', '幂等设计', '限流降级', '链路追踪',
+    '配置中心', '灰度发布', '单点登录', '令牌刷新', 'OpenAPI 规范', 'Webhook 回调',
+    '审计日志', '数据脱敏', '租户隔离', '组织架构', '岗位权限', '菜单管理',
+    '工作流引擎', '定时任务', '文件存储', '图谱构建', '实体抽取', '关系推断',
+    '冲突检测', '版本回滚', '导入导出', '搜索高亮',
+  ]
+  const nodes: KbGraph['nodes'] = titles.map((title, i) => ({
+    id: String(90000 + i),
+    title,
+    type: types[i % types.length],
+    deg: 0,
+  }))
+
+  const links: KbGraph['links'] = []
+  const deg = new Array(nodes.length).fill(0)
+  // 每个节点向前若干个节点连边，构造一张中等密度的图
+  for (let i = 1; i < nodes.length; i++) {
+    const fanout = (i % 3) + 1
+    for (let k = 0; k < fanout; k++) {
+      const target = (i * 7 + k * 13) % i
+      if (target === i) continue
+      const type = relations[(i + k) % relations.length]
+      links.push({ source: nodes[i].id, target: nodes[target].id, type })
+      deg[i] += 1
+      deg[target] += 1
+    }
   }
+  nodes.forEach((n, i) => (n.deg = deg[i]))
+  return { nodes, links }
 }
 
 function mockLint(): KbLintReport {
@@ -160,6 +191,113 @@ function mockLint(): KbLintReport {
     noSummary: [],
     counts: { pages: MOCK_PAGES.length, broken: 1, orphans: 1, noSummary: 0 },
   }
+}
+
+// ---------------------------------------------------------------------------
+// 1. 空间
+// ---------------------------------------------------------------------------
+
+/** 当前用户可读空间（含 canEdit/canAdmin） */
+export async function getKbAccessibleSpacesApi() {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok<KbAccessibleSpace[]>([
+      {
+        id: 900000000000000001,
+        spaceCode: 'enterprise-kb',
+        spaceName: '企业知识库',
+        description: '公司级知识沉淀',
+        visibility: 2,
+        canEdit: false,
+        canAdmin: false,
+      },
+      {
+        id: 900000000000000002,
+        spaceCode: 'jp-fe-ap-exam',
+        spaceName: '日本語試験（FE/AP）',
+        description: '基本情報・応用情報备考',
+        visibility: 0,
+        canEdit: false,
+        canAdmin: false,
+      },
+    ])
+  }
+  return request<KbAccessibleSpace[]>(`${KB_BASE}/space/accessible`, { method: 'GET' })
+}
+
+export async function getKbSpaceApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(100)
+    return ok<import('@/types/knowledge').KbSpace>({
+      id,
+      spaceCode: 'enterprise-kb',
+      spaceName: '企业知识库',
+      visibility: 2,
+      status: 1,
+    })
+  }
+  return request<import('@/types/knowledge').KbSpace>(`${KB_BASE}/space/${id}`, { method: 'GET' })
+}
+
+export async function createKbSpaceApi(data: import('@/types/knowledge').KbSpace) {
+  if (USE_MOCK) {
+    await delay(200)
+    return ok<number | string>(Date.now())
+  }
+  return request<number | string>(`${KB_BASE}/space`, { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function updateKbSpaceApi(data: import('@/types/knowledge').KbSpace) {
+  if (USE_MOCK) {
+    await delay(200)
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/space`, { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export async function deleteKbSpaceApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(150)
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/space/${id}`, { method: 'DELETE' })
+}
+
+export async function listKbSpaceMembersApi(spaceId: number | string) {
+  if (USE_MOCK) {
+    await delay(150)
+    return ok<import('@/types/knowledge').KbSpaceMember[]>([
+      { id: 1, spaceId, memberType: 0, memberId: 719712653013942272, role: 'admin' },
+    ])
+  }
+  return request<import('@/types/knowledge').KbSpaceMember[]>(
+    `${KB_BASE}/space/member/list${buildQuery({ spaceId })}`,
+    { method: 'GET' },
+  )
+}
+
+export async function addKbSpaceMemberApi(data: import('@/types/knowledge').KbSpaceMember) {
+  if (USE_MOCK) {
+    await delay(150)
+    return ok<number | string>(Date.now())
+  }
+  return request<number | string>(`${KB_BASE}/space/member`, { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function updateKbSpaceMemberApi(data: import('@/types/knowledge').KbSpaceMember) {
+  if (USE_MOCK) {
+    await delay(150)
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/space/member`, { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export async function removeKbSpaceMemberApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/space/member/${id}`, { method: 'DELETE' })
 }
 
 // ---------------------------------------------------------------------------
@@ -207,16 +345,20 @@ export async function askKbApi(payload: KbAskRequest) {
       model: 'mock',
       citations: list.map((p) => ({
         docId: p.docId,
+        spaceId: p.spaceId ?? 900000000000000001,
         slug: p.slug,
         title: p.title,
         kbType: p.kbType,
         snippet: p.summary,
       })),
+      qaLogId: Date.now(),
     })
   }
   return request<KbAskResponse>(`${KB_BASE}/ask`, {
     method: 'POST',
     body: JSON.stringify(payload),
+    /** 生成式问答会调 LLM，后端 timeout 90s；默认 8s 会误报超时 */
+    timeoutMs: 120_000,
   })
 }
 
@@ -289,4 +431,146 @@ export async function updateKbLintIssueApi(id: number | string, status: KbLintIs
     return ok<boolean>(true)
   }
   return request<boolean>(`${KB_BASE}/lint/issue/${id}${buildQuery({ status })}`, { method: 'PUT' })
+}
+
+// ---------------------------------------------------------------------------
+// 3.2 问答历史与反馈
+// ---------------------------------------------------------------------------
+
+export async function getKbAskHistoryApi(params?: {
+  spaceId?: number | string
+  pageNum?: number
+  pageSize?: number
+}) {
+  if (USE_MOCK) {
+    await delay(200)
+    return ok<MoliPage<KbQaHistory>>({
+      records: [],
+      total: 0,
+      size: params?.pageSize ?? 10,
+      current: params?.pageNum ?? 1,
+    })
+  }
+  return request<MoliPage<KbQaHistory>>(`${KB_BASE}/ask/history${buildQuery(params as Record<string, string | number | undefined>)}`, {
+    method: 'GET',
+  })
+}
+
+export async function feedbackKbAskApi(id: number | string, useful: 0 | 1) {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/ask/feedback/${id}${buildQuery({ useful })}`, { method: 'PUT' })
+}
+
+// ---------------------------------------------------------------------------
+// 5. 文档详情 / 附件
+// ---------------------------------------------------------------------------
+
+export async function getKbDocumentApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(150)
+    const p = MOCK_PAGES.find((x) => String(x.docId) === String(id))
+    if (!p) return ok<KbDocumentDetail | undefined>(undefined)
+    return ok<KbDocumentDetail>({
+      id: p.docId,
+      spaceId: p.spaceId,
+      slug: p.slug,
+      title: p.title,
+      summary: p.summary,
+      content: p.content,
+      kbType: p.kbType,
+      domain: p.domain,
+      status: p.status,
+    })
+  }
+  return request<KbDocumentDetail>(`${KB_BASE}/document/${id}`, { method: 'GET' })
+}
+
+export async function listKbAttachmentsApi(documentId: number | string) {
+  if (USE_MOCK) {
+    await delay(100)
+    return ok<KbAttachment[]>([])
+  }
+  return request<KbAttachment[]>(`${KB_BASE}/attachment/list${buildQuery({ documentId })}`, { method: 'GET' })
+}
+
+export async function uploadKbAttachmentApi(documentId: number | string, file: File) {
+  if (USE_MOCK) {
+    await delay(400)
+    return ok<KbAttachment>({
+      id: Date.now(),
+      documentId,
+      fileName: file.name,
+      fileSize: file.size,
+      contentType: file.type,
+    })
+  }
+  const form = new FormData()
+  form.append('documentId', String(documentId))
+  form.append('file', file)
+  return request<KbAttachment>(`${KB_BASE}/attachment/upload`, { method: 'POST', body: form })
+}
+
+export async function deleteKbAttachmentApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/attachment/${id}`, { method: 'DELETE' })
+}
+
+export async function downloadKbAttachmentApi(id: number | string, fileName?: string) {
+  const base = import.meta.env.VITE_API_BASE_URL ?? ''
+  const token = getToken()
+  const res = await fetch(`${base}${KB_BASE}/attachment/${id}`, {
+    headers: token ? { Authorization: token } : {},
+  })
+  if (!res.ok) throw new Error(`下载失败 (HTTP ${res.status})`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName || 'attachment'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ---------------------------------------------------------------------------
+// 6. Wiki 同步管理
+// ---------------------------------------------------------------------------
+
+export async function getKbSyncStatusApi(spaceId?: number | string) {
+  if (USE_MOCK) {
+    await delay(150)
+    return ok<KbSyncStatus>({ batchNo: 'mock', total: 0, failCount: 0, actionCounts: {} })
+  }
+  return request<KbSyncStatus>(`${KB_BASE}/sync/status${buildQuery({ spaceId })}`, { method: 'GET' })
+}
+
+export async function getKbSyncLogsApi(params?: {
+  spaceId?: number | string
+  batchNo?: string
+  pageNum?: number
+  pageSize?: number
+}) {
+  if (USE_MOCK) {
+    await delay(180)
+    return ok<MoliPage<KbSyncLog>>({ records: [], total: 0, size: 10, current: 1 })
+  }
+  return request<MoliPage<KbSyncLog>>(`${KB_BASE}/sync/logs${buildQuery(params as Record<string, string | number | undefined>)}`, {
+    method: 'GET',
+  })
+}
+
+export async function triggerKbSyncApi(params?: { spaceId?: number | string; spaceCode?: string }) {
+  if (USE_MOCK) {
+    await delay(800)
+    return ok<KbSyncTrigger>({ success: true, exitCode: 0, spaceCode: 'enterprise-kb', outputTail: 'mock sync ok' })
+  }
+  return request<KbSyncTrigger>(`${KB_BASE}/sync/trigger${buildQuery(params as Record<string, string | number | undefined>)}`, {
+    method: 'POST',
+    timeoutMs: 320_000,
+  })
 }

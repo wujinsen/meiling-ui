@@ -229,8 +229,40 @@
     @apply space-y-1 text-sm;
   }
 
+  .kb-markdown .kb-table-wrap {
+    @apply my-3 overflow-x-auto rounded-lg border border-gray-200 dark:border-white/10;
+  }
+
+  .kb-markdown .kb-table {
+    @apply w-full min-w-[20rem] border-collapse text-left text-sm;
+  }
+
+  .kb-markdown .kb-table th {
+    @apply border-b border-gray-200 bg-gray-50 px-3 py-2 font-semibold text-gray-800 dark:border-white/10 dark:bg-white/5 dark:text-gray-100;
+  }
+
+  .kb-markdown .kb-table td {
+    @apply border-b border-gray-100 px-3 py-2 text-gray-600 dark:border-white/5 dark:text-gray-300;
+  }
+
+  .kb-markdown .kb-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .kb-markdown .kb-table tbody tr:hover td {
+    @apply bg-gray-50/80 dark:bg-white/[0.03];
+  }
+
   .kb-markdown .kb-code {
     @apply rounded bg-gray-100 px-1 py-0.5 text-xs text-brand-700 dark:bg-white/10 dark:text-brand-300;
+  }
+
+  .kb-markdown .kb-pre {
+    @apply my-3 overflow-x-auto rounded-lg bg-gray-900 p-3 text-xs leading-relaxed text-gray-100 dark:bg-black/40;
+  }
+
+  .kb-markdown .kb-codeblock {
+    @apply block whitespace-pre font-mono;
   }
 
   .kb-markdown .kb-wikilink {

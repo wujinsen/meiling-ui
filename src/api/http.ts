@@ -12,7 +12,7 @@ export async function request<T>(
 ): Promise<MoliResult<T>> {
   const { timeoutMs = DEFAULT_TIMEOUT_MS, ...fetchOptions } = options
   const headers = new Headers(fetchOptions.headers)
-  if (!headers.has('Content-Type') && fetchOptions.body) {
+  if (!headers.has('Content-Type') && fetchOptions.body && !(fetchOptions.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
 
@@ -33,7 +33,8 @@ export async function request<T>(
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error('请求超时，请确认后端 moli-server (8888) 已启动')
+      const sec = Math.round(timeoutMs / 1000)
+      throw new Error(`请求超时（${sec}s）：${path.startsWith('/KnowledgeServer') ? '请确认知识库服务 (8090) 已启动' : '请确认后端 user-center (8888) 已启动'}`)
     }
     throw error
   } finally {
