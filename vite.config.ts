@@ -14,9 +14,20 @@ function spaBypass(req: IncomingMessage) {
 const backendTarget = 'http://127.0.0.1:8888'
 // const backendTarget = 'http://localhost:21000/UserCenter'
 
+/** 知识库经网关访问：网关 :21000 StripPrefix 去掉 /KnowledgeServer 转发到 moli-knowledge-server(:8090) */
+const knowledgeGatewayTarget = 'http://127.0.0.1:21000'
+
 function apiProxy() {
   return {
     target: backendTarget,
+    changeOrigin: true,
+    bypass: spaBypass,
+  } as const
+}
+
+function knowledgeProxy() {
+  return {
+    target: knowledgeGatewayTarget,
     changeOrigin: true,
     bypass: spaBypass,
   } as const
@@ -56,6 +67,7 @@ export default defineConfig(({ command }) => ({
       '/cockpit': apiProxy(),
       '/bi': apiProxy(),
       '/persona': apiProxy(),
+      '/KnowledgeServer': knowledgeProxy(),
     },
   },
 }))

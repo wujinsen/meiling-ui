@@ -225,6 +225,22 @@
     @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium;
   }
 
+  .kb-markdown {
+    @apply space-y-1 text-sm;
+  }
+
+  .kb-markdown .kb-code {
+    @apply rounded bg-gray-100 px-1 py-0.5 text-xs text-brand-700 dark:bg-white/10 dark:text-brand-300;
+  }
+
+  .kb-markdown .kb-wikilink {
+    @apply cursor-pointer font-medium text-brand-600 underline decoration-dotted underline-offset-2 hover:text-brand-700 dark:text-brand-400;
+  }
+
+  .kb-linkrow {
+    @apply flex w-full items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-100 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10;
+  }
+
   .user-role-tags {
     @apply flex min-w-0 flex-wrap items-center gap-1;
   }

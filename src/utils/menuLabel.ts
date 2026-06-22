@@ -35,6 +35,14 @@ const MENU_COMPONENT_TITLE_KEYS: Record<string, string> = {
   'operation/server/index': 'operation.server.title',
   'operation/platform/index': 'operation.platform.title',
   'operation/component/index': 'operation.component.title',
+  'knowledge/browse/index': 'knowledge.browse.title',
+  'knowledge/index/index': 'knowledge.browse.title',
+  'knowledge/docs/index': 'knowledge.browse.title',
+  'knowledge/ask/index': 'knowledge.ask.title',
+  'knowledge/query/index': 'knowledge.ask.title',
+  'knowledge/graph/index': 'knowledge.graph.title',
+  'knowledge/lint/index': 'knowledge.lint.title',
+  'knowledge/health/index': 'knowledge.lint.title',
 }
 
 const MENU_PATH_TITLE_KEYS: Record<string, string> = {
@@ -43,6 +51,7 @@ const MENU_PATH_TITLE_KEYS: Record<string, string> = {
   monitor: 'menu.navOperation',
   insight: 'sections.insightControl',
   candlelight: 'candlelightDragon.title',
+  knowledge: 'knowledge.title',
 }
 
 const MENU_NAME_TITLE_KEYS: Record<string, string> = {

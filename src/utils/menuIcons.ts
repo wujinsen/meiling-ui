@@ -18,6 +18,10 @@ import {
   Wrench,
   Monitor,
   List,
+  Library,
+  Share2,
+  MessageCircleQuestion,
+  Activity,
 } from 'lucide-vue-next'
 
 const ICON_MAP: Record<string, Component> = {
@@ -42,6 +46,10 @@ const ICON_MAP: Record<string, Component> = {
   tool: Wrench,
   monitor: Monitor,
   list: List,
+  knowledge: Library,
+  query: MessageCircleQuestion,
+  graph: Share2,
+  health: Activity,
 }
 
 export type MenuIconKey = keyof typeof ICON_MAP
