@@ -139,8 +139,25 @@ function roleLabel(role: string) {
   return t(`knowledge.spaceManage.roles.${role}` as 'knowledge.spaceManage.roles.viewer')
 }
 
+function spaceRoleLabel(role?: string) {
+  if (!role) return t('knowledge.spaceManage.readOnly')
+  if (role === 'platform') return t('knowledge.spaceManage.roles.platform')
+  if (role === 'owner') return t('knowledge.spaceManage.roles.owner')
+  return roleLabel(role)
+}
+
+function spaceRoleBadgeClass(role?: string) {
+  if (role === 'platform' || role === 'owner' || role === 'admin') {
+    return 'badge bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
+  }
+  if (role === 'editor') {
+    return 'badge bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
+  }
+  return 'badge bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'
+}
+
 const roleCardOptions = computed(() =>
-  (['viewer', 'editor', 'admin'] as KbMemberRole[]).map((role) => ({
+  (['viewer', 'editor'] as KbMemberRole[]).map((role) => ({
     value: role,
     label: roleLabel(role),
     desc: t(`knowledge.spaceManage.roleDesc.${role}` as 'knowledge.spaceManage.roleDesc.viewer'),
@@ -556,7 +573,8 @@ async function loadUserLabels(ids: Array<number | string>) {
 }
 
 async function openMembers(row: KbAccessibleSpace) {
-  if (!canManageMembers.value || !(row.canAdmin || hasSpaceManageScope.value)) {
+  // 成员授权由动作权限 kb:space:member 控制（菜单管数据、动作管按钮）
+  if (!canManageMembers.value) {
     showToast('error', t('knowledge.accessDenied.title'))
     return
   }
@@ -684,11 +702,7 @@ onMounted(() => loadSpaces())
                 </span>
               </td>
               <td class="px-4 py-3">
-                <div class="flex flex-wrap gap-1">
-                  <span v-if="row.canEdit" class="badge bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">{{ t('knowledge.spaceManage.canEdit') }}</span>
-                  <span v-if="row.canAdmin" class="badge bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">{{ t('knowledge.spaceManage.canAdmin') }}</span>
-                  <span v-if="!row.canEdit && !row.canAdmin" class="badge bg-gray-100 text-gray-500">{{ t('knowledge.spaceManage.readOnly') }}</span>
-                </div>
+                <span :class="spaceRoleBadgeClass(row.myRole)">{{ spaceRoleLabel(row.myRole) }}</span>
               </td>
               <td class="px-4 py-3 text-right">
                 <div v-if="canEditSpace(row) || canRemoveSpace(row)" class="btn-action-group justify-end">
@@ -969,7 +983,6 @@ onMounted(() => loadSpaces())
                   >
                     <option value="viewer">{{ roleLabel('viewer') }}</option>
                     <option value="editor">{{ roleLabel('editor') }}</option>
-                    <option value="admin">{{ roleLabel('admin') }}</option>
                   </select>
                   <button
                     type="button"

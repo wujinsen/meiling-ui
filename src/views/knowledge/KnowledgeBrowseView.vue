@@ -2,18 +2,21 @@
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, FileText, FoldVertical, Link2, Search, UnfoldVertical } from 'lucide-vue-next'
+import { ChevronDown, FileText, FoldVertical, Link2, Loader2, Search, UnfoldVertical } from 'lucide-vue-next'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
-import { getKbIndexApi, getKbPageApi } from '@/api/knowledge'
+import { getKbIndexApi, getKbIndexItemsApi, getKbPageApi, locateKbIndexApi, searchKbIndexApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
-import type { KbIndex, KbPage } from '@/types/knowledge'
+import type { KbIndex, KbIndexGroup, KbIndexItem, KbPage } from '@/types/knowledge'
 
 const LAST_SLUG_KEY = 'kb_last_active_slug'
+const GROUP_ITEM_BATCH = 40
+const GROUP_FETCH_SIZE = 50
+const SEARCH_DEBOUNCE_MS = 300
 const pageCache = new Map<string, KbPage>()
 const inflightPages = new Map<string, Promise<KbPage | undefined>>()
 
@@ -35,11 +38,19 @@ const canEdit = computed(() => selectedSpace.value?.canEdit === true)
 const loading = ref(false)
 const loadError = ref('')
 const detailLoading = ref(false)
-const index = ref<KbIndex>({ total: 0, groups: [] })
+const index = shallowRef<KbIndex>({ total: 0, groups: [] })
+const searchIndex = shallowRef<KbIndex | null>(null)
+const searchLoading = ref(false)
 const keyword = ref('')
+const groupItemsCache = ref<Record<string, KbIndexItem[]>>({})
+const groupItemsTotal = ref<Record<string, number>>({})
+const groupItemsPage = ref<Record<string, number>>({})
+const groupItemsLoading = ref<Record<string, boolean>>({})
 const page = ref<KbPage | null>(null)
 const activeSlug = ref('')
 const openGroups = ref<Record<string, boolean>>({})
+/** 分组展开后分批挂载条目，避免一次渲染上千个 DOM 节点 */
+const groupVisibleLimit = ref<Record<string, number>>({})
 const detailRef = ref<HTMLElement | null>(null)
 const treeRef = ref<HTMLElement | null>(null)
 const contentHtml = shallowRef('')
@@ -47,22 +58,24 @@ const attachmentsReady = ref(false)
 const slugLookup = ref<Map<string, string>>(new Map())
 
 let openSeq = 0
+let groupGrowSeq = 0
+let searchTimer: ReturnType<typeof setTimeout> | undefined
 
-const filteredGroups = computed(() => {
-  const kw = keyword.value.trim().toLowerCase()
-  if (!kw) return index.value.groups
-  return index.value.groups
-    .map((g) => ({
-      ...g,
-      items: g.items.filter((it) => {
-        const title = it.title.toLowerCase()
-        const summary = it.summary?.toLowerCase() ?? ''
-        const slug = it.slug.toLowerCase()
-        return title.includes(kw) || summary.includes(kw) || slug.includes(kw)
-      }),
-    }))
-    .filter((g) => g.items.length)
+function groupCount(group: KbIndexGroup) {
+  return group.count ?? group.items.length
+}
+
+const displayGroups = computed((): KbIndexGroup[] => {
+  if (keyword.value.trim() && searchIndex.value) {
+    return searchIndex.value.groups
+  }
+  return index.value.groups.map((g) => ({
+    ...g,
+    items: groupItemsCache.value[g.type] ?? [],
+  }))
 })
+
+const filteredGroups = computed(() => displayGroups.value.filter((g) => groupCount(g) > 0))
 
 function readLastActiveSlug() {
   try {
@@ -84,7 +97,7 @@ function pageCacheKey(slug: string, spaceId?: string) {
   return `${spaceId ?? 'all'}::${slug}`
 }
 
-function rebuildSlugLookup(groups: KbIndex['groups']) {
+function rebuildSlugLookup(groups: KbIndexGroup[]) {
   const map = new Map<string, string>()
   for (const g of groups) {
     for (const it of g.items) {
@@ -96,12 +109,34 @@ function rebuildSlugLookup(groups: KbIndex['groups']) {
   slugLookup.value = map
 }
 
+function mergeItemsIntoCache(type: string, items: KbIndexItem[], replace = false) {
+  if (!items.length && replace) {
+    groupItemsCache.value = { ...groupItemsCache.value, [type]: [] }
+    return
+  }
+  const prev = replace ? [] : (groupItemsCache.value[type] ?? [])
+  const seen = new Set(prev.map((it) => it.slug))
+  const merged = [...prev]
+  for (const it of items) {
+    if (!seen.has(it.slug)) {
+      seen.add(it.slug)
+      merged.push(it)
+    }
+  }
+  groupItemsCache.value = { ...groupItemsCache.value, [type]: merged }
+  rebuildSlugLookup(displayGroups.value)
+}
+
 function resolveSlug(slug: string) {
   return slugLookup.value.get(slug) ?? slug
 }
 
 function firstIndexSlug() {
-  return index.value.groups.find((g) => g.items.length)?.items[0]?.slug ?? ''
+  for (const g of index.value.groups) {
+    const cached = groupItemsCache.value[g.type]
+    if (cached?.length) return cached[0].slug
+  }
+  return ''
 }
 
 function preferredSlug(explicit?: string) {
@@ -151,36 +186,161 @@ watch(
   },
 )
 
-const visibleDocCount = computed(() =>
-  filteredGroups.value.reduce((sum, g) => sum + g.items.length, 0),
-)
+const visibleDocCount = computed(() => {
+  if (keyword.value.trim() && searchIndex.value) return searchIndex.value.total
+  return index.value.total
+})
 
 const allCollapsed = computed(
   () =>
     filteredGroups.value.length > 0 &&
-    filteredGroups.value.every((g) => openGroups.value[g.type] === false),
+    filteredGroups.value.every((g) => openGroups.value[g.type] !== true),
 )
 
 function isGroupOpen(type: string) {
-  return openGroups.value[type] !== false
+  return openGroups.value[type] === true
+}
+
+function resetTreeExpandState() {
+  groupGrowSeq++
+  openGroups.value = {}
+  groupVisibleLimit.value = {}
+  groupItemsCache.value = {}
+  groupItemsTotal.value = {}
+  groupItemsPage.value = {}
+  groupItemsLoading.value = {}
+  searchIndex.value = null
+}
+
+function ensureGroupItemsRendered(type: string, total: number) {
+  if (total <= 0) return
+  const seq = ++groupGrowSeq
+  groupVisibleLimit.value[type] = Math.min(GROUP_ITEM_BATCH, total)
+  if (total <= GROUP_ITEM_BATCH) return
+
+  const grow = () => {
+    if (seq !== groupGrowSeq) return
+    const cur = groupVisibleLimit.value[type] ?? 0
+    if (cur >= total) return
+    groupVisibleLimit.value[type] = Math.min(cur + GROUP_ITEM_BATCH, total)
+    if (groupVisibleLimit.value[type] < total) requestAnimationFrame(grow)
+  }
+  requestAnimationFrame(grow)
+}
+
+function visibleGroupItems(group: KbIndexGroup) {
+  if (keyword.value.trim()) return group.items
+  const limit = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
+  return group.items.slice(0, limit)
+}
+
+function hasMoreGroupItems(group: KbIndexGroup) {
+  if (keyword.value.trim()) {
+    const limit = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
+    return limit < group.items.length
+  }
+  const loaded = group.items.length
+  const total = groupItemsTotal.value[group.type] ?? groupCount(group)
+  if (loaded < total) return true
+  const limit = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
+  return limit < loaded
+}
+
+function loadMoreGroupItems(group: KbIndexGroup) {
+  if (keyword.value.trim()) {
+    const cur = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
+    groupVisibleLimit.value[group.type] = Math.min(cur + GROUP_ITEM_BATCH, group.items.length)
+    return
+  }
+  const loaded = group.items.length
+  const total = groupItemsTotal.value[group.type] ?? groupCount(group)
+  const limit = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
+  if (limit < loaded) {
+    groupVisibleLimit.value[group.type] = Math.min(limit + GROUP_ITEM_BATCH, loaded)
+    return
+  }
+  if (loaded < total) {
+    const nextPage = (groupItemsPage.value[group.type] ?? 1) + 1
+    void fetchGroupItems(group.type, nextPage)
+  }
+}
+
+function openGroup(type: string) {
+  openGroups.value[type] = true
+  if (!keyword.value.trim()) {
+    void ensureGroupItemsLoaded(type)
+  }
+  const meta = index.value.groups.find((g) => g.type === type)
+  const total = groupItemsTotal.value[type] ?? meta?.count ?? groupItemsCache.value[type]?.length ?? 0
+  ensureGroupItemsRendered(type, total)
+}
+
+async function ensureGroupItemsLoaded(type: string) {
+  if ((groupItemsCache.value[type]?.length ?? 0) > 0) return
+  if (groupItemsLoading.value[type]) return
+  await fetchGroupItems(type, 1)
+}
+
+async function fetchGroupItems(type: string, pageNum: number) {
+  if (groupItemsLoading.value[type]) return
+  groupItemsLoading.value = { ...groupItemsLoading.value, [type]: true }
+  try {
+    const res = await getKbIndexItemsApi(type, kbQuerySpaceId(), pageNum, GROUP_FETCH_SIZE)
+    if (res.code !== API_SUCCESS_CODE || !res.data) return
+    mergeItemsIntoCache(type, res.data.items, pageNum === 1)
+    groupItemsTotal.value = { ...groupItemsTotal.value, [type]: res.data.total }
+    groupItemsPage.value = { ...groupItemsPage.value, [type]: pageNum }
+    const g = index.value.groups.find((x) => x.type === type)
+    if (g && isGroupOpen(type)) {
+      ensureGroupItemsRendered(type, res.data.total)
+    }
+  } finally {
+    groupItemsLoading.value = { ...groupItemsLoading.value, [type]: false }
+  }
 }
 
 function toggleGroup(type: string) {
-  openGroups.value[type] = !isGroupOpen(type)
+  if (isGroupOpen(type)) {
+    openGroups.value[type] = false
+    return
+  }
+  openGroup(type)
 }
 
 function toggleAllGroups() {
   const collapse = !allCollapsed.value
+  if (collapse) {
+    groupGrowSeq++
+    openGroups.value = {}
+    groupVisibleLimit.value = {}
+    return
+  }
   const next: Record<string, boolean> = { ...openGroups.value }
-  for (const g of index.value.groups) next[g.type] = !collapse
+  for (const g of filteredGroups.value) {
+    next[g.type] = true
+    if (!keyword.value.trim()) void ensureGroupItemsLoaded(g.type)
+    ensureGroupItemsRendered(g.type, groupCount(g))
+  }
   openGroups.value = next
 }
 
 /** 展开当前文档所在分组，避免激活项被折叠隐藏 */
-function ensureGroupOpenFor(slug: string) {
+async function ensureGroupOpenFor(slug: string) {
+  const spaceId = kbQuerySpaceId()
+  try {
+    const res = await locateKbIndexApi(slug, spaceId)
+    if (res.code === API_SUCCESS_CODE && res.data) {
+      mergeItemsIntoCache(res.data.type, [res.data.item])
+      if (!isGroupOpen(res.data.type)) openGroup(res.data.type)
+      return
+    }
+  } catch {
+    /* fallback below */
+  }
   for (const g of index.value.groups) {
-    if (g.items.some((it) => it.slug === slug)) {
-      if (openGroups.value[g.type] === false) openGroups.value[g.type] = true
+    const cached = groupItemsCache.value[g.type]
+    if (cached?.some((it) => it.slug === slug)) {
+      if (!isGroupOpen(g.type)) openGroup(g.type)
       return
     }
   }
@@ -214,27 +374,85 @@ watch(activeSlug, (slug) => {
   void scrollActiveIntoView(slug)
 })
 
+watch(keyword, (kw) => {
+  if (searchTimer) clearTimeout(searchTimer)
+  const trimmed = kw.trim()
+  if (!trimmed) {
+    searchIndex.value = null
+    searchLoading.value = false
+    return
+  }
+  searchTimer = setTimeout(() => {
+    void runIndexSearch(trimmed)
+  }, SEARCH_DEBOUNCE_MS)
+})
+
+async function runIndexSearch(q: string) {
+  searchLoading.value = true
+  try {
+    const res = await searchKbIndexApi(q, kbQuerySpaceId())
+    if (res.code !== API_SUCCESS_CODE || !res.data) return
+    if (keyword.value.trim() !== q) return
+    searchIndex.value = res.data
+    rebuildSlugLookup(res.data.groups)
+    const next = { ...openGroups.value }
+    let changed = false
+    for (const g of res.data.groups) {
+      if (g.items.length && !isGroupOpen(g.type)) {
+        next[g.type] = true
+        changed = true
+        ensureGroupItemsRendered(g.type, g.items.length)
+      }
+    }
+    if (changed) openGroups.value = next
+  } finally {
+    searchLoading.value = false
+  }
+}
+
 function formatTime(value?: string) {
   return value || '-'
+}
+
+async function resolveInitialSlug(slugTarget: string) {
+  const spaceId = kbQuerySpaceId()
+  if (slugTarget) {
+    try {
+      const res = await locateKbIndexApi(slugTarget, spaceId)
+      if (res.code === API_SUCCESS_CODE && res.data) {
+        mergeItemsIntoCache(res.data.type, [res.data.item])
+        openGroup(res.data.type)
+        return resolveSlug(slugTarget)
+      }
+    } catch {
+      /* ignore */
+    }
+    return resolveSlug(slugTarget)
+  }
+  const firstGroup = index.value.groups[0]
+  if (firstGroup) {
+    await ensureGroupItemsLoaded(firstGroup.type)
+    return firstIndexSlug()
+  }
+  return ''
 }
 
 async function loadIndex(preferred?: string) {
   loading.value = true
   loadError.value = ''
-  const spaceId = kbQuerySpaceId()
   const slugTarget = preferredSlug(preferred)
 
   try {
-    const res = await getKbIndexApi(spaceId)
+    const res = await getKbIndexApi(kbQuerySpaceId())
     if (res.code !== API_SUCCESS_CODE || !res.data) {
       if (res.code !== API_SUCCESS_CODE) loadError.value = res.msg || `接口异常(code=${res.code})`
       return
     }
 
+    resetTreeExpandState()
     index.value = res.data
-    rebuildSlugLookup(res.data.groups)
 
-    const slug = slugTarget ? resolveSlug(slugTarget) : firstIndexSlug()
+    const slug = await resolveInitialSlug(slugTarget)
     if (slug && (activeSlug.value !== slug || !page.value)) {
       void openSlug(slug)
     }
@@ -369,7 +587,8 @@ watch(
       <aside class="card w-full p-4 xl:w-[22rem] xl:shrink-0 xl:sticky xl:top-6 xl:self-start">
         <div class="relative mb-2">
           <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input v-model="keyword" type="text" class="field-input pl-9" :placeholder="t('knowledge.browse.searchPlaceholder')" />
+          <input v-model="keyword" type="text" class="field-input pl-9 pr-9" :placeholder="t('knowledge.browse.searchPlaceholder')" />
+          <Loader2 v-if="searchLoading" class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
         </div>
 
         <div
@@ -399,11 +618,12 @@ watch(
             >
               <ChevronDown class="h-4 w-4 shrink-0 text-gray-400 transition" :class="!isGroupOpen(group.type) && '-rotate-90'" />
               <span class="flex-1 truncate">{{ group.label }}</span>
-              <span class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400">{{ group.items.length }}</span>
+              <span class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400">{{ groupCount(group) }}</span>
             </button>
-            <div v-show="isGroupOpen(group.type)" class="ml-2 space-y-0.5 border-l border-gray-100 pl-2 dark:border-white/10">
+            <div v-if="isGroupOpen(group.type)" class="ml-2 space-y-0.5 border-l border-gray-100 pl-2 dark:border-white/10">
+              <p v-if="groupItemsLoading[group.type]" class="px-2 py-1 text-xs text-gray-400">{{ t('common.loading') }}</p>
               <button
-                v-for="item in group.items"
+                v-for="item in visibleGroupItems(group)"
                 :key="item.slug"
                 type="button"
                 :data-tree-slug="item.slug"
@@ -417,6 +637,14 @@ watch(
               >
                 <FileText class="h-3.5 w-3.5 shrink-0 opacity-70" />
                 <span class="truncate">{{ item.title }}</span>
+              </button>
+              <button
+                v-if="hasMoreGroupItems(group)"
+                type="button"
+                class="w-full rounded-md px-2 py-1 text-left text-xs text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-300"
+                @click="loadMoreGroupItems(group)"
+              >
+                {{ t('knowledge.browse.loadMore', { count: (groupItemsTotal[group.type] ?? groupCount(group)) - visibleGroupItems(group).length }) }}
               </button>
             </div>
           </div>

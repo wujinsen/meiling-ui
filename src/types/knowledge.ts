@@ -21,7 +21,24 @@ export type KbIndexItem = {
 export type KbIndexGroup = {
   type: KbType
   label: string
+  /** meta 模式下的分组文档数 */
+  count?: number
   items: KbIndexItem[]
+}
+
+export type KbIndexItemsPage = {
+  type: KbType
+  label: string
+  total: number
+  pageNum: number
+  pageSize: number
+  items: KbIndexItem[]
+}
+
+export type KbIndexLocate = {
+  type: KbType
+  label: string
+  item: KbIndexItem
 }
 
 export type KbIndex = {
@@ -142,9 +159,38 @@ export type KbGraphLink = {
   type?: string
 }
 
+/** /kb/graph 与 /kb/graph/ego 的统计信息（大库优化 2026-06-24） */
+export type KbGraphMeta = {
+  totalNodes: number
+  totalLinks: number
+  returnedNodes: number
+  returnedLinks: number
+  /** 为 true 表示后端按度数裁剪过，还有更多节点未返回 */
+  truncated: boolean
+  /** relation=读已落库边；runtime=回退运行时解析 */
+  source?: 'relation' | 'runtime'
+  mode?: 'full' | 'summary' | 'ego'
+}
+
 export type KbGraph = {
   nodes: KbGraphNode[]
   links: KbGraphLink[]
+  meta?: KbGraphMeta
+}
+
+export type KbGraphMode = 'full' | 'summary'
+
+export interface KbGraphParams {
+  spaceId?: number | string
+  mode?: KbGraphMode
+  maxNodes?: number
+  minDeg?: number
+}
+
+export interface KbGraphEgoParams {
+  spaceId?: number | string
+  depth?: number
+  maxNodes?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +242,8 @@ export type KbLintIssue = {
 /** 可见性：0 私有 / 1 内部 / 2 公开 */
 export type KbSpaceVisibility = 0 | 1 | 2
 
+export type KbSpaceRoleHint = KbMemberRole | 'owner' | 'platform'
+
 export type KbAccessibleSpace = {
   id: number | string
   spaceCode: string
@@ -205,6 +253,8 @@ export type KbAccessibleSpace = {
   visibility?: KbSpaceVisibility
   canEdit?: boolean
   canAdmin?: boolean
+  /** 管理页：当前用户在该空间的成员角色 */
+  myRole?: KbSpaceRoleHint
 }
 
 export type KbSpace = {

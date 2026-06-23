@@ -133,39 +133,37 @@ watch(canSync, (allowed) => {
   <div class="page-stack">
     <div class="flex flex-wrap items-center gap-2">
       <KbSpaceSelector />
-      <div class="ml-auto flex shrink-0 items-center gap-2">
-        <template v-if="activeTab === 'lint'">
-          <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadReport">
-            <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.lint.recheck') }}
-          </button>
-          <button type="button" class="btn-primary shrink-0" :disabled="scanning || !canScan" @click="scan">
-            <Loader2 v-if="scanning" class="h-4 w-4 animate-spin" />
-            <ScanLine v-else class="h-4 w-4" />
-            {{ t('knowledge.lint.scan') }}
-          </button>
-        </template>
-        <template v-else>
-          <button
-            type="button"
-            class="btn-ghost shrink-0"
-            :disabled="syncPanelRef?.busy"
-            @click="syncPanelRef?.refreshAll()"
-          >
-            <RefreshCw class="h-4 w-4" :class="syncPanelRef?.busy && 'animate-spin'" /> {{ t('knowledge.sync.refresh') }}
-          </button>
-          <button
-            v-if="canSync"
-            type="button"
-            class="btn-primary shrink-0"
-            :disabled="syncPanelRef?.triggering"
-            @click="syncPanelRef?.trigger()"
-          >
-            <Loader2 v-if="syncPanelRef?.triggering" class="h-4 w-4 animate-spin" />
-            <Play v-else class="h-4 w-4" />
-            {{ t('knowledge.sync.trigger') }}
-          </button>
-        </template>
-      </div>
+      <template v-if="activeTab === 'lint'">
+        <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadReport">
+          <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.lint.recheck') }}
+        </button>
+        <button type="button" class="btn-primary shrink-0" :disabled="scanning || !canScan" @click="scan">
+          <Loader2 v-if="scanning" class="h-4 w-4 animate-spin" />
+          <ScanLine v-else class="h-4 w-4" />
+          {{ t('knowledge.lint.scan') }}
+        </button>
+      </template>
+      <template v-else>
+        <button
+          type="button"
+          class="btn-ghost shrink-0"
+          :disabled="syncPanelRef?.busy"
+          @click="syncPanelRef?.refreshAll()"
+        >
+          <RefreshCw class="h-4 w-4" :class="syncPanelRef?.busy && 'animate-spin'" /> {{ t('knowledge.sync.refresh') }}
+        </button>
+        <button
+          v-if="canSync"
+          type="button"
+          class="btn-primary shrink-0"
+          :disabled="syncPanelRef?.triggering"
+          @click="syncPanelRef?.trigger()"
+        >
+          <Loader2 v-if="syncPanelRef?.triggering" class="h-4 w-4 animate-spin" />
+          <Play v-else class="h-4 w-4" />
+          {{ t('knowledge.sync.trigger') }}
+        </button>
+      </template>
     </div>
 
     <SegmentControl

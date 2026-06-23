@@ -7,6 +7,9 @@ import type {
   KbAttachment,
   KbDocumentDetail,
   KbGraph,
+  KbGraphEgoParams,
+  KbGraphNode,
+  KbGraphParams,
   KbIndex,
   KbLintIssue,
   KbLintIssueStatus,
@@ -118,32 +121,48 @@ const MOCK_INDEX: KbIndex = {
     {
       type: 'guide',
       label: '操作指导',
+      count: MOCK_PAGES.filter((p) => p.kbType === 'guide').length,
       items: MOCK_PAGES.filter((p) => p.kbType === 'guide').map(toIndexItem),
     },
     {
       type: 'service',
       label: '微服务',
+      count: MOCK_PAGES.filter((p) => p.kbType === 'service').length,
       items: MOCK_PAGES.filter((p) => p.kbType === 'service').map(toIndexItem),
     },
     {
       type: 'concept',
       label: '概念',
+      count: MOCK_PAGES.filter((p) => p.kbType === 'concept').length,
       items: MOCK_PAGES.filter((p) => p.kbType === 'concept').map(toIndexItem),
     },
     {
       type: 'interview',
       label: '面试题',
+      count: MOCK_PAGES.filter((p) => p.kbType === 'interview').length,
       items: MOCK_PAGES.filter((p) => p.kbType === 'interview').map(toIndexItem),
     },
   ],
+}
+
+function mockIndexMeta(): KbIndex {
+  return {
+    total: MOCK_INDEX.total,
+    groups: MOCK_INDEX.groups.map((g) => ({
+      type: g.type,
+      label: g.label,
+      count: g.count ?? g.items.length,
+      items: [],
+    })),
+  }
 }
 
 function toIndexItem(p: KbPage) {
   return { id: p.docId, slug: p.slug, title: p.title, summary: p.summary }
 }
 
-function mockGraph(): KbGraph {
-  const types = ['service', 'concept', 'guide', 'interview', 'api', 'config']
+function mockGraph(params: KbGraphParams = {}): KbGraph {
+  const types = ['guide', 'service', 'concept', 'article', 'interview', 'output']
   const relations = ['links_to', 'related', 'same_tag', 'depends_on', 'ref', 'contradiction', 'inference']
   const titles = [
     '用户中心', 'RBAC 权限模型', '本地启动指南', 'Spring 事务', '网关路由', '鉴权流程',
@@ -154,29 +173,85 @@ function mockGraph(): KbGraph {
     '工作流引擎', '定时任务', '文件存储', '图谱构建', '实体抽取', '关系推断',
     '冲突检测', '版本回滚', '导入导出', '搜索高亮',
   ]
-  const nodes: KbGraph['nodes'] = titles.map((title, i) => ({
+  const allNodes: KbGraphNode[] = titles.map((title, i) => ({
     id: String(90000 + i),
     title,
     type: types[i % types.length],
     deg: 0,
   }))
 
-  const links: KbGraph['links'] = []
-  const deg = new Array(nodes.length).fill(0)
+  const allLinks: KbGraph['links'] = []
+  const deg = new Array(allNodes.length).fill(0)
   // 每个节点向前若干个节点连边，构造一张中等密度的图
-  for (let i = 1; i < nodes.length; i++) {
+  for (let i = 1; i < allNodes.length; i++) {
     const fanout = (i % 3) + 1
     for (let k = 0; k < fanout; k++) {
       const target = (i * 7 + k * 13) % i
       if (target === i) continue
       const type = relations[(i + k) % relations.length]
-      links.push({ source: nodes[i].id, target: nodes[target].id, type })
+      allLinks.push({ source: allNodes[i].id, target: allNodes[target].id, type })
       deg[i] += 1
       deg[target] += 1
     }
   }
-  nodes.forEach((n, i) => (n.deg = deg[i]))
-  return { nodes, links }
+  allNodes.forEach((n, i) => (n.deg = deg[i]))
+
+  return cropGraph(allNodes, allLinks, {
+    mode: params.mode ?? 'full',
+    maxNodes: params.maxNodes ?? (params.mode === 'summary' ? 50 : 300),
+    minDeg: params.minDeg ?? 0,
+  })
+}
+
+/** 按度数降序裁剪节点 + 过滤弱连接，模拟后端 /kb/graph 行为 */
+function cropGraph(
+  allNodes: KbGraphNode[],
+  allLinks: KbGraph['links'],
+  opts: { mode: 'full' | 'summary'; maxNodes: number; minDeg: number },
+): KbGraph {
+  let pool = allNodes.filter((n) => (n.deg ?? 0) >= opts.minDeg)
+  pool = [...pool].sort((a, b) => (b.deg ?? 0) - (a.deg ?? 0)).slice(0, opts.maxNodes)
+  const keep = new Set(pool.map((n) => n.id))
+  const links = allLinks.filter((l) => keep.has(l.source) && keep.has(l.target))
+  return {
+    nodes: pool,
+    links,
+    meta: {
+      totalNodes: allNodes.length,
+      totalLinks: allLinks.length,
+      returnedNodes: pool.length,
+      returnedLinks: links.length,
+      truncated: pool.length < allNodes.length,
+      source: 'relation',
+      mode: opts.mode,
+    },
+  }
+}
+
+/** 模拟 ego：返回中心节点 + 一跳邻居 */
+function mockEgo(docId: number | string): KbGraph {
+  const full = mockGraph({ mode: 'full', maxNodes: 2000 })
+  const center = String(docId)
+  const neighborIds = new Set<string>([center])
+  full.links.forEach((l) => {
+    if (l.source === center) neighborIds.add(l.target)
+    if (l.target === center) neighborIds.add(l.source)
+  })
+  const nodes = full.nodes.filter((n) => neighborIds.has(n.id))
+  const links = full.links.filter((l) => neighborIds.has(l.source) && neighborIds.has(l.target))
+  return {
+    nodes,
+    links,
+    meta: {
+      totalNodes: full.nodes.length,
+      totalLinks: full.links.length,
+      returnedNodes: nodes.length,
+      returnedLinks: links.length,
+      truncated: false,
+      source: 'relation',
+      mode: 'ego',
+    },
+  }
 }
 
 function mockLint(): KbLintReport {
@@ -339,13 +414,78 @@ export async function batchRemoveKbSpaceMembersApi(data: import('@/types/knowled
 // 2. 浏览
 // ---------------------------------------------------------------------------
 
-/** 目录树（按知识类型分组的已发布文档） */
+/** 目录 meta（按类型分组计数，不含 items） */
 export async function getKbIndexApi(spaceId?: number | string) {
   if (USE_MOCK) {
     await delay(220)
-    return ok<KbIndex>(MOCK_INDEX)
+    return ok<KbIndex>(mockIndexMeta())
   }
   return request<KbIndex>(`${KB_BASE}/index${buildQuery({ spaceId })}`, { method: 'GET' })
+}
+
+/** 目录分组条目分页 */
+export async function getKbIndexItemsApi(
+  type: string,
+  spaceId?: number | string,
+  pageNum = 1,
+  pageSize = 50,
+) {
+  if (USE_MOCK) {
+    await delay(120)
+    const group = MOCK_INDEX.groups.find((g) => g.type === type)
+    const items = group?.items ?? []
+    const start = (pageNum - 1) * pageSize
+    return ok<import('@/types/knowledge').KbIndexItemsPage>({
+      type,
+      label: group?.label ?? type,
+      total: items.length,
+      pageNum,
+      pageSize,
+      items: items.slice(start, start + pageSize),
+    })
+  }
+  return request<import('@/types/knowledge').KbIndexItemsPage>(
+    `${KB_BASE}/index/items${buildQuery({ spaceId, type, pageNum, pageSize })}`,
+    { method: 'GET' },
+  )
+}
+
+/** 目录搜索（服务端过滤） */
+export async function searchKbIndexApi(q: string, spaceId?: number | string, limit = 200) {
+  if (USE_MOCK) {
+    await delay(160)
+    const kw = q.trim().toLowerCase()
+    const groups = MOCK_INDEX.groups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter(
+          (it) =>
+            it.title.toLowerCase().includes(kw)
+            || it.slug.toLowerCase().includes(kw)
+            || (it.summary?.toLowerCase().includes(kw) ?? false),
+        ),
+      }))
+      .filter((g) => g.items.length)
+    const total = groups.reduce((s, g) => s + g.items.length, 0)
+    return ok<KbIndex>({ total, groups })
+  }
+  return request<KbIndex>(`${KB_BASE}/index/search${buildQuery({ spaceId, q, limit })}`, { method: 'GET' })
+}
+
+/** 按 slug 定位目录分组 */
+export async function locateKbIndexApi(slug: string, spaceId?: number | string) {
+  if (USE_MOCK) {
+    await delay(80)
+    for (const g of MOCK_INDEX.groups) {
+      const item = g.items.find((it) => it.slug === slug)
+      if (item) return ok<import('@/types/knowledge').KbIndexLocate>({ type: g.type, label: g.label, item })
+    }
+    return ok<import('@/types/knowledge').KbIndexLocate | undefined>(undefined)
+  }
+  return request<import('@/types/knowledge').KbIndexLocate>(
+    `${KB_BASE}/index/locate${buildQuery({ spaceId, slug })}`,
+    { method: 'GET' },
+  )
 }
 
 /** 单页详情（slug 含斜杠，走查询参数） */
@@ -415,12 +555,37 @@ export async function askKbApi(payload: KbAskRequest) {
 // 4.1 关系图谱
 // ---------------------------------------------------------------------------
 
-export async function getKbGraphApi(spaceId?: number | string) {
+export async function getKbGraphApi(params: KbGraphParams = {}) {
   if (USE_MOCK) {
     await delay(280)
-    return ok<KbGraph>(mockGraph())
+    return ok<KbGraph>(mockGraph(params))
   }
-  return request<KbGraph>(`${KB_BASE}/graph${buildQuery({ spaceId })}`, { method: 'GET' })
+  return request<KbGraph>(
+    `${KB_BASE}/graph${buildQuery({
+      spaceId: params.spaceId,
+      mode: params.mode,
+      maxNodes: params.maxNodes,
+      minDeg: params.minDeg,
+    })}`,
+    { method: 'GET' },
+  )
+}
+
+/** 4.1.1 邻域子图：以某文档为中心 BFS 拉取邻居，用于点击节点增量展开 */
+export async function getKbGraphEgoApi(docId: number | string, params: KbGraphEgoParams = {}) {
+  if (USE_MOCK) {
+    await delay(200)
+    return ok<KbGraph>(mockEgo(docId))
+  }
+  return request<KbGraph>(
+    `${KB_BASE}/graph/ego${buildQuery({
+      docId,
+      spaceId: params.spaceId,
+      depth: params.depth,
+      maxNodes: params.maxNodes,
+    })}`,
+    { method: 'GET' },
+  )
 }
 
 // ---------------------------------------------------------------------------
