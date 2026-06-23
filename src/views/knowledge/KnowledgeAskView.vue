@@ -3,7 +3,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { History, Loader2, Send, Sparkles, ThumbsDown, ThumbsUp, User } from 'lucide-vue-next'
-import KbAskScopePanel from '@/components/knowledge/KbAskScopePanel.vue'
+import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import KbDocPreviewModal from '@/components/knowledge/KbDocPreviewModal.vue'
 import KbLlmToggle from '@/components/knowledge/KbLlmToggle.vue'
 import AppSwitch from '@/components/ui/AppSwitch.vue'
@@ -30,10 +30,7 @@ type ChatTurn = {
 
 const { t } = useI18n()
 const router = useRouter()
-const { selectedSpaceId, ensureSpacesLoaded, setSelectedSpaceId, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
-
-const scopeMode = ref<'all' | 'custom'>('all')
-const scopeSpaceIds = ref<string[]>([])
+const { selectedSpaceId, ensureSpacesLoaded, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
 
 const question = ref('')
 const asking = ref(false)
@@ -103,14 +100,8 @@ async function ask(text?: string) {
       topK: 8,
       useLlm: useLlm.value,
     }
-    if (scopeMode.value === 'custom' && scopeSpaceIds.value.length === 0) {
-      throw new Error(t('knowledge.ask.crossSpaceEmpty'))
-    } else if (scopeMode.value === 'custom' && scopeSpaceIds.value.length > 1) {
-      payload.spaceIds = [...scopeSpaceIds.value]
-    } else {
-      const sid = kbQuerySpaceId()
-      if (sid != null) payload.spaceId = sid
-    }
+    const sid = kbQuerySpaceId()
+    if (sid != null) payload.spaceId = sid
     const res = await askKbApi(payload)
     if (res.code === API_SUCCESS_CODE && res.data) {
       turn.result = res.data
@@ -203,21 +194,8 @@ function onKeydown(event: KeyboardEvent) {
 
 onMounted(async () => {
   await ensureSpacesLoaded()
-  if (selectedSpaceId.value != null) {
-    scopeMode.value = 'custom'
-    scopeSpaceIds.value = [selectedSpaceId.value]
-  }
   await loadHistory()
 })
-
-// 统一检索范围 → 同步全局选中空间（供历史记录与跨页上下文使用）
-watch([scopeMode, scopeSpaceIds], () => {
-  if (scopeMode.value === 'custom' && scopeSpaceIds.value.length === 1) {
-    setSelectedSpaceId(scopeSpaceIds.value[0])
-  } else {
-    setSelectedSpaceId(null)
-  }
-}, { deep: true })
 
 watch(selectedSpaceId, () => loadHistory())
 watch(showHistory, (open) => {
@@ -232,6 +210,7 @@ watch(showHistory, (open) => {
         <button type="button" class="btn-ghost shrink-0 text-sm" @click="showHistory = !showHistory">
           <History class="h-4 w-4" /> {{ t('knowledge.ask.history') }}
         </button>
+        <KbSpaceSelector />
         <div
           class="flex items-center gap-2"
           :class="llmAvailable ? '' : 'opacity-50'"
@@ -388,7 +367,6 @@ watch(showHistory, (open) => {
         </div>
 
         <div class="border-t border-gray-100 p-4 dark:border-white/5">
-          <KbAskScopePanel v-model="scopeSpaceIds" v-model:mode="scopeMode" class="mb-3" />
           <div class="flex items-end gap-2">
             <textarea
               v-model="question"

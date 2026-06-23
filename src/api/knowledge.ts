@@ -220,6 +220,14 @@ export async function getKbAccessibleSpacesApi() {
   return request<KbAccessibleSpace[]>(`${KB_BASE}/space/mine`, { method: 'GET' })
 }
 
+/** 当前用户可管理空间（空间管理页；平台超管=全部） */
+export async function getKbManageSpacesApi() {
+  if (USE_MOCK) {
+    return getKbAccessibleSpacesApi()
+  }
+  return request<KbAccessibleSpace[]>(`${KB_BASE}/space/manage`, { method: 'GET' })
+}
+
 export async function getKbSpaceApi(id: number | string) {
   if (USE_MOCK) {
     await delay(100)

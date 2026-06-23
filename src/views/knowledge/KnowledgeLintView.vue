@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { CheckCircle2, FileWarning, Link2Off, Loader2, RefreshCw, ScanLine } from 'lucide-vue-next'
+import { CheckCircle2, FileWarning, Link2Off, Loader2, Play, RefreshCw, ScanLine } from 'lucide-vue-next'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import KbSyncPanel from '@/components/knowledge/KbSyncPanel.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
@@ -16,15 +16,17 @@ import { PERM } from '@/constants/permissions'
 const { t } = useI18n()
 const { selectedSpaceId, ensureSpacesLoaded, kbQuerySpaceId } = useKbSpace()
 
-const isKbAdmin = computed(() => assertAction(PERM.KB_ADMIN))
-const canScan = computed(() => isKbAdmin.value || assertAction(PERM.KB_LINT_SCAN))
-const canSync = computed(() => isKbAdmin.value || assertAction(PERM.KB_SYNC_TRIGGER))
+const canScan = computed(() => assertAction(PERM.KB_LINT_SCAN))
+const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
 
 const activeTab = ref<'lint' | 'sync'>('lint')
+const syncPanelRef = ref<InstanceType<typeof KbSyncPanel> | null>(null)
 const tabOptions = computed(() => {
-  const options = [{ value: 'lint' as const, label: t('knowledge.lint.tabLint') }]
+  const options: { value: 'lint' | 'sync'; label: string }[] = [
+    { value: 'lint', label: t('knowledge.lint.tabLint') },
+  ]
   if (canSync.value) {
-    options.push({ value: 'sync' as const, label: t('knowledge.lint.tabSync') })
+    options.push({ value: 'sync', label: t('knowledge.lint.tabSync') })
   }
   return options
 })
@@ -58,7 +60,7 @@ async function loadReport() {
 
 async function scan() {
   if (!canScan.value) return
-  if (!guardAction(PERM.KB_LINT_SCAN) && !isKbAdmin.value) return
+  if (!guardAction(PERM.KB_LINT_SCAN)) return
   scanning.value = true
   try {
     const res = await scanKbLintApi(kbQuerySpaceId())
@@ -129,18 +131,41 @@ watch(canSync, (allowed) => {
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-wrap items-end gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <KbSpaceSelector />
-      <template v-if="activeTab === 'lint'">
-        <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadReport">
-          <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.lint.recheck') }}
-        </button>
-        <button type="button" class="btn-primary shrink-0" :disabled="scanning || !canScan" @click="scan">
-          <Loader2 v-if="scanning" class="h-4 w-4 animate-spin" />
-          <ScanLine v-else class="h-4 w-4" />
-          {{ t('knowledge.lint.scan') }}
-        </button>
-      </template>
+      <div class="ml-auto flex shrink-0 items-center gap-2">
+        <template v-if="activeTab === 'lint'">
+          <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadReport">
+            <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.lint.recheck') }}
+          </button>
+          <button type="button" class="btn-primary shrink-0" :disabled="scanning || !canScan" @click="scan">
+            <Loader2 v-if="scanning" class="h-4 w-4 animate-spin" />
+            <ScanLine v-else class="h-4 w-4" />
+            {{ t('knowledge.lint.scan') }}
+          </button>
+        </template>
+        <template v-else>
+          <button
+            type="button"
+            class="btn-ghost shrink-0"
+            :disabled="syncPanelRef?.busy"
+            @click="syncPanelRef?.refreshAll()"
+          >
+            <RefreshCw class="h-4 w-4" :class="syncPanelRef?.busy && 'animate-spin'" /> {{ t('knowledge.sync.refresh') }}
+          </button>
+          <button
+            v-if="canSync"
+            type="button"
+            class="btn-primary shrink-0"
+            :disabled="syncPanelRef?.triggering"
+            @click="syncPanelRef?.trigger()"
+          >
+            <Loader2 v-if="syncPanelRef?.triggering" class="h-4 w-4 animate-spin" />
+            <Play v-else class="h-4 w-4" />
+            {{ t('knowledge.sync.trigger') }}
+          </button>
+        </template>
+      </div>
     </div>
 
     <SegmentControl
@@ -149,7 +174,7 @@ watch(canSync, (allowed) => {
       @update:model-value="activeTab = $event as 'lint' | 'sync'"
     />
 
-    <KbSyncPanel v-if="activeTab === 'sync'" />
+    <KbSyncPanel v-if="activeTab === 'sync'" ref="syncPanelRef" />
 
     <template v-else>
     <p v-if="loading && !report" class="card p-16 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>

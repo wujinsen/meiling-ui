@@ -347,7 +347,7 @@ watch(
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-wrap items-end gap-3">
+    <div class="flex flex-wrap items-center gap-3">
       <KbSpaceSelector />
     </div>
 

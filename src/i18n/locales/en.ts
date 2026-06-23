@@ -142,7 +142,7 @@ export default {
       title: 'No access to this space',
       emptyTitle: 'No accessible knowledge spaces',
       emptyMessage: 'Your account is not a member of any space, or private spaces are not granted.',
-      emptyHint: 'Ask an admin to add you under Space Management, or grant kb:admin.',
+      emptyHint: 'Ask an admin to add you as a space member under Space Management.',
       readOnlyTitle: 'No space admin rights',
       readOnlyMessage: 'You can browse authorized spaces but cannot manage settings or members.',
     },
@@ -243,6 +243,7 @@ export default {
       scopeAll: 'All readable spaces',
       scopeCustom: 'Specific spaces',
       scopeAllHint: 'Answers draw from every knowledge space you can read',
+      scopeMulti: '{count} spaces selected',
       crossSpaceEmpty: 'Select at least one space',
       selectAllSpaces: 'Select all',
       llm: {
@@ -274,7 +275,7 @@ export default {
       delete: 'Delete',
     },
     sync: {
-      subtitle: 'Sync kb/wiki markdown into MySQL (requires kb:sync:trigger or kb:admin)',
+      subtitle: 'Sync kb/wiki markdown into MySQL (requires kb:sync:trigger)',
       refresh: 'Refresh',
       trigger: 'Trigger sync',
       triggerOk: 'Sync completed',

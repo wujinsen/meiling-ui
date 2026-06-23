@@ -1,18 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { computed } from 'vue'
 import { useKbSpace } from '@/composables/useKbSpace'
+import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 
-const { t } = useI18n()
-const {
-  spaces,
-  selectedSpaceId,
-  hasMultipleSpaces,
-  loading,
-  loadError,
-  ensureSpacesLoaded,
-  setSelectedSpaceId,
-} = useKbSpace()
+const { spaces, selectedSpaceId, hasMultipleSpaces, setSelectedSpaceId } = useKbSpace()
 
 const selectValue = computed({
   get: () => (selectedSpaceId.value == null ? 'all' : String(selectedSpaceId.value)),
@@ -21,28 +12,10 @@ const selectValue = computed({
   },
 })
 
-onMounted(() => ensureSpacesLoaded())
+/** 与浏览页一致：至少 1 个空间即展示下拉 */
+const visible = computed(() => hasMultipleSpaces.value || spaces.value.length === 1)
 </script>
 
 <template>
-  <div v-if="loading && !spaces.length" class="text-xs text-gray-400">
-    {{ t('knowledge.space.loading') }}
-  </div>
-  <p v-else-if="loadError" class="text-xs text-rose-500">{{ loadError }}</p>
-  <p v-else-if="!spaces.length" class="text-xs text-gray-400">{{ t('knowledge.accessDenied.emptyTitle') }}</p>
-  <label
-    v-else-if="hasMultipleSpaces || spaces.length === 1"
-    class="inline-flex min-w-[12rem] max-w-full flex-col gap-1 sm:min-w-[16rem]"
-  >
-    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('knowledge.space.label') }}</span>
-    <div class="relative">
-      <select v-model="selectValue" class="field-input w-full py-2 pr-8 text-sm">
-        <option value="all">{{ t('knowledge.space.allAccessible') }}</option>
-        <option v-for="s in spaces" :key="String(s.id)" :value="String(s.id)">
-          {{ s.spaceName }}
-          <template v-if="s.visibility === 0"> · {{ t('knowledge.space.private') }}</template>
-        </option>
-      </select>
-    </div>
-  </label>
+  <KbSpaceDropdown v-if="visible" v-model="selectValue" />
 </template>

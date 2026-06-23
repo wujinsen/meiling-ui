@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Loader2, Play, RefreshCw } from 'lucide-vue-next'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { getKbSyncLogsApi, getKbSyncStatusApi, triggerKbSyncApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
@@ -14,7 +13,7 @@ import { PERM } from '@/constants/permissions'
 const { t } = useI18n()
 const { selectedSpace, kbQuerySpaceId, ensureSpacesLoaded } = useKbSpace()
 
-const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER) || assertAction(PERM.KB_ADMIN))
+const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
 
 const statusLoading = ref(false)
 const logsLoading = ref(false)
@@ -57,12 +56,12 @@ async function refreshAll() {
   await Promise.all([loadStatus(), loadLogs()])
 }
 
+const busy = computed(() => statusLoading.value || logsLoading.value)
+
 async function trigger() {
   const allowed =
     assertAction(PERM.KB_SYNC_TRIGGER) ||
-    assertAction(PERM.KB_ADMIN) ||
-    (await guardActionWithRefresh(PERM.KB_SYNC_TRIGGER)) ||
-    assertAction(PERM.KB_ADMIN)
+    (await guardActionWithRefresh(PERM.KB_SYNC_TRIGGER))
   if (!allowed) return
   triggering.value = true
   lastOutput.value = ''
@@ -98,30 +97,13 @@ onMounted(async () => {
 })
 
 watch([pageNum, pageSize], () => loadLogs())
+
+defineExpose({ refreshAll, trigger, busy, triggering, canSync })
 </script>
 
 <template>
   <div class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('knowledge.sync.subtitle') }}</p>
-      <div class="flex items-center gap-2">
-        <button type="button" class="btn-ghost text-sm" :disabled="statusLoading || logsLoading" @click="refreshAll">
-          <RefreshCw class="h-4 w-4" :class="(statusLoading || logsLoading) && 'animate-spin'" />
-          {{ t('knowledge.sync.refresh') }}
-        </button>
-        <button
-          v-if="canSync"
-          type="button"
-          class="btn-primary text-sm"
-          :disabled="triggering"
-          @click="trigger"
-        >
-          <Loader2 v-if="triggering" class="h-4 w-4 animate-spin" />
-          <Play v-else class="h-4 w-4" />
-          {{ t('knowledge.sync.trigger') }}
-        </button>
-      </div>
-    </div>
+    <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('knowledge.sync.subtitle') }}</p>
 
     <div v-if="!canSync" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
       {{ t('knowledge.sync.noPerm') }}

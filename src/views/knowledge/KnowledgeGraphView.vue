@@ -218,7 +218,7 @@ watch(selectedSpaceId, () => loadGraph())
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-wrap items-end gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <KbSpaceSelector />
       <button type="button" class="btn-ghost shrink-0" @click="loadGraph">
         <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.graph.refresh') }}

@@ -142,7 +142,7 @@ export default {
       title: '无权访问该知识空间',
       emptyTitle: '暂无可访问的知识空间',
       emptyMessage: '当前账号未被加入任何知识空间，或私有空间未授权。',
-      emptyHint: '请联系空间管理员在「空间管理」中添加成员，或分配 kb:admin 权限。',
+      emptyHint: '请联系空间管理员在「空间管理」中添加成员。',
       readOnlyTitle: '无空间管理权限',
       readOnlyMessage: '你可以浏览已授权空间的内容，但不能管理空间设置与成员。',
     },
@@ -260,6 +260,7 @@ export default {
       scopeAll: '全部可读空间',
       scopeCustom: '指定空间',
       scopeAllHint: '在你有权限的全部知识空间内检索作答',
+      scopeMulti: '已选 {count} 个空间',
       crossSpaceEmpty: '请至少选择一个空间',
       selectAllSpaces: '全选',
       llm: {
@@ -293,7 +294,7 @@ export default {
       delete: '删除',
     },
     sync: {
-      subtitle: '将 kb/wiki markdown 同步到 MySQL（需 kb:sync:trigger 或 kb:admin 权限）',
+      subtitle: '将 kb/wiki markdown 同步到 MySQL（需 kb:sync:trigger 权限）',
       refresh: '刷新',
       trigger: '触发同步',
       triggerOk: '同步任务已完成',

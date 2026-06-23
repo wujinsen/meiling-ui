@@ -26,7 +26,7 @@ import {
   batchRemoveKbSpaceMembersApi,
   createKbSpaceApi,
   deleteKbSpaceApi,
-  getKbAccessibleSpacesApi,
+  getKbManageSpacesApi,
   getKbSpaceApi,
   listKbSpaceMembersApi,
   updateKbSpaceApi,
@@ -34,7 +34,7 @@ import {
 } from '@/api/knowledge'
 import { getUserApi, listUserApi } from '@/api/user'
 import { confirm } from '@/composables/useConfirm'
-import { assertAction, guardAction } from '@/composables/useActionPermissions'
+import { assertAction, guardAction, useActionPermissions } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { KbAccessibleSpace, KbMemberRole, KbSpace, KbSpaceMember } from '@/types/knowledge'
@@ -42,6 +42,7 @@ import type { UserVo } from '@/types/user'
 import { PERM } from '@/constants/permissions'
 
 const { t } = useI18n()
+const { fullPermission } = useActionPermissions()
 
 const loading = ref(false)
 const spaces = ref<KbAccessibleSpace[]>([])
@@ -86,25 +87,36 @@ const activePickerSpaceId = computed(() => {
   return null
 })
 
-const isKbAdmin = computed(() => assertAction(PERM.KB_ADMIN))
-const canCreateSpace = computed(() => isKbAdmin.value || assertAction(PERM.KB_SPACE_ADD))
-const canManageMembers = computed(() => isKbAdmin.value || assertAction(PERM.KB_SPACE_MEMBER))
+const canCreateSpace = computed(() => assertAction(PERM.KB_SPACE_ADD))
+const canManageMembers = computed(() => assertAction(PERM.KB_SPACE_MEMBER))
+const hasSpaceManageScope = computed(
+  () =>
+    fullPermission.value
+    || assertAction(PERM.KB_SPACE_ADMIN)
+    || assertAction(PERM.KB_SPACE_ADD)
+    || assertAction(PERM.KB_SPACE_EDIT)
+    || assertAction(PERM.KB_SPACE_REMOVE)
+    || assertAction(PERM.KB_SPACE_MEMBER),
+)
 const adminSpaces = computed(() =>
-  spaces.value.filter((s) => s.canAdmin || isKbAdmin.value),
+  hasSpaceManageScope.value
+    ? spaces.value
+    : spaces.value.filter((s) => s.canAdmin || fullPermission.value),
 )
 const hasManageAccess = computed(
   () =>
-    canCreateSpace.value
+    hasSpaceManageScope.value
+    || canCreateSpace.value
     || (canManageMembers.value && adminSpaces.value.length > 0)
     || adminSpaces.value.some((s) => canEditSpace(s) || canRemoveSpace(s)),
 )
 
 function canEditSpace(row: KbAccessibleSpace) {
-  return (row.canAdmin || isKbAdmin.value) && (isKbAdmin.value || assertAction(PERM.KB_SPACE_EDIT))
+  return row.canEdit && assertAction(PERM.KB_SPACE_EDIT)
 }
 
-function canRemoveSpace(row: KbAccessibleSpace) {
-  return (row.canAdmin || isKbAdmin.value) && (isKbAdmin.value || assertAction(PERM.KB_SPACE_REMOVE))
+function canRemoveSpace(_row: KbAccessibleSpace) {
+  return assertAction(PERM.KB_SPACE_REMOVE)
 }
 
 function emptySpace(): KbSpace {
@@ -171,7 +183,7 @@ async function loadSpaces() {
   loading.value = true
   loadError.value = ''
   try {
-    const res = await getKbAccessibleSpacesApi()
+    const res = await getKbManageSpacesApi()
     if (res.code !== API_SUCCESS_CODE || !res.data) {
       throw new Error(res.msg || t('knowledge.spaceManage.loadFailed'))
     }
@@ -185,7 +197,7 @@ async function loadSpaces() {
 }
 
 function openCreateSpace() {
-  if (!guardAction(PERM.KB_SPACE_ADD) && !isKbAdmin.value) return
+  if (!guardAction(PERM.KB_SPACE_ADD)) return
   spaceForm.value = emptySpace()
   spaceModalTitle.value = t('knowledge.spaceManage.create')
   spaceModalOpen.value = true
@@ -214,8 +226,8 @@ async function submitSpace() {
   }
   const isEdit = spaceForm.value.id != null
   if (isEdit) {
-    if (!guardAction(PERM.KB_SPACE_EDIT) && !isKbAdmin.value) return
-  } else if (!guardAction(PERM.KB_SPACE_ADD) && !isKbAdmin.value) {
+    if (!guardAction(PERM.KB_SPACE_EDIT)) return
+  } else if (!guardAction(PERM.KB_SPACE_ADD)) {
     return
   }
   savingSpace.value = true
@@ -236,7 +248,7 @@ async function submitSpace() {
 
 async function removeSpace(row: KbAccessibleSpace) {
   if (!canRemoveSpace(row)) return
-  if (!guardAction(PERM.KB_SPACE_REMOVE) && !isKbAdmin.value) return
+  if (!guardAction(PERM.KB_SPACE_REMOVE)) return
   const ok = await confirm({
     title: t('knowledge.spaceManage.deleteConfirm'),
     message: row.spaceName,
@@ -507,7 +519,7 @@ async function openBatchGrant() {
     showToast('error', t('knowledge.accessDenied.title'))
     return
   }
-  if (!guardAction(PERM.KB_SPACE_MEMBER) && !isKbAdmin.value) return
+  if (!guardAction(PERM.KB_SPACE_MEMBER)) return
   if (!adminSpaces.value.length) {
     showToast('error', t('knowledge.spaceManage.batchGrantNoSpace'))
     return
@@ -544,11 +556,11 @@ async function loadUserLabels(ids: Array<number | string>) {
 }
 
 async function openMembers(row: KbAccessibleSpace) {
-  if (!canManageMembers.value || !(row.canAdmin || isKbAdmin.value)) {
+  if (!canManageMembers.value || !(row.canAdmin || hasSpaceManageScope.value)) {
     showToast('error', t('knowledge.accessDenied.title'))
     return
   }
-  if (!guardAction(PERM.KB_SPACE_MEMBER) && !isKbAdmin.value) return
+  if (!guardAction(PERM.KB_SPACE_MEMBER)) return
   memberSpace.value = row
   resetUserPicker()
   selectedMemberIds.value = new Set()

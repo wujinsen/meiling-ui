@@ -142,7 +142,7 @@ export default {
       title: 'この空間にアクセスできません',
       emptyTitle: 'アクセス可能なナレッジ空間がありません',
       emptyMessage: 'アカウントがメンバーに含まれていないか、非公開空間の権限がありません。',
-      emptyHint: '管理者にスペース管理でのメンバー追加、または kb:admin 権限を依頼してください。',
+      emptyHint: '管理者にスペース管理でメンバー追加を依頼してください。',
       readOnlyTitle: '空間管理権限がありません',
       readOnlyMessage: '閲覧は可能ですが、設定やメンバー管理はできません。',
     },
@@ -243,6 +243,7 @@ export default {
       scopeAll: '読み取り可能な全空間',
       scopeCustom: '空間を指定',
       scopeAllHint: 'アクセスできるすべての知識空間から回答します',
+      scopeMulti: '{count} 件の空間を選択',
       crossSpaceEmpty: '少なくとも1つの空間を選択',
       selectAllSpaces: 'すべて選択',
       llm: {
@@ -274,7 +275,7 @@ export default {
       delete: '削除',
     },
     sync: {
-      subtitle: 'kb/wiki を MySQL に同期（kb:sync:trigger または kb:admin 権限）',
+      subtitle: 'kb/wiki を MySQL に同期（kb:sync:trigger 権限が必要）',
       refresh: '更新',
       trigger: '同期実行',
       triggerOk: '同期完了',
