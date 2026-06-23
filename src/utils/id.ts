@@ -22,6 +22,8 @@ export function normalizeEntityPayload<T extends Record<string, unknown>>(payloa
     if (value == null) continue
     if (key.endsWith('Ids') && Array.isArray(value)) {
       out[key] = toEntityIdList(value as Array<number | string>)
+    } else if (key === 'ids' && Array.isArray(value)) {
+      out[key] = toEntityIdList(value as Array<number | string>)
     } else if (key === 'parentId') {
       out[key] = toParentId(value as number | string)
     } else if (key === 'id' || key.endsWith('Id')) {

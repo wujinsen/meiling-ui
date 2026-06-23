@@ -64,6 +64,8 @@ export type KbAskRequest = {
   spaceId?: number | string
   spaceIds?: Array<number | string>
   topK?: number
+  /** 是否启用 LLM 生成式（默认 false） */
+  useLlm?: boolean
 }
 
 export type KbAskMode = 'generative' | 'retrieval' | string
@@ -88,16 +90,13 @@ export type KbAskResponse = {
   qaLogId?: number | string
 }
 
-/** GET /kb/ask/llm-config */
+/** GET /kb/ask/llm-config — 后端 LLM 能力探测 */
 export type KbLlmConfig = {
-  enabled: boolean
-  usable: boolean
+  available: boolean
+  configEnabled: boolean
   apiKeyConfigured: boolean
   provider?: string
   model?: string
-  nacosManaged: boolean
-  nacosDataId?: string
-  canManage: boolean
 }
 
 export type KbQaHistory = {
@@ -231,6 +230,24 @@ export type KbSpaceMember = {
   memberId: number | string
   role: KbMemberRole
   createTime?: string
+}
+
+export type KbSpaceMemberBatchAddRequest = {
+  spaceId: number | string
+  memberType?: number
+  memberIds: Array<number | string>
+  role: KbMemberRole
+}
+
+export type KbSpaceMemberBatchRemoveRequest = {
+  ids: Array<number | string>
+}
+
+export type KbSpaceMemberBatchResult = {
+  successCount: number
+  skipCount: number
+  failCount: number
+  memberRowIds?: Array<number | string>
 }
 
 // ---------------------------------------------------------------------------

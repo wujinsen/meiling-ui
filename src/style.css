@@ -637,9 +637,16 @@
     @apply min-w-[8.5rem];
   }
 
-  .cockpit-action-chip {
-    @apply inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600;
-    @apply dark:border-white/10 dark:bg-white/5 dark:text-gray-300;
+  .kb-ask-toolbar {
+    @apply flex flex-wrap items-center gap-3 px-4 py-3;
+  }
+
+  .kb-ask-toolbar-start {
+    @apply flex shrink-0 flex-wrap items-center gap-3;
+  }
+
+  .kb-ask-llm-bar {
+    @apply flex min-w-0 flex-1 items-center;
   }
 
   select.field-input {

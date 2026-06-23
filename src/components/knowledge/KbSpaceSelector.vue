@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Globe, Lock, Users } from 'lucide-vue-next'
 import { useKbSpace } from '@/composables/useKbSpace'
 
 const { t } = useI18n()
 const {
   spaces,
   selectedSpaceId,
-  selectedSpace,
   hasMultipleSpaces,
   loading,
   loadError,
@@ -22,12 +20,6 @@ const selectValue = computed({
     setSelectedSpaceId(v === 'all' ? null : v)
   },
 })
-
-function visibilityIcon(v?: number) {
-  if (v === 0) return Lock
-  if (v === 1) return Users
-  return Globe
-}
 
 onMounted(() => ensureSpacesLoaded())
 </script>
@@ -52,9 +44,5 @@ onMounted(() => ensureSpacesLoaded())
         </option>
       </select>
     </div>
-    <p v-if="selectedSpace" class="flex items-center gap-1 text-[11px] text-gray-400">
-      <component :is="visibilityIcon(selectedSpace.visibility)" class="h-3 w-3 shrink-0" />
-      <span class="truncate">{{ selectedSpace.description || selectedSpace.spaceCode }}</span>
-    </p>
   </label>
 </template>

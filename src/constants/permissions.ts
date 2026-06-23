@@ -108,5 +108,13 @@ export const PERM = {
 
   OP_COMPONENT_REMOVE: 'operation:component:remove',
 
+  KB_ADMIN: 'kb:admin',
+  KB_SPACE_ADD: 'kb:space:add',
+  KB_SPACE_EDIT: 'kb:space:edit',
+  KB_SPACE_REMOVE: 'kb:space:remove',
+  KB_SPACE_MEMBER: 'kb:space:member',
+  KB_LINT_SCAN: 'kb:lint:scan',
+  KB_SYNC_TRIGGER: 'kb:sync:trigger',
+
 } as const
 

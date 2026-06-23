@@ -7,18 +7,27 @@ import KbSyncPanel from '@/components/knowledge/KbSyncPanel.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import { getKbLintApi, getKbLintIssuesApi, scanKbLintApi, updateKbLintIssueApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
+import { assertAction, guardAction } from '@/composables/useActionPermissions'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { showToast } from '@/composables/useToast'
 import type { KbLintIssue, KbLintIssueStatus, KbLintReport } from '@/types/knowledge'
+import { PERM } from '@/constants/permissions'
 
 const { t } = useI18n()
 const { selectedSpaceId, ensureSpacesLoaded, kbQuerySpaceId } = useKbSpace()
 
+const isKbAdmin = computed(() => assertAction(PERM.KB_ADMIN))
+const canScan = computed(() => isKbAdmin.value || assertAction(PERM.KB_LINT_SCAN))
+const canSync = computed(() => isKbAdmin.value || assertAction(PERM.KB_SYNC_TRIGGER))
+
 const activeTab = ref<'lint' | 'sync'>('lint')
-const tabOptions = computed(() => [
-  { value: 'lint', label: t('knowledge.lint.tabLint') },
-  { value: 'sync', label: t('knowledge.lint.tabSync') },
-])
+const tabOptions = computed(() => {
+  const options = [{ value: 'lint' as const, label: t('knowledge.lint.tabLint') }]
+  if (canSync.value) {
+    options.push({ value: 'sync' as const, label: t('knowledge.lint.tabSync') })
+  }
+  return options
+})
 
 const loading = ref(false)
 const scanning = ref(false)
@@ -48,6 +57,8 @@ async function loadReport() {
 }
 
 async function scan() {
+  if (!canScan.value) return
+  if (!guardAction(PERM.KB_LINT_SCAN) && !isKbAdmin.value) return
   scanning.value = true
   try {
     const res = await scanKbLintApi(kbQuerySpaceId())
@@ -110,6 +121,10 @@ watch(selectedSpaceId, async () => {
   await loadReport()
   await loadIssues()
 })
+
+watch(canSync, (allowed) => {
+  if (!allowed && activeTab.value === 'sync') activeTab.value = 'lint'
+})
 </script>
 
 <template>
@@ -120,7 +135,7 @@ watch(selectedSpaceId, async () => {
         <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadReport">
           <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.lint.recheck') }}
         </button>
-        <button type="button" class="btn-primary shrink-0" :disabled="scanning" @click="scan">
+        <button type="button" class="btn-primary shrink-0" :disabled="scanning || !canScan" @click="scan">
           <Loader2 v-if="scanning" class="h-4 w-4 animate-spin" />
           <ScanLine v-else class="h-4 w-4" />
           {{ t('knowledge.lint.scan') }}

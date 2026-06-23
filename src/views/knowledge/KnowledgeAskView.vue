@@ -6,12 +6,14 @@ import { History, Loader2, Send, Sparkles, ThumbsDown, ThumbsUp, User } from 'lu
 import KbAskScopePanel from '@/components/knowledge/KbAskScopePanel.vue'
 import KbDocPreviewModal from '@/components/knowledge/KbDocPreviewModal.vue'
 import KbLlmToggle from '@/components/knowledge/KbLlmToggle.vue'
+import AppSwitch from '@/components/ui/AppSwitch.vue'
 import {
   askKbApi,
   feedbackKbAskApi,
   getKbAskHistoryApi,
 } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
+import { confirm } from '@/composables/useConfirm'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { showToast } from '@/composables/useToast'
 import { renderMarkdown } from '@/utils/markdown'
@@ -47,6 +49,27 @@ const previewOpen = ref(false)
 const previewSlug = ref('')
 const previewSpaceId = ref<number | string | undefined>()
 
+/** 是否在本次问答中启用 LLM（默认关闭，随请求传 useLlm） */
+const useLlm = ref(false)
+const llmAvailable = ref(false)
+const llmStatus = ref({ loading: true, label: '', className: '' })
+
+async function onLlmSwitchRequest(next: boolean) {
+  const ok = await confirm({
+    title: t('knowledge.ask.llm.confirmTitle'),
+    message: next ? t('knowledge.ask.llm.confirmEnable') : t('knowledge.ask.llm.confirmDisable'),
+    confirmText: t('confirm.ok'),
+    cancelText: t('confirm.cancel'),
+    danger: false,
+  })
+  if (!ok) return
+  useLlm.value = next
+  showToast(
+    'success',
+    next ? t('knowledge.ask.llm.enabledHint') : t('knowledge.ask.llm.disabledHint'),
+  )
+}
+
 const SUGGESTIONS = ['knowledge.ask.sample1', 'knowledge.ask.sample2', 'knowledge.ask.sample3']
 
 async function scrollToBottom() {
@@ -75,7 +98,11 @@ async function ask(text?: string) {
   await scrollToBottom()
 
   try {
-    const payload: import('@/types/knowledge').KbAskRequest = { question: q, topK: 8 }
+    const payload: import('@/types/knowledge').KbAskRequest = {
+      question: q,
+      topK: 8,
+      useLlm: useLlm.value,
+    }
     if (scopeMode.value === 'custom' && scopeSpaceIds.value.length === 0) {
       throw new Error(t('knowledge.ask.crossSpaceEmpty'))
     } else if (scopeMode.value === 'custom' && scopeSpaceIds.value.length > 1) {
@@ -200,13 +227,37 @@ watch(showHistory, (open) => {
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-wrap items-end gap-2">
-      <button type="button" class="btn-ghost text-sm" @click="showHistory = !showHistory">
-        <History class="h-4 w-4" /> {{ t('knowledge.ask.history') }}
-      </button>
+    <div class="card kb-ask-toolbar">
+      <div class="kb-ask-toolbar-start">
+        <button type="button" class="btn-ghost shrink-0 text-sm" @click="showHistory = !showHistory">
+          <History class="h-4 w-4" /> {{ t('knowledge.ask.history') }}
+        </button>
+        <div
+          class="flex items-center gap-2"
+          :class="llmAvailable ? '' : 'opacity-50'"
+        >
+          <span class="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.ask.llm.switch') }}</span>
+          <AppSwitch
+            :model-value="useLlm"
+            confirm-before-change
+            :disabled="!llmAvailable"
+            :label="t('knowledge.ask.llm.switch')"
+            @change="onLlmSwitchRequest"
+          />
+        </div>
+        <span
+          v-if="!llmStatus.loading"
+          class="badge shrink-0"
+          :class="llmStatus.className"
+        >{{ llmStatus.label }}</span>
+      </div>
+      <div class="hidden h-8 w-px shrink-0 bg-gray-200 dark:bg-white/10 sm:block" aria-hidden="true" />
+      <KbLlmToggle
+        v-model="useLlm"
+        @availability="llmAvailable = $event"
+        @status="llmStatus = $event"
+      />
     </div>
-
-    <KbLlmToggle />
 
     <div class="flex flex-col gap-4 xl:flex-row xl:items-start">
       <aside

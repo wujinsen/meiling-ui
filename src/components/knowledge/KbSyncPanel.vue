@@ -9,11 +9,12 @@ import { assertAction, guardActionWithRefresh } from '@/composables/useActionPer
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { KbSyncLog, KbSyncStatus } from '@/types/knowledge'
+import { PERM } from '@/constants/permissions'
 
 const { t } = useI18n()
 const { selectedSpace, kbQuerySpaceId, ensureSpacesLoaded } = useKbSpace()
 
-const canSync = computed(() => assertAction('kb:sync:trigger') || assertAction('kb:admin'))
+const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER) || assertAction(PERM.KB_ADMIN))
 
 const statusLoading = ref(false)
 const logsLoading = ref(false)
@@ -58,10 +59,10 @@ async function refreshAll() {
 
 async function trigger() {
   const allowed =
-    assertAction('kb:sync:trigger') ||
-    assertAction('kb:admin') ||
-    (await guardActionWithRefresh('kb:sync:trigger')) ||
-    assertAction('kb:admin')
+    assertAction(PERM.KB_SYNC_TRIGGER) ||
+    assertAction(PERM.KB_ADMIN) ||
+    (await guardActionWithRefresh(PERM.KB_SYNC_TRIGGER)) ||
+    assertAction(PERM.KB_ADMIN)
   if (!allowed) return
   triggering.value = true
   lastOutput.value = ''

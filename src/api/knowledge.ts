@@ -279,6 +279,22 @@ export async function addKbSpaceMemberApi(data: import('@/types/knowledge').KbSp
   return request<number | string>(`${KB_BASE}/space/member`, { method: 'POST', body: jsonEntityBody(data as Record<string, unknown>) })
 }
 
+export async function batchAddKbSpaceMembersApi(data: import('@/types/knowledge').KbSpaceMemberBatchAddRequest) {
+  if (USE_MOCK) {
+    await delay(180)
+    return ok<import('@/types/knowledge').KbSpaceMemberBatchResult>({
+      successCount: data.memberIds.length,
+      skipCount: 0,
+      failCount: 0,
+      memberRowIds: data.memberIds.map((_, i) => String(Date.now() + i)),
+    })
+  }
+  return request<import('@/types/knowledge').KbSpaceMemberBatchResult>(`${KB_BASE}/space/member/batch`, {
+    method: 'POST',
+    body: jsonEntityBody(data as Record<string, unknown>),
+  })
+}
+
 export async function updateKbSpaceMemberApi(data: import('@/types/knowledge').KbSpaceMember) {
   if (USE_MOCK) {
     await delay(150)
@@ -293,6 +309,22 @@ export async function removeKbSpaceMemberApi(id: number | string) {
     return ok<boolean>(true)
   }
   return request<boolean>(`${KB_BASE}/space/member/${id}`, { method: 'DELETE' })
+}
+
+export async function batchRemoveKbSpaceMembersApi(data: import('@/types/knowledge').KbSpaceMemberBatchRemoveRequest) {
+  if (USE_MOCK) {
+    await delay(150)
+    return ok<import('@/types/knowledge').KbSpaceMemberBatchResult>({
+      successCount: data.ids.length,
+      skipCount: 0,
+      failCount: 0,
+      memberRowIds: data.ids,
+    })
+  }
+  return request<import('@/types/knowledge').KbSpaceMemberBatchResult>(`${KB_BASE}/space/member/batch/remove`, {
+    method: 'POST',
+    body: jsonEntityBody(data as Record<string, unknown>),
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -325,28 +357,14 @@ export async function getKbLlmConfigApi() {
   if (USE_MOCK) {
     await delay(80)
     return ok<import('@/types/knowledge').KbLlmConfig>({
-      enabled: false,
-      usable: false,
+      available: false,
+      configEnabled: false,
       apiKeyConfigured: false,
       provider: 'mock',
       model: 'mock',
-      nacosManaged: true,
-      nacosDataId: 'knowledge-server-kb-llm-dev.yaml',
-      canManage: true,
     })
   }
   return request<import('@/types/knowledge').KbLlmConfig>(`${KB_BASE}/ask/llm-config`, { method: 'GET' })
-}
-
-export async function updateKbLlmConfigApi(enabled: boolean) {
-  if (USE_MOCK) {
-    await delay(120)
-    return ok<boolean>(true)
-  }
-  return request<boolean>(`${KB_BASE}/ask/llm-config`, {
-    method: 'PUT',
-    body: jsonEntityBody({ enabled }),
-  })
 }
 
 export async function askKbApi(payload: KbAskRequest) {
