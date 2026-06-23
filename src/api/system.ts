@@ -1,15 +1,10 @@
 import { request } from '@/api/http'
 import type { PageRes } from '@/types/page'
 import type { SysSystem, SystemEnterVo, SystemVo } from '@/types/system'
+import { buildEntityQuery, jsonEntityBody } from '@/utils/id'
 
 function buildQuery(params?: Record<string, string | number | undefined>) {
-  if (!params) return ''
-  const qs = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') qs.set(key, String(value))
-  }
-  const query = qs.toString()
-  return query ? `?${query}` : ''
+  return buildEntityQuery(params)
 }
 
 export async function mySystemsApi() {
@@ -19,14 +14,14 @@ export async function mySystemsApi() {
 export async function enterSystemApi(systemId: number | string) {
   return request<SystemEnterVo>('/system/enter', {
     method: 'POST',
-    body: JSON.stringify({ systemId }),
+    body: jsonEntityBody({ systemId }),
   })
 }
 
 export async function switchSystemApi(systemId: number | string) {
   return request<SystemEnterVo>('/system/switch', {
     method: 'POST',
-    body: JSON.stringify({ systemId }),
+    body: jsonEntityBody({ systemId }),
   })
 }
 
@@ -39,14 +34,14 @@ export async function listSystemApi(params?: SysSystem) {
 export async function addSystemApi(data: SysSystem) {
   return request<boolean>('/system', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 
 export async function updateSystemApi(data: SysSystem) {
   return request<boolean>('/system', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 

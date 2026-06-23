@@ -20,6 +20,7 @@ import { useTreeExpand } from '@/composables/useTreeExpand'
 import { loadDynamicRoutes } from '@/composables/usePermission'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyMenu, type MenuQuery, type SysMenu } from '@/types/menu'
+import { toParentId } from '@/utils/id'
 import { buildTree, flattenVisibleTree } from '@/utils/tree'
 import { getMenuIconLabel, resolveMenuIcon } from '@/utils/menuIcons'
 import { ChevronDown, ChevronRight, FoldVertical, Pencil, Plus, RefreshCw, Search, Trash2, UnfoldVertical } from 'lucide-vue-next'
@@ -154,7 +155,7 @@ async function submitForm() {
       ...form.value,
       menuName: form.value.menuName.trim(),
       routeName: form.value.routeName?.trim() || undefined,
-      parentId: Number(form.value.parentId) || 0,
+      parentId: toParentId(form.value.parentId),
       orderNum: Number(form.value.orderNum) || 0,
       status: Number(form.value.status ?? 1),
     }

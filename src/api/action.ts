@@ -2,6 +2,7 @@ import { request } from '@/api/http'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { normalizePageRes, type PageRes } from '@/types/page'
+import { jsonEntityBody, toEntityId } from '@/utils/id'
 
 export type ActionVo = {
   id?: number | string
@@ -25,7 +26,8 @@ export type ActionQuery = {
 }
 
 export async function listActionsByMenuApi(menuId: number | string) {
-  return request<ActionVo[]>(`/action/list?menuId=${menuId}`, { method: 'GET' })
+  const id = toEntityId(menuId) ?? String(menuId)
+  return request<ActionVo[]>(`/action/list?menuId=${id}`, { method: 'GET' })
 }
 
 export async function pageActionApi(query: ActionQuery) {
@@ -34,7 +36,9 @@ export async function pageActionApi(query: ActionQuery) {
   if (query.pageSize != null) params.set('pageSize', String(query.pageSize))
   if (query.permCode) params.set('permCode', query.permCode)
   if (query.name) params.set('name', query.name)
-  if (query.menuId != null && query.menuId !== '') params.set('menuId', String(query.menuId))
+  if (query.menuId != null && query.menuId !== '') {
+    params.set('menuId', toEntityId(query.menuId) ?? String(query.menuId))
+  }
   if (query.status !== '' && query.status != null) params.set('status', String(query.status))
   return request<PageRes<ActionVo>>(`/action/page?${params}`, { method: 'GET' })
 }
@@ -44,17 +48,17 @@ export async function getActionApi(id: number | string) {
 }
 
 export async function addActionApi(payload: ActionVo) {
-  return request<boolean>('/action', { method: 'POST', body: JSON.stringify(payload) })
+  return request<boolean>('/action', { method: 'POST', body: jsonEntityBody(payload as Record<string, unknown>) })
 }
 
 export async function updateActionApi(payload: ActionVo) {
-  return request<boolean>('/action', { method: 'PUT', body: JSON.stringify(payload) })
+  return request<boolean>('/action', { method: 'PUT', body: jsonEntityBody(payload as Record<string, unknown>) })
 }
 
 export async function changeActionStatusApi(id: number | string, status: number) {
   return request<boolean>('/action/changeStatus', {
     method: 'PUT',
-    body: JSON.stringify({ id, status }),
+    body: jsonEntityBody({ id, status }),
   })
 }
 

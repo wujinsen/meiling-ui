@@ -1,5 +1,6 @@
 import { request } from '@/api/http'
 import type { DeptQuery, DeptVo, SysDept } from '@/types/dept'
+import { jsonEntityBody } from '@/utils/id'
 
 export async function listDeptApi(params?: DeptQuery) {
   const qs = new URLSearchParams()
@@ -20,14 +21,14 @@ export async function getDeptApi(id: number | string) {
 export async function addDeptApi(data: SysDept) {
   return request<boolean>('/dept', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 
 export async function updateDeptApi(data: SysDept) {
   return request<boolean>('/dept', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 

@@ -66,7 +66,7 @@ async function trigger() {
   triggering.value = true
   lastOutput.value = ''
   try {
-    const params: { spaceId?: number; spaceCode?: string } = {}
+    const params: { spaceId?: number | string; spaceCode?: string } = {}
     const sid = kbQuerySpaceId()
     if (sid != null) params.spaceId = sid
     else if (selectedSpace.value?.spaceCode) params.spaceCode = selectedSpace.value.spaceCode

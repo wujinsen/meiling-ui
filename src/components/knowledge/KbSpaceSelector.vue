@@ -19,7 +19,7 @@ const {
 const selectValue = computed({
   get: () => (selectedSpaceId.value == null ? 'all' : String(selectedSpaceId.value)),
   set: (v: string) => {
-    setSelectedSpaceId(v === 'all' ? null : Number(v))
+    setSelectedSpaceId(v === 'all' ? null : v)
   },
 })
 
@@ -46,7 +46,7 @@ onMounted(() => ensureSpacesLoaded())
     <div class="relative">
       <select v-model="selectValue" class="field-input w-full py-2 pr-8 text-sm">
         <option value="all">{{ t('knowledge.space.allAccessible') }}</option>
-        <option v-for="s in spaces" :key="s.id" :value="String(s.id)">
+        <option v-for="s in spaces" :key="String(s.id)" :value="String(s.id)">
           {{ s.spaceName }}
           <template v-if="s.visibility === 0"> · {{ t('knowledge.space.private') }}</template>
         </option>

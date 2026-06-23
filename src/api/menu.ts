@@ -3,6 +3,7 @@ import { getDefaultMenus } from '@/router/defaultMenus'
 import type { MenuVo, MoliResult } from '@/types/api'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { MenuQuery, SysMenu } from '@/types/menu'
+import { jsonEntityBody } from '@/utils/id'
 
 /**
  * 当前用户可访问的路由菜单。
@@ -48,14 +49,14 @@ export async function getMenuApi(id: number | string) {
 export async function addMenuApi(data: SysMenu) {
   return request<boolean>('/menu', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 
 export async function updateMenuApi(data: SysMenu) {
   return request<boolean>('/menu', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 

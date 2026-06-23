@@ -35,7 +35,7 @@ import type { SysPost } from '@/types/post'
 import type { SysRole } from '@/types/role'
 import { createEmptyUser, type UserQuery, type UserVo } from '@/types/user'
 import { filterAssignableRoles, isBuiltinSuperAdminRole } from '@/utils/role'
-import { toEntityId } from '@/utils/id'
+import { toEntityId, toEntityIdList } from '@/utils/id'
 import { buildTree, collectTreeIds, normalizeNestedTree, sortTreeByOrderNum } from '@/utils/tree'
 import { KeyRound, LayoutGrid, Pencil, Plus, RefreshCw, Search, Shield, Trash2 } from 'lucide-vue-next'
 
@@ -92,7 +92,7 @@ const formDeptId = computed({
     return form.value.deptId != null && form.value.deptId !== '' ? String(form.value.deptId) : ''
   },
   set(value: string) {
-    form.value.deptId = value ? Number(value) : undefined
+    form.value.deptId = value || undefined
   },
 })
 
@@ -188,12 +188,12 @@ async function loadPostOptions() {
 
 function resolvePostIds(data: UserVo & { posts?: SysPost[] }) {
   if (data.postIds?.length) {
-    return data.postIds.map((id) => Number(id))
+    return toEntityIdList(data.postIds)
   }
   if (data.posts?.length) {
     return data.posts
-      .map((post) => Number(post.id))
-      .filter((id) => !Number.isNaN(id))
+      .map((post) => toEntityId(post.id))
+      .filter((id): id is string => id != null)
   }
   return []
 }
@@ -390,10 +390,10 @@ async function submitForm() {
       nickName: form.value.nickName!.trim(),
       telephone: form.value.telephone?.trim() || undefined,
       email: form.value.email?.trim() || undefined,
-      deptId: form.value.deptId ? Number(form.value.deptId) : undefined,
+      deptId: toEntityId(form.value.deptId),
       status: Number(form.value.status ?? 1),
       sex: Number(form.value.sex ?? 0),
-      postIds: form.value.postIds?.map((id) => Number(id)) ?? [],
+      postIds: toEntityIdList(form.value.postIds),
     }
 
     if (!isEdit.value) {
@@ -483,7 +483,7 @@ const selectedPostId = computed({
     return id != null && id !== '' ? String(id) : ''
   },
   set: (value: string) => {
-    form.value.postIds = value ? [Number(value)] : []
+    form.value.postIds = value ? [value] : []
   },
 })
 

@@ -19,6 +19,7 @@ import type {
   MoliPage,
 } from '@/types/knowledge'
 import { getToken } from '@/utils/authSession'
+import { buildEntityQuery, jsonEntityBody } from '@/utils/id'
 
 /**
  * 网关前缀：网关 StripPrefix=1 去掉 /KnowledgeServer 后转发到 moli-knowledge-server。
@@ -34,13 +35,7 @@ export function isMockKnowledgeEnabled() {
 }
 
 function buildQuery(params?: Record<string, string | number | undefined>) {
-  if (!params) return ''
-  const qs = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') qs.set(key, String(value))
-  }
-  const query = qs.toString()
-  return query ? `?${query}` : ''
+  return buildEntityQuery(params)
 }
 
 function delay(ms: number) {
@@ -203,7 +198,7 @@ export async function getKbAccessibleSpacesApi() {
     await delay(120)
     return ok<KbAccessibleSpace[]>([
       {
-        id: 900000000000000001,
+        id: '900000000000000001',
         spaceCode: 'enterprise-kb',
         spaceName: '企业知识库',
         description: '公司级知识沉淀',
@@ -222,7 +217,7 @@ export async function getKbAccessibleSpacesApi() {
       },
     ])
   }
-  return request<KbAccessibleSpace[]>(`${KB_BASE}/space/accessible`, { method: 'GET' })
+  return request<KbAccessibleSpace[]>(`${KB_BASE}/space/mine`, { method: 'GET' })
 }
 
 export async function getKbSpaceApi(id: number | string) {
@@ -244,7 +239,7 @@ export async function createKbSpaceApi(data: import('@/types/knowledge').KbSpace
     await delay(200)
     return ok<number | string>(Date.now())
   }
-  return request<number | string>(`${KB_BASE}/space`, { method: 'POST', body: JSON.stringify(data) })
+  return request<number | string>(`${KB_BASE}/space`, { method: 'POST', body: jsonEntityBody(data as Record<string, unknown>) })
 }
 
 export async function updateKbSpaceApi(data: import('@/types/knowledge').KbSpace) {
@@ -252,7 +247,7 @@ export async function updateKbSpaceApi(data: import('@/types/knowledge').KbSpace
     await delay(200)
     return ok<boolean>(true)
   }
-  return request<boolean>(`${KB_BASE}/space`, { method: 'PUT', body: JSON.stringify(data) })
+  return request<boolean>(`${KB_BASE}/space`, { method: 'PUT', body: jsonEntityBody(data as Record<string, unknown>) })
 }
 
 export async function deleteKbSpaceApi(id: number | string) {
@@ -267,7 +262,7 @@ export async function listKbSpaceMembersApi(spaceId: number | string) {
   if (USE_MOCK) {
     await delay(150)
     return ok<import('@/types/knowledge').KbSpaceMember[]>([
-      { id: 1, spaceId, memberType: 0, memberId: 719712653013942272, role: 'admin' },
+      { id: '1', spaceId, memberType: 0, memberId: '719712653013942272', role: 'admin' },
     ])
   }
   return request<import('@/types/knowledge').KbSpaceMember[]>(
@@ -281,7 +276,7 @@ export async function addKbSpaceMemberApi(data: import('@/types/knowledge').KbSp
     await delay(150)
     return ok<number | string>(Date.now())
   }
-  return request<number | string>(`${KB_BASE}/space/member`, { method: 'POST', body: JSON.stringify(data) })
+  return request<number | string>(`${KB_BASE}/space/member`, { method: 'POST', body: jsonEntityBody(data as Record<string, unknown>) })
 }
 
 export async function updateKbSpaceMemberApi(data: import('@/types/knowledge').KbSpaceMember) {
@@ -289,7 +284,7 @@ export async function updateKbSpaceMemberApi(data: import('@/types/knowledge').K
     await delay(150)
     return ok<boolean>(true)
   }
-  return request<boolean>(`${KB_BASE}/space/member`, { method: 'PUT', body: JSON.stringify(data) })
+  return request<boolean>(`${KB_BASE}/space/member`, { method: 'PUT', body: jsonEntityBody(data as Record<string, unknown>) })
 }
 
 export async function removeKbSpaceMemberApi(id: number | string) {
@@ -345,7 +340,7 @@ export async function askKbApi(payload: KbAskRequest) {
       model: 'mock',
       citations: list.map((p) => ({
         docId: p.docId,
-        spaceId: p.spaceId ?? 900000000000000001,
+        spaceId: p.spaceId ?? '900000000000000001',
         slug: p.slug,
         title: p.title,
         kbType: p.kbType,
@@ -356,7 +351,7 @@ export async function askKbApi(payload: KbAskRequest) {
   }
   return request<KbAskResponse>(`${KB_BASE}/ask`, {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: jsonEntityBody(payload as Record<string, unknown>),
     /** 生成式问答会调 LLM，后端 timeout 90s；默认 8s 会误报超时 */
     timeoutMs: 120_000,
   })

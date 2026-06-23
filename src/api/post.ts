@@ -1,15 +1,10 @@
 import { request } from '@/api/http'
 import type { PageRes } from '@/types/page'
 import type { PostQuery, SysPost } from '@/types/post'
+import { buildEntityQuery, jsonEntityBody } from '@/utils/id'
 
 function buildQuery(params?: Record<string, string | number | undefined>) {
-  if (!params) return ''
-  const qs = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') qs.set(key, String(value))
-  }
-  const query = qs.toString()
-  return query ? `?${query}` : ''
+  return buildEntityQuery(params)
 }
 
 export async function listPostApi(params?: PostQuery) {
@@ -25,14 +20,14 @@ export async function getPostApi(id: number | string) {
 export async function addPostApi(data: SysPost) {
   return request<boolean>('/post', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 
 export async function updatePostApi(data: SysPost) {
   return request<boolean>('/post', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 

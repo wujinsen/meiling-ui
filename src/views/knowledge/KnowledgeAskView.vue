@@ -31,7 +31,7 @@ const router = useRouter()
 const { selectedSpaceId, ensureSpacesLoaded, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
 
 const crossSpaceAsk = ref(false)
-const askSpaceIds = ref<number[]>([])
+const askSpaceIds = ref<string[]>([])
 
 const question = ref('')
 const asking = ref(false)

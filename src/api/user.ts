@@ -6,16 +6,10 @@ import type { SysUserVo, UserQuery, UserRoleVo, UserVo } from '@/types/user'
 import type { SysUser } from '@/types/api'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { getStoredUser } from '@/utils/authSession'
-import { toEntityId } from '@/utils/id'
+import { buildEntityQuery, jsonEntityBody, toEntityId } from '@/utils/id'
 
 function buildQuery(params?: Record<string, string | number | undefined>) {
-  if (!params) return ''
-  const qs = new URLSearchParams()
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') qs.set(key, String(value))
-  }
-  const query = qs.toString()
-  return query ? `?${query}` : ''
+  return buildEntityQuery(params)
 }
 
 export async function listUserApi(params?: UserQuery) {
@@ -35,14 +29,14 @@ export async function getUserDetailApi(id: number | string) {
 export async function addUserApi(data: UserVo) {
   return request<boolean>('/user', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 
 export async function updateUserApi(data: SysUserVo) {
   return request<boolean>('/user', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 
@@ -54,7 +48,7 @@ export async function deleteUserApi(ids: number | string | Array<number | string
 export async function changeUserStatusApi(id: number | string, status: number) {
   return request<boolean>('/user/changeStatus', {
     method: 'PUT',
-    body: JSON.stringify({ id, status }),
+    body: jsonEntityBody({ id, status }),
   })
 }
 
@@ -107,7 +101,7 @@ export async function getUserProfileApi() {
 export async function updateUserProfileApi(data: SysUserVo) {
   return request<boolean>('/user', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data as Record<string, unknown>),
   })
 }
 
@@ -141,9 +135,13 @@ export async function getSystemByUserIdApi(userId: number | string) {
 }
 
 export async function insertUserSystemApi(data: { userId: number | string; systemIds: Array<number | string> }) {
+  const userId = toEntityId(data.userId)
+  if (!userId) {
+    return { code: 500, msg: '用户ID无效' } as const
+  }
   return request<boolean>('/user/insertUserSystem', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: jsonEntityBody({ userId, systemIds: data.systemIds }),
   })
 }
 
@@ -178,13 +176,13 @@ export async function unauthorizedUsersBySystemApi(params?: UserQuery) {
 export async function addUserRoleApi(data: { roleId: number | string; userIds: Array<number | string> }) {
   return request<boolean>('/user/addUserRole', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data),
   })
 }
 
 export async function removeUsersFromRoleApi(data: { roleId: number | string; userIds: Array<number | string> }) {
   return request<boolean>('/user/removeUsers', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: jsonEntityBody(data),
   })
 }
