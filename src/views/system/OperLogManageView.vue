@@ -236,6 +236,7 @@ onMounted(loadLogs)
               <th class="px-4 py-3">{{ t('system.operlog.businessType') }}</th>
               <th class="px-4 py-3">{{ t('system.operlog.userName') }}</th>
               <th class="px-4 py-3">{{ t('system.operlog.requestIp') }}</th>
+              <th class="px-4 py-3">{{ t('system.operlog.requestLocation') }}</th>
               <th class="px-4 py-3">{{ t('system.operlog.status') }}</th>
               <th class="px-4 py-3">{{ t('system.operlog.createTime') }}</th>
               <th class="px-4 py-3 text-right">{{ t('system.operlog.actions') }}</th>
@@ -243,10 +244,10 @@ onMounted(loadLogs)
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('system.operlog.loading') }}</td>
+              <td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('system.operlog.loading') }}</td>
             </tr>
             <tr v-else-if="!logList.length">
-              <td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('system.operlog.empty') }}</td>
+              <td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('system.operlog.empty') }}</td>
             </tr>
             <tr
               v-for="row in logList"
@@ -270,6 +271,7 @@ onMounted(loadLogs)
               </td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.userName || '-' }}</td>
               <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.requestIp || '-' }}</td>
+              <td class="max-w-[160px] truncate px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.requestLocation || '-' }}</td>
               <td class="px-4 py-3">
                 <span
                   :class="[
@@ -322,6 +324,9 @@ onMounted(loadLogs)
           </FormField>
           <FormField :label="t('system.operlog.requestIp')">
             <div class="field-readonly">{{ detailRow.requestIp || '-' }}</div>
+          </FormField>
+          <FormField :label="t('system.operlog.requestLocation')">
+            <div class="field-readonly">{{ detailRow.requestLocation || '-' }}</div>
           </FormField>
           <FormField :label="t('system.operlog.createTime')">
             <div class="field-readonly">{{ formatTime(detailRow.createTime) }}</div>

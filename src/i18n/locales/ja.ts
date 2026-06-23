@@ -1062,6 +1062,7 @@ export default {
       businessType5: 'エクスポート',
       businessType6: 'その他',
       requestIp: '操作IP',
+      requestLocation: '操作場所',
       requestMethod: 'リクエスト方式',
       requestUrl: 'リクエストURL',
       requestParam: 'リクエストパラメータ',

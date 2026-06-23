@@ -1062,6 +1062,7 @@ export default {
       businessType5: 'Export',
       businessType6: 'Other',
       requestIp: 'IP address',
+      requestLocation: 'Location',
       requestMethod: 'Request method',
       requestUrl: 'Request URL',
       requestParam: 'Request params',

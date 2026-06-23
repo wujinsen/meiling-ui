@@ -8,6 +8,7 @@ export type SysOperationLog = {
   requestMethod?: string
   userName?: string
   requestIp?: string
+  requestLocation?: string
   requestUrl?: string
   requestParam?: string
   responseResult?: string

@@ -1081,6 +1081,7 @@ export default {
       businessType5: '导出',
       businessType6: '其它',
       requestIp: '操作 IP',
+      requestLocation: '操作地点',
       requestMethod: '请求方式',
       requestUrl: '请求地址',
       requestParam: '请求参数',
