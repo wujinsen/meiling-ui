@@ -321,6 +321,34 @@ export async function getKbPageApi(slug: string, spaceId?: number | string) {
 // 3. Query 问答
 // ---------------------------------------------------------------------------
 
+export async function getKbLlmConfigApi() {
+  if (USE_MOCK) {
+    await delay(80)
+    return ok<import('@/types/knowledge').KbLlmConfig>({
+      enabled: false,
+      usable: false,
+      apiKeyConfigured: false,
+      provider: 'mock',
+      model: 'mock',
+      nacosManaged: true,
+      nacosDataId: 'knowledge-server-kb-llm-dev.yaml',
+      canManage: true,
+    })
+  }
+  return request<import('@/types/knowledge').KbLlmConfig>(`${KB_BASE}/ask/llm-config`, { method: 'GET' })
+}
+
+export async function updateKbLlmConfigApi(enabled: boolean) {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/ask/llm-config`, {
+    method: 'PUT',
+    body: jsonEntityBody({ enabled }),
+  })
+}
+
 export async function askKbApi(payload: KbAskRequest) {
   if (USE_MOCK) {
     await delay(600)

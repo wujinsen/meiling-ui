@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { History, Loader2, Send, Sparkles, ThumbsDown, ThumbsUp, User } from 'lucide-vue-next'
 import KbAskScopePanel from '@/components/knowledge/KbAskScopePanel.vue'
 import KbDocPreviewModal from '@/components/knowledge/KbDocPreviewModal.vue'
-import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
+import KbLlmToggle from '@/components/knowledge/KbLlmToggle.vue'
 import {
   askKbApi,
   feedbackKbAskApi,
@@ -28,10 +28,10 @@ type ChatTurn = {
 
 const { t } = useI18n()
 const router = useRouter()
-const { selectedSpaceId, ensureSpacesLoaded, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
+const { selectedSpaceId, ensureSpacesLoaded, setSelectedSpaceId, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
 
-const crossSpaceAsk = ref(false)
-const askSpaceIds = ref<string[]>([])
+const scopeMode = ref<'all' | 'custom'>('all')
+const scopeSpaceIds = ref<string[]>([])
 
 const question = ref('')
 const asking = ref(false)
@@ -76,11 +76,10 @@ async function ask(text?: string) {
 
   try {
     const payload: import('@/types/knowledge').KbAskRequest = { question: q, topK: 8 }
-    if (crossSpaceAsk.value) {
-      if (!askSpaceIds.value.length) {
-        throw new Error(t('knowledge.ask.crossSpaceEmpty'))
-      }
-      payload.spaceIds = [...askSpaceIds.value]
+    if (scopeMode.value === 'custom' && scopeSpaceIds.value.length === 0) {
+      throw new Error(t('knowledge.ask.crossSpaceEmpty'))
+    } else if (scopeMode.value === 'custom' && scopeSpaceIds.value.length > 1) {
+      payload.spaceIds = [...scopeSpaceIds.value]
     } else {
       const sid = kbQuerySpaceId()
       if (sid != null) payload.spaceId = sid
@@ -177,8 +176,21 @@ function onKeydown(event: KeyboardEvent) {
 
 onMounted(async () => {
   await ensureSpacesLoaded()
+  if (selectedSpaceId.value != null) {
+    scopeMode.value = 'custom'
+    scopeSpaceIds.value = [selectedSpaceId.value]
+  }
   await loadHistory()
 })
+
+// 统一检索范围 → 同步全局选中空间（供历史记录与跨页上下文使用）
+watch([scopeMode, scopeSpaceIds], () => {
+  if (scopeMode.value === 'custom' && scopeSpaceIds.value.length === 1) {
+    setSelectedSpaceId(scopeSpaceIds.value[0])
+  } else {
+    setSelectedSpaceId(null)
+  }
+}, { deep: true })
 
 watch(selectedSpaceId, () => loadHistory())
 watch(showHistory, (open) => {
@@ -188,23 +200,18 @@ watch(showHistory, (open) => {
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="page-title text-xl">{{ t('knowledge.ask.title') }}</h1>
-        <p class="page-subtitle">{{ t('knowledge.ask.subtitle') }}</p>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <button type="button" class="btn-ghost text-sm" @click="showHistory = !showHistory">
-          <History class="h-4 w-4" /> {{ t('knowledge.ask.history') }}
-        </button>
-        <KbSpaceSelector />
-      </div>
+    <div class="flex flex-wrap items-end gap-2">
+      <button type="button" class="btn-ghost text-sm" @click="showHistory = !showHistory">
+        <History class="h-4 w-4" /> {{ t('knowledge.ask.history') }}
+      </button>
     </div>
+
+    <KbLlmToggle />
 
     <div class="flex flex-col gap-4 xl:flex-row xl:items-start">
       <aside
         v-if="showHistory"
-        class="card w-full p-4 xl:w-72 xl:shrink-0 xl:sticky xl:top-20 xl:self-start"
+        class="card w-full p-4 xl:w-72 xl:shrink-0 xl:sticky xl:top-6 xl:self-start"
       >
         <h2 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('knowledge.ask.history') }}</h2>
         <p v-if="historyLoading" class="py-6 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
@@ -330,7 +337,7 @@ watch(showHistory, (open) => {
         </div>
 
         <div class="border-t border-gray-100 p-4 dark:border-white/5">
-          <KbAskScopePanel v-model="askSpaceIds" v-model:enabled="crossSpaceAsk" class="mb-3" />
+          <KbAskScopePanel v-model="scopeSpaceIds" v-model:mode="scopeMode" class="mb-3" />
           <div class="flex items-end gap-2">
             <textarea
               v-model="question"

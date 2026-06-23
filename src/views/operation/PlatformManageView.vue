@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { addPlatformApi, deletePlatformApi, getPlatformApi, listPlatformApi, updatePlatformApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import { confirm } from '@/composables/useConfirm'
 import { guardAction } from '@/composables/useActionPermissions'
@@ -135,15 +136,15 @@ onMounted(loadList)
 
 <template>
   <div class="page-stack">
-    <div class="card p-5">
-      <div class="mb-4 flex flex-wrap items-end gap-3">
-        <form class="contents" @submit.prevent="search">
-          <label class="flex w-44 shrink-0 flex-col gap-1 text-sm">
-            <span class="text-gray-500">{{ t('operation.platform.platformName') }}</span>
+    <OperationPageHeader :title="t('operation.platform.title')" :subtitle="t('operation.platform.subtitle')">
+      <template #toolbar>
+        <form class="operation-search-form" @submit.prevent="search">
+          <label class="operation-filter-field">
+            <span>{{ t('operation.platform.platformName') }}</span>
             <input v-model="query.platformName" type="text" class="field-input" />
           </label>
-          <label class="flex w-32 shrink-0 flex-col gap-1 text-sm">
-            <span class="text-gray-500">{{ t('operation.common.environment') }}</span>
+          <label class="operation-filter-field">
+            <span>{{ t('operation.common.environment') }}</span>
             <EnvironmentSelect v-model="query.environment" include-all />
           </label>
           <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
@@ -152,7 +153,10 @@ onMounted(loadList)
         <div class="toolbar-actions">
           <button type="button" class="btn-primary shrink-0" @click="openCreate"><Plus class="h-4 w-4" /> {{ t('operation.common.add') }}</button>
         </div>
-      </div>
+      </template>
+    </OperationPageHeader>
+
+    <div class="card p-5">
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
         <table class="w-full min-w-[900px] text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">

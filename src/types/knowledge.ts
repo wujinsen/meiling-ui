@@ -88,6 +88,18 @@ export type KbAskResponse = {
   qaLogId?: number | string
 }
 
+/** GET /kb/ask/llm-config */
+export type KbLlmConfig = {
+  enabled: boolean
+  usable: boolean
+  apiKeyConfigured: boolean
+  provider?: string
+  model?: string
+  nacosManaged: boolean
+  nacosDataId?: string
+  canManage: boolean
+}
+
 export type KbQaHistory = {
   id: number | string
   spaceId?: number | string

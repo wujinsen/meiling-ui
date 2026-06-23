@@ -11,6 +11,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useKbSpace } from '@/composables/useKbSpace'
 import KbDocPreviewModal from '@/components/knowledge/KbDocPreviewModal.vue'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
+import SegmentControl from '@/components/ui/SegmentControl.vue'
 import { getKbGraphApi } from '@/api/knowledge'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { KbGraph } from '@/types/knowledge'
@@ -31,6 +32,11 @@ const query = ref('')
 const layout = ref<'force' | 'circular'>('force')
 const coreOnly = ref(false)
 const activeTypes = ref<string[]>([])
+
+const layoutOptions = computed(() => [
+  { value: 'force', label: t('knowledge.graph.layoutForce') },
+  { value: 'circular', label: t('knowledge.graph.layoutCircular') },
+])
 
 /** 超过该节点数视为大图：关掉持续力导画、关掉入场动画、默认只标核心节点 */
 const BIG_GRAPH = 140
@@ -212,17 +218,11 @@ watch(selectedSpaceId, () => loadGraph())
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 class="page-title text-xl">{{ t('knowledge.graph.title') }}</h1>
-        <p class="page-subtitle">{{ t('knowledge.graph.subtitle') }}</p>
-      </div>
-      <div class="flex flex-wrap items-end gap-2">
-        <KbSpaceSelector />
-        <button type="button" class="btn-ghost shrink-0" @click="loadGraph">
-          <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.graph.refresh') }}
-        </button>
-      </div>
+    <div class="flex flex-wrap items-end gap-2">
+      <KbSpaceSelector />
+      <button type="button" class="btn-ghost shrink-0" @click="loadGraph">
+        <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.graph.refresh') }}
+      </button>
     </div>
 
     <div class="card flex flex-wrap items-center gap-3 p-3">
@@ -232,28 +232,15 @@ watch(selectedSpaceId, () => loadGraph())
           v-model="query"
           type="search"
           :placeholder="t('knowledge.graph.searchPlaceholder')"
-          class="input h-9 w-full pl-9"
+          class="field-input h-9 w-full pl-9"
         />
       </div>
 
-      <div class="inline-flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-        <button
-          type="button"
-          class="px-3 py-1.5 text-sm transition"
-          :class="layout === 'force' ? 'bg-violet-500 text-white' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'"
-          @click="layout = 'force'"
-        >
-          {{ t('knowledge.graph.layoutForce') }}
-        </button>
-        <button
-          type="button"
-          class="px-3 py-1.5 text-sm transition"
-          :class="layout === 'circular' ? 'bg-violet-500 text-white' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'"
-          @click="layout = 'circular'"
-        >
-          {{ t('knowledge.graph.layoutCircular') }}
-        </button>
-      </div>
+      <SegmentControl
+        :model-value="layout"
+        :options="layoutOptions"
+        @update:model-value="layout = $event as 'force' | 'circular'"
+      />
 
       <label class="inline-flex cursor-pointer select-none items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
         <input v-model="coreOnly" type="checkbox" class="h-4 w-4 rounded" />

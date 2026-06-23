@@ -702,7 +702,7 @@ onMounted(async () => {
 
     <!-- 按系统 -->
     <div v-if="activeTab === 'system'" class="flex flex-col gap-4 xl:flex-row xl:items-start">
-      <aside class="w-full shrink-0 xl:w-80 xl:sticky xl:top-20 xl:self-start 2xl:w-[22rem]">
+      <aside class="w-full shrink-0 xl:w-80 xl:sticky xl:top-6 xl:self-start 2xl:w-[22rem]">
         <div class="card p-4 sm:p-5">
           <h2 class="mb-4 text-base font-semibold text-gray-900 dark:text-white">
             {{ t('system.userAssign.selectSystem') }}
@@ -887,7 +887,7 @@ onMounted(async () => {
 
     <!-- 按用户 -->
     <div v-else class="flex flex-col gap-4 xl:flex-row xl:items-start">
-      <aside class="w-full shrink-0 xl:w-80 xl:sticky xl:top-20 xl:self-start 2xl:w-[22rem]">
+      <aside class="w-full shrink-0 xl:w-80 xl:sticky xl:top-6 xl:self-start 2xl:w-[22rem]">
         <div class="card p-4 sm:p-5">
           <h2 class="mb-4 text-base font-semibold text-gray-900 dark:text-white">{{ t('system.userAssign.selectUser') }}</h2>
           <UserAssignSidebar

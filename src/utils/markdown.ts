@@ -46,8 +46,15 @@ function renderTable(header: string[], rows: string[][]) {
   return `<div class="kb-table-wrap"><table class="kb-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`
 }
 
-export function renderMarkdown(content?: string): string {
-  if (!content) return ''
+const markdownCache = new Map<string, string>()
+const MARKDOWN_CACHE_MAX = 48
+const MARKDOWN_CACHE_VERSION = 'v2'
+
+function markdownCacheKey(content: string) {
+  return `${MARKDOWN_CACHE_VERSION}::${content}`
+}
+
+function renderMarkdownBody(content: string): string {
   const lines = content.split('\n')
   const out: string[] = []
   let inList = false
@@ -63,7 +70,6 @@ export function renderMarkdown(content?: string): string {
   while (i < lines.length) {
     const line = lines[i]
 
-    // GFM 表格：表头行 + 分隔行 + 数据行
     if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
       closeList()
       const header = parseTableCells(line)
@@ -81,8 +87,8 @@ export function renderMarkdown(content?: string): string {
     if (heading) {
       closeList()
       const level = heading[1].length
-      const size = level === 1 ? 'text-xl' : level === 2 ? 'text-lg' : 'text-base'
-      out.push(`<h${level} class="${size} font-semibold text-gray-900 dark:text-white mt-4 mb-2">${renderInline(heading[2])}</h${level}>`)
+      const size = level === 1 ? 'kb-md-h1' : level === 2 ? 'kb-md-h2' : 'kb-md-h3'
+      out.push(`<h${level} class="kb-md-heading ${size}">${renderInline(heading[2])}</h${level}>`)
       i += 1
       continue
     }
@@ -90,7 +96,7 @@ export function renderMarkdown(content?: string): string {
     const li = line.match(/^\s*[-*]\s+(.*)$/)
     if (li) {
       if (!inList) {
-        out.push('<ul class="my-2 list-disc space-y-1 pl-5 text-gray-600 dark:text-gray-300">')
+        out.push('<ul class="kb-md-ul">')
         inList = true
       }
       out.push(`<li>${renderInline(li[1])}</li>`)
@@ -101,7 +107,7 @@ export function renderMarkdown(content?: string): string {
     const ol = line.match(/^\s*(\d+)\.\s+(.*)$/)
     if (ol) {
       closeList()
-      out.push(`<p class="ml-5 text-gray-600 dark:text-gray-300"><span class="mr-1 font-medium">${ol[1]}.</span>${renderInline(ol[2])}</p>`)
+      out.push(`<p class="kb-md-ol"><span class="kb-md-ol-num">${ol[1]}.</span>${renderInline(ol[2])}</p>`)
       i += 1
       continue
     }
@@ -109,7 +115,7 @@ export function renderMarkdown(content?: string): string {
     const quote = line.match(/^>\s?(.*)$/)
     if (quote) {
       closeList()
-      out.push(`<blockquote class="my-2 border-l-4 border-brand-200 pl-3 text-gray-600 dark:border-brand-500/40 dark:text-gray-300">${renderInline(quote[1])}</blockquote>`)
+      out.push(`<blockquote class="kb-md-quote">${renderInline(quote[1])}</blockquote>`)
       i += 1
       continue
     }
@@ -135,10 +141,24 @@ export function renderMarkdown(content?: string): string {
     }
 
     closeList()
-    out.push(`<p class="leading-relaxed text-gray-600 dark:text-gray-300">${renderInline(line)}</p>`)
+    out.push(`<p class="kb-md-p">${renderInline(line)}</p>`)
     i += 1
   }
 
   closeList()
   return out.join('')
+}
+
+export function renderMarkdown(content?: string): string {
+  if (!content) return ''
+  const key = markdownCacheKey(content)
+  const cached = markdownCache.get(key)
+  if (cached !== undefined) return cached
+  const html = renderMarkdownBody(content)
+  if (markdownCache.size >= MARKDOWN_CACHE_MAX) {
+    const first = markdownCache.keys().next().value
+    if (first !== undefined) markdownCache.delete(first)
+  }
+  markdownCache.set(key, html)
+  return html
 }

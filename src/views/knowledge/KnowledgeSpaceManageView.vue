@@ -25,7 +25,7 @@ import {
   updateKbSpaceApi,
   updateKbSpaceMemberApi,
 } from '@/api/knowledge'
-import { listUserApi } from '@/api/user'
+import { getUserApi, listUserApi } from '@/api/user'
 import { confirm } from '@/composables/useConfirm'
 import { assertAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
@@ -54,6 +54,16 @@ const userSearch = ref('')
 const userResults = ref<UserVo[]>([])
 const userSearchLoading = ref(false)
 const newMemberRole = ref<KbMemberRole>('viewer')
+const selectedUserIds = ref(new Set<string>())
+const batchAdding = ref(false)
+
+const allUsersSelected = computed(
+  () =>
+    userResults.value.length > 0
+    && userResults.value.every((u) => u.id != null && selectedUserIds.value.has(String(u.id))),
+)
+const hasUserSelection = computed(() => selectedUserIds.value.size > 0)
+const selectedUserCount = computed(() => selectedUserIds.value.size)
 
 const canCreateSpace = computed(() => true)
 const isKbAdmin = computed(() => assertAction('kb:admin'))
@@ -165,22 +175,28 @@ async function removeSpace(row: KbAccessibleSpace) {
   }
 }
 
+function memberIdSet() {
+  return new Set(members.value.filter((m) => m.memberType !== 1).map((m) => String(m.memberId)))
+}
+
 async function loadUserLabels(ids: Array<number | string>) {
   if (!ids.length) return
-  try {
-    const res = await listUserApi({ pageNum: 1, pageSize: 200 })
-    if (res.code === API_SUCCESS_CODE && res.data?.list) {
-      const map = { ...userLabelMap.value }
-      for (const u of res.data.list) {
-        if (u.id != null) {
-          map[String(u.id)] = u.nickName || u.userName || String(u.id)
+  const map = { ...userLabelMap.value }
+  await Promise.all(
+    ids.map(async (id) => {
+      const key = String(id)
+      if (map[key]) return
+      try {
+        const res = await getUserApi(id)
+        if (res.code === API_SUCCESS_CODE && res.data) {
+          map[key] = res.data.nickName || res.data.userName || key
         }
+      } catch {
+        /* optional enrichment */
       }
-      userLabelMap.value = map
-    }
-  } catch {
-    /* optional enrichment */
-  }
+    }),
+  )
+  userLabelMap.value = map
 }
 
 async function openMembers(row: KbAccessibleSpace) {
@@ -193,12 +209,14 @@ async function openMembers(row: KbAccessibleSpace) {
   membersLoading.value = true
   userSearch.value = ''
   userResults.value = []
+  selectedUserIds.value = new Set()
   newMemberRole.value = 'viewer'
   try {
     const res = await listKbSpaceMembersApi(row.id)
     if (res.code !== API_SUCCESS_CODE) throw new Error(res.msg || t('knowledge.spaceManage.memberLoadFailed'))
     members.value = res.data ?? []
-    await loadUserLabels(members.value.map((m) => m.memberId))
+    await loadUserLabels(members.value.filter((m) => m.memberType !== 1).map((m) => m.memberId))
+    await searchUsers()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.spaceManage.memberLoadFailed'))
     members.value = []
@@ -207,18 +225,86 @@ async function openMembers(row: KbAccessibleSpace) {
   }
 }
 
+async function refreshMembers() {
+  if (!memberSpace.value) return
+  const res = await listKbSpaceMembersApi(memberSpace.value.id)
+  if (res.code !== API_SUCCESS_CODE) throw new Error(res.msg || t('knowledge.spaceManage.memberLoadFailed'))
+  members.value = res.data ?? []
+  await loadUserLabels(members.value.filter((m) => m.memberType !== 1).map((m) => m.memberId))
+  await searchUsers()
+}
+
 async function searchUsers() {
   const kw = userSearch.value.trim()
-  if (!kw) {
-    userResults.value = []
-    return
-  }
   userSearchLoading.value = true
   try {
-    const res = await listUserApi({ pageNum: 1, pageSize: 20, userName: kw })
-    if (res.code === API_SUCCESS_CODE) userResults.value = res.data?.list ?? []
+    const res = await listUserApi({ pageNum: 1, pageSize: 50, userName: kw || undefined, status: 1 })
+    if (res.code !== API_SUCCESS_CODE) {
+      userResults.value = []
+      selectedUserIds.value = new Set()
+      return
+    }
+    const existing = memberIdSet()
+    userResults.value = (res.data?.list ?? []).filter((u) => u.id != null && !existing.has(String(u.id)))
+    const visible = new Set(userResults.value.map((u) => String(u.id)))
+    selectedUserIds.value = new Set([...selectedUserIds.value].filter((id) => visible.has(id)))
   } finally {
     userSearchLoading.value = false
+  }
+}
+
+function toggleSelectAllUsers() {
+  if (allUsersSelected.value) {
+    selectedUserIds.value = new Set()
+    return
+  }
+  selectedUserIds.value = new Set(
+    userResults.value.filter((u) => u.id != null).map((u) => String(u.id)),
+  )
+}
+
+function toggleUserSelect(id: number | string) {
+  const key = String(id)
+  const next = new Set(selectedUserIds.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  selectedUserIds.value = next
+}
+
+async function batchAddMembers() {
+  if (!memberSpace.value || !selectedUserIds.value.size) {
+    showToast('error', t('knowledge.spaceManage.batchAddNone'))
+    return
+  }
+  batchAdding.value = true
+  let ok = 0
+  let fail = 0
+  try {
+    for (const id of selectedUserIds.value) {
+      try {
+        const res = await addKbSpaceMemberApi({
+          spaceId: memberSpace.value.id,
+          memberType: 0,
+          memberId: id,
+          role: newMemberRole.value,
+        })
+        if (res.code === API_SUCCESS_CODE) ok += 1
+        else fail += 1
+      } catch {
+        fail += 1
+      }
+    }
+    selectedUserIds.value = new Set()
+    if (fail === 0) {
+      showToast('success', t('knowledge.spaceManage.batchAddOk', { count: ok }))
+    } else {
+      showToast('error', t('knowledge.spaceManage.batchAddPartial', { ok, fail }))
+    }
+    await refreshMembers()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.spaceManage.memberAddFailed'))
+  } finally {
+    batchAdding.value = false
   }
 }
 
@@ -233,7 +319,7 @@ async function addMember(user: UserVo) {
     })
     if (res.code !== API_SUCCESS_CODE) throw new Error(res.msg || t('knowledge.spaceManage.memberAddFailed'))
     showToast('success', t('knowledge.spaceManage.memberAddOk'))
-    await openMembers(memberSpace.value)
+    await refreshMembers()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.spaceManage.memberAddFailed'))
   }
@@ -259,6 +345,7 @@ async function removeMember(row: KbSpaceMember) {
     if (res.code !== API_SUCCESS_CODE) throw new Error(res.msg || t('knowledge.spaceManage.memberRemoveFailed'))
     members.value = members.value.filter((m) => m.id !== row.id)
     showToast('success', t('knowledge.spaceManage.memberRemoveOk'))
+    await searchUsers()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.spaceManage.memberRemoveFailed'))
   }
@@ -269,19 +356,13 @@ onMounted(() => loadSpaces())
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 class="page-title text-xl">{{ t('knowledge.spaceManage.title') }}</h1>
-        <p class="page-subtitle">{{ t('knowledge.spaceManage.subtitle') }}</p>
-      </div>
-      <div class="flex items-center gap-2">
-        <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadSpaces">
-          <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.graph.refresh') }}
-        </button>
-        <button v-if="canCreateSpace" type="button" class="btn-primary shrink-0" @click="openCreateSpace">
-          <Plus class="h-4 w-4" /> {{ t('knowledge.spaceManage.create') }}
-        </button>
-      </div>
+    <div class="flex flex-wrap items-end gap-2">
+      <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadSpaces">
+        <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.graph.refresh') }}
+      </button>
+      <button v-if="canCreateSpace" type="button" class="btn-primary shrink-0" @click="openCreateSpace">
+        <Plus class="h-4 w-4" /> {{ t('knowledge.spaceManage.create') }}
+      </button>
     </div>
 
     <KbAccessDenied
@@ -404,17 +485,61 @@ onMounted(() => loadSpaces())
               <option value="admin">{{ roleLabel('admin') }}</option>
             </select>
             <button type="button" class="btn-ghost" :disabled="userSearchLoading" @click="searchUsers">
-              {{ t('system.common.search') }}
+              {{ t('knowledge.spaceManage.search') }}
             </button>
           </div>
-          <ul v-if="userResults.length" class="mt-2 max-h-40 space-y-1 overflow-y-auto">
-            <li v-for="u in userResults" :key="u.id">
-              <button type="button" class="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5" @click="addMember(u)">
-                <span>{{ u.nickName || u.userName }} <span class="text-xs text-gray-400">({{ u.userName }})</span></span>
-                <UserPlus class="h-4 w-4 text-brand-500" />
-              </button>
-            </li>
-          </ul>
+          <p v-if="userSearchLoading" class="mt-2 text-xs text-gray-400">{{ t('common.loading') }}</p>
+          <div v-else-if="userResults.length" class="mt-2">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <label class="flex cursor-pointer items-center gap-2 text-xs text-gray-500">
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded"
+                  :checked="allUsersSelected"
+                  @change="toggleSelectAllUsers"
+                />
+                {{ t('common.selectAll') }}
+              </label>
+              <div class="flex items-center gap-2">
+                <span v-if="hasUserSelection" class="text-xs text-gray-500">
+                  {{ t('knowledge.spaceManage.selectedCount', { count: selectedUserCount }) }}
+                </span>
+                <button
+                  type="button"
+                  class="btn-primary inline-flex items-center gap-1 px-2 py-1 text-xs"
+                  :disabled="!hasUserSelection || batchAdding"
+                  @click="batchAddMembers"
+                >
+                  <UserPlus class="h-3.5 w-3.5" />
+                  {{ t('knowledge.spaceManage.batchAdd') }}
+                </button>
+              </div>
+            </div>
+            <ul class="max-h-40 space-y-1 overflow-y-auto">
+              <li v-for="u in userResults" :key="u.id">
+                <div class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 shrink-0 rounded"
+                    :checked="u.id != null && selectedUserIds.has(String(u.id))"
+                    @change="u.id != null && toggleUserSelect(u.id)"
+                  />
+                  <span class="min-w-0 flex-1 truncate">
+                    {{ u.nickName || u.userName }}
+                    <span class="text-xs text-gray-400">({{ u.userName }})</span>
+                  </span>
+                  <button
+                    type="button"
+                    class="btn-ghost shrink-0 px-1 py-0.5"
+                    @click="addMember(u)"
+                  >
+                    <UserPlus class="h-4 w-4 text-brand-500" />
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <p v-else-if="userSearch.trim()" class="mt-2 text-xs text-gray-400">{{ t('knowledge.spaceManage.userSearchEmpty') }}</p>
         </div>
 
         <p v-if="membersLoading" class="py-8 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>

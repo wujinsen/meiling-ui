@@ -2,7 +2,17 @@ import { ref, watch } from 'vue'
 
 const STORAGE_KEY = 'meiling-app-settings'
 
+export type FontSizePreset = 'sm' | 'md' | 'lg' | 'xl'
+
+const FONT_SIZE_MAP: Record<FontSizePreset, string> = {
+  sm: '14px',
+  md: '16px',
+  lg: '18px',
+  xl: '20px',
+}
+
 export interface AppSettings {
+  fontSize: FontSizePreset
   emailNotifications: boolean
   browserNotifications: boolean
   weeklyDigest: boolean
@@ -10,23 +20,50 @@ export interface AppSettings {
 }
 
 const defaults: AppSettings = {
+  fontSize: 'md',
   emailNotifications: true,
   browserNotifications: false,
   weeklyDigest: true,
   dealAlerts: true,
 }
 
+function normalizeFontSize(value: unknown): FontSizePreset {
+  if (value === 'sm' || value === 'md' || value === 'lg' || value === 'xl') return value
+  return defaults.fontSize
+}
+
+export function applyFontSize(preset: FontSizePreset) {
+  document.documentElement.style.setProperty('--app-root-font-size', FONT_SIZE_MAP[preset])
+  document.documentElement.dataset.fontSize = preset
+}
+
 function load(): AppSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ...defaults }
-    return { ...defaults, ...JSON.parse(raw) }
+    if (!raw) {
+      applyFontSize(defaults.fontSize)
+      return { ...defaults }
+    }
+    const parsed = JSON.parse(raw) as Partial<AppSettings>
+    const merged: AppSettings = {
+      ...defaults,
+      ...parsed,
+      fontSize: normalizeFontSize(parsed.fontSize),
+    }
+    applyFontSize(merged.fontSize)
+    return merged
   } catch {
+    applyFontSize(defaults.fontSize)
     return { ...defaults }
   }
 }
 
 const settings = ref<AppSettings>(load())
+
+watch(
+  () => settings.value.fontSize,
+  (preset) => applyFontSize(preset),
+)
 
 watch(
   settings,

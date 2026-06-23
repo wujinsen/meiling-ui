@@ -8,6 +8,14 @@ function prefersReducedMotion() {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
+/** 知识库正文 DOM 较大时，跳过 View Transition 以避免整页卡顿 */
+function shouldUseViewTransition() {
+  if (prefersReducedMotion()) return false
+  const md = document.querySelector('.kb-markdown')
+  if (md && md.childElementCount > 0) return false
+  return typeof (document as Document & { startViewTransition?: unknown }).startViewTransition === 'function'
+}
+
 function applyTheme(dark: boolean) {
   isDark.value = dark
   document.documentElement.classList.toggle('dark', dark)
@@ -27,7 +35,7 @@ async function applyThemeWithViewTransition(next: boolean, event: MouseEvent) {
     startViewTransition?: (cb: () => void) => { ready: Promise<void>; finished: Promise<void> }
   }
 
-  if (!doc.startViewTransition) {
+  if (!shouldUseViewTransition()) {
     applyThemeWithCssFallback(next)
     return
   }
@@ -39,7 +47,7 @@ async function applyThemeWithViewTransition(next: boolean, event: MouseEvent) {
     Math.max(y, window.innerHeight - y)
   )
 
-  const transition = doc.startViewTransition(() => applyTheme(next))
+  const transition = doc.startViewTransition!(() => applyTheme(next))
 
   try {
     await transition.ready

@@ -392,7 +392,7 @@ onMounted(async () => {
       </div>
 
       <div v-if="viewMode === 'group'" class="flex flex-col gap-4 xl:flex-row xl:items-start">
-        <aside class="w-full shrink-0 xl:w-56 xl:sticky xl:top-20 xl:self-start">
+        <aside class="w-full shrink-0 xl:w-56 xl:sticky xl:top-6 xl:self-start">
           <div class="rounded-xl border border-gray-100 bg-gray-50/50 p-3 dark:border-white/5 dark:bg-white/5">
             <p class="mb-2 px-1 text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('system.manage.groupNav') }}</p>
             <ul class="space-y-1">

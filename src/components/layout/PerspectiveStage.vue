@@ -17,10 +17,14 @@ const dragStart = { x: 0, y: 0, rx: 0, ry: 0 }
 
 const show3d = computed(() => isPerspective.value && !reduced.value)
 
+const stageClass = computed(() => (show3d.value ? 'perspective-stage' : 'app-flat min-h-screen w-full'))
+
 const windowClass = computed(() => ({
-  'perspective-window--entered': entered.value,
-  'perspective-window--ready': ready.value,
-  'perspective-window--dragging': dragging.value,
+  'perspective-window': show3d.value,
+  'perspective-window-flat': !show3d.value,
+  'perspective-window--entered': show3d.value && entered.value,
+  'perspective-window--ready': show3d.value && ready.value,
+  'perspective-window--dragging': show3d.value && dragging.value,
 }))
 
 function isInteractive(target: EventTarget | null) {
@@ -36,6 +40,12 @@ function playEnter() {
   requestAnimationFrame(() => {
     entered.value = true
   })
+}
+
+function reset3dState() {
+  entered.value = false
+  ready.value = false
+  endDrag()
 }
 
 function onAnimationEnd(e: AnimationEvent) {
@@ -75,12 +85,12 @@ function startDrag(e: PointerEvent) {
 }
 
 function onWindowPointerDown(e: PointerEvent) {
-  if (isInteractive(e.target)) return
+  if (!show3d.value || isInteractive(e.target)) return
   startDrag(e)
 }
 
 function onStagePointerDown(e: PointerEvent) {
-  if (e.target !== stageRef.value) return
+  if (!show3d.value || e.target !== stageRef.value) return
   startDrag(e)
 }
 
@@ -88,8 +98,12 @@ onMounted(() => {
   if (show3d.value) playEnter()
 })
 
-watch(show3d, (on) => {
-  if (on) playEnter()
+watch(show3d, (on, wasOn) => {
+  if (on) {
+    playEnter()
+    return
+  }
+  if (wasOn) reset3dState()
 })
 
 onUnmounted(() => {
@@ -98,19 +112,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="!show3d" class="app-flat min-h-screen w-full">
-    <slot />
-  </div>
   <div
-    v-else
     ref="stageRef"
-    class="perspective-stage"
+    :class="stageClass"
     @pointerdown="onStagePointerDown"
   >
     <div
-      class="perspective-window"
       :class="windowClass"
-      :style="tiltStyle"
+      :style="show3d ? tiltStyle : undefined"
       @pointerdown="onWindowPointerDown"
       @animationend="onAnimationEnd"
     >

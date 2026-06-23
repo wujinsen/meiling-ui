@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Bell, ChevronRight, Monitor, Palette, Shield, Sparkles } from 'lucide-vue-next'
 import { useTheme } from '@/composables/useTheme'
 import { usePerspective } from '@/composables/usePerspective'
-import { useAppSettings } from '@/composables/useAppSettings'
+import { useAppSettings, type FontSizePreset } from '@/composables/useAppSettings'
 import { useLocale } from '@/i18n'
 import { showToast } from '@/composables/useToast'
+import SegmentControl from '@/components/ui/SegmentControl.vue'
 
 const router = useRouter()
 const { t, locale } = useI18n()
@@ -15,12 +17,24 @@ const { isPerspective, togglePerspective } = usePerspective()
 const { settings } = useAppSettings()
 const { options: localeOptions, setLocale } = useLocale()
 
+const fontSizeOptions = computed(() => [
+  { value: 'sm', label: t('settings.appearance.fontSizeSm') },
+  { value: 'md', label: t('settings.appearance.fontSizeMd') },
+  { value: 'lg', label: t('settings.appearance.fontSizeLg') },
+  { value: 'xl', label: t('settings.appearance.fontSizeXl') },
+])
+
 function onThemeChange(e: Event) {
   setTheme((e.target as HTMLSelectElement).value === 'dark')
 }
 
 function onLocaleChange(e: Event) {
   setLocale((e.target as HTMLSelectElement).value as 'zh' | 'en' | 'ja')
+  showToast('success', t('settings.saveOk'))
+}
+
+function onFontSizeChange(value: number | string) {
+  settings.value.fontSize = value as FontSizePreset
   showToast('success', t('settings.saveOk'))
 }
 
@@ -60,6 +74,16 @@ function goProfile() {
             </option>
           </select>
         </label>
+      </div>
+
+      <div class="mt-4">
+        <span class="mb-2 block text-sm text-gray-500 dark:text-gray-400">{{ t('settings.appearance.fontSize') }}</span>
+        <SegmentControl
+          :model-value="settings.fontSize"
+          :options="fontSizeOptions"
+          @update:model-value="onFontSizeChange"
+        />
+        <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{{ t('settings.appearance.fontSizeSub') }}</p>
       </div>
 
       <label class="mt-4 flex cursor-pointer items-center justify-between rounded-lg border border-gray-100 px-4 py-3 dark:border-white/5">

@@ -54,12 +54,15 @@ export type UserQuery = {
 export function createEmptyUser(): UserVo {
   return {
     deptId: undefined,
+    workNo: '',
     nickName: '',
     userName: '',
     password: '',
     telephone: '',
     email: '',
+    address: '',
     sex: 0,
+    isJob: 0,
     status: 1,
     postIds: [],
     remark: '',

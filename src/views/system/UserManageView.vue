@@ -17,6 +17,7 @@ import {
 } from '@/api/user'
 import { getRoleAllApi } from '@/api/role'
 import AppModal from '@/components/ui/AppModal.vue'
+import AppTooltip from '@/components/ui/AppTooltip.vue'
 import AppDatePicker from '@/components/ui/AppDatePicker.vue'
 import AppStatusPill from '@/components/ui/AppStatusPill.vue'
 import FormField from '@/components/ui/FormField.vue'
@@ -116,6 +117,25 @@ function formatTime(value?: string | number) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
 }
+
+function formatSex(sex?: number) {
+  if (sex === 0) return t('system.user.sexMale')
+  if (sex === 1) return t('system.user.sexFemale')
+  return t('system.user.sexUnknown')
+}
+
+function formatIsJob(isJob?: number) {
+  if (isJob === 0) return t('system.user.isJobOn')
+  if (isJob === 1) return t('system.user.isJobOff')
+  return '-'
+}
+
+function clipTooltip(value?: string | null) {
+  const text = value?.trim()
+  return text || undefined
+}
+
+const userTableColCount = 15
 
 function isProtectedUser(row: UserVo) {
   return String(row.id) === '1'
@@ -344,6 +364,7 @@ async function openEdit(row: UserVo) {
       ...data,
       password: '',
       sex: data.sex === 1 ? 1 : 0,
+      isJob: data.isJob === 1 ? 1 : 0,
       postIds: resolvePostIds(data),
     }
     modalTitle.value = t('system.user.edit')
@@ -388,11 +409,14 @@ async function submitForm() {
       ...form.value,
       userName: form.value.userName!.trim(),
       nickName: form.value.nickName!.trim(),
+      workNo: form.value.workNo?.trim() || undefined,
       telephone: form.value.telephone?.trim() || undefined,
       email: form.value.email?.trim() || undefined,
+      address: form.value.address?.trim() || undefined,
       deptId: toEntityId(form.value.deptId),
       status: Number(form.value.status ?? 1),
       sex: Number(form.value.sex ?? 0),
+      isJob: Number(form.value.isJob ?? 0),
       postIds: toEntityIdList(form.value.postIds),
     }
 
@@ -580,21 +604,9 @@ onMounted(async () => {
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-col gap-4 xl:flex-row xl:items-start">
-      <aside class="w-full shrink-0 xl:w-64 xl:sticky xl:top-20 xl:self-start 2xl:w-72">
-        <div class="card p-4">
-          <DeptTreePanel
-            :tree="deptTree"
-            :selected-id="String(query.deptId)"
-            :loading="deptLoading"
-            @select="selectDept"
-          />
-        </div>
-      </aside>
-
-      <div class="card min-w-0 flex-1 p-5">
-      <div class="mb-4 flex flex-wrap items-center gap-3">
-        <form class="form-search-toolbar contents" @submit.prevent="searchUsers">
+    <div class="card p-4">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <form class="form-search-toolbar min-w-0 flex-1" @submit.prevent="searchUsers">
           <FormField :label="t('system.user.userName')" horizontal class="form-field-search">
             <input v-model="query.userName" type="text" class="field-input" :placeholder="t('system.user.userNamePlaceholder')" />
           </FormField>
@@ -621,7 +633,7 @@ onMounted(async () => {
             <RefreshCw class="h-4 w-4" /> {{ t('system.user.reset') }}
           </button>
         </form>
-        <div class="toolbar-actions">
+        <div class="toolbar-actions shrink-0 self-start">
           <button type="button" class="btn-ghost shrink-0" :disabled="!hasSelection" @click="onBatchDeleteClick">
             <Trash2 class="h-4 w-4" /> {{ t('system.user.deleteBatch') }}
           </button>
@@ -630,16 +642,28 @@ onMounted(async () => {
           </button>
         </div>
       </div>
+    </div>
 
+    <div class="page-split">
+      <aside class="card page-split-aside p-4">
+        <DeptTreePanel
+          :tree="deptTree"
+          :selected-id="String(query.deptId)"
+          :loading="deptLoading"
+          @select="selectDept"
+        />
+      </aside>
+
+      <div class="card page-split-main p-4">
       <p v-if="query.deptId" class="mb-3 text-sm text-gray-500 dark:text-gray-400">
         {{ t('system.user.deptFilterActive', { name: selectedDeptName }) }}
       </p>
 
-      <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-        <table class="w-full min-w-[72rem] text-left text-sm">
-          <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-white/5">
+      <div class="data-table-scroll">
+        <table class="data-table">
+          <thead>
             <tr>
-              <th class="w-10 px-4 py-3">
+              <th class="w-10">
                 <input
                   type="checkbox"
                   :checked="allSelected"
@@ -647,31 +671,35 @@ onMounted(async () => {
                   @change="toggleSelectAll"
                 />
               </th>
-              <th class="px-4 py-3">{{ t('system.user.id') }}</th>
-              <th class="px-4 py-3">{{ t('system.user.userName') }}</th>
-              <th class="px-4 py-3">{{ t('system.user.nickName') }}</th>
-              <th class="px-4 py-3">{{ t('system.user.dept') }}</th>
-              <th class="min-w-[12rem] px-4 py-3">{{ t('system.user.roles') }}</th>
-              <th class="px-4 py-3">{{ t('system.user.telephone') }}</th>
-              <th class="px-4 py-3">{{ t('system.user.status') }}</th>
-              <th class="px-4 py-3">{{ t('system.user.createTime') }}</th>
-              <th class="min-w-[26rem] px-4 py-3 text-right">{{ t('system.user.actions') }}</th>
+              <th>{{ t('system.user.id') }}</th>
+              <th>{{ t('system.user.userName') }}</th>
+              <th>{{ t('system.user.nickName') }}</th>
+              <th>{{ t('system.user.dept') }}</th>
+              <th class="data-table-cell-roles">{{ t('system.user.roles') }}</th>
+              <th>{{ t('system.user.isJob') }}</th>
+              <th>{{ t('system.user.workNo') }}</th>
+              <th>{{ t('system.user.email') }}</th>
+              <th>{{ t('system.user.phone') }}</th>
+              <th>{{ t('system.user.address') }}</th>
+              <th>{{ t('system.user.sex') }}</th>
+              <th>{{ t('system.user.status') }}</th>
+              <th>{{ t('system.user.createTime') }}</th>
+              <th class="data-table-sticky-end text-right">{{ t('system.user.actions') }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('system.user.loading') }}</td>
+              <td :colspan="userTableColCount" class="py-10 text-center text-gray-400">{{ t('system.user.loading') }}</td>
             </tr>
             <tr v-else-if="!userList.length">
-              <td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('system.user.empty') }}</td>
+              <td :colspan="userTableColCount" class="py-10 text-center text-gray-400">{{ t('system.user.empty') }}</td>
             </tr>
             <tr
               v-for="row in userList"
               v-else
               :key="String(row.id)"
-              class="border-t border-gray-50 transition hover:bg-gray-50/80 dark:border-white/5 dark:hover:bg-white/5"
             >
-              <td class="px-4 py-3">
+              <td>
                 <input
                   type="checkbox"
                   :checked="selectedIds.has(String(row.id))"
@@ -679,15 +707,53 @@ onMounted(async () => {
                   @change="toggleSelect(row.id!)"
                 />
               </td>
-              <td class="px-4 py-3 tabular-nums text-gray-600 dark:text-gray-300">{{ row.id }}</td>
-              <td class="px-4 py-3 font-medium text-gray-900 dark:text-white">{{ row.userName }}</td>
-              <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.nickName || '-' }}</td>
-              <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.deptName || '-' }}</td>
-              <td class="min-w-[12rem] px-4 py-3 align-top">
+              <td class="tabular-nums text-gray-600 dark:text-gray-300">{{ row.id }}</td>
+              <td class="font-medium text-gray-900 dark:text-white">{{ row.userName }}</td>
+              <td class="text-gray-600 dark:text-gray-300">
+                <AppTooltip :text="clipTooltip(row.nickName)">
+                  <span class="data-table-cell-clip block">{{ row.nickName || '-' }}</span>
+                </AppTooltip>
+              </td>
+              <td class="text-gray-600 dark:text-gray-300">
+                <AppTooltip :text="clipTooltip(row.deptName)">
+                  <span class="data-table-cell-clip block">{{ row.deptName || '-' }}</span>
+                </AppTooltip>
+              </td>
+              <td class="data-table-cell-roles">
                 <UserRoleTags :role-names="row.roleNames" />
               </td>
-              <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.telephone || '-' }}</td>
-              <td class="px-4 py-3">
+              <td>
+                <span
+                  :class="[
+                    'inline-flex whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium',
+                    row.isJob === 0
+                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+                      : row.isJob === 1
+                        ? 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400'
+                        : 'text-gray-400',
+                  ]"
+                >
+                  {{ formatIsJob(row.isJob) }}
+                </span>
+              </td>
+              <td class="tabular-nums text-gray-600 dark:text-gray-300">
+                <AppTooltip :text="clipTooltip(row.workNo)">
+                  <span class="data-table-cell-clip block">{{ row.workNo || '-' }}</span>
+                </AppTooltip>
+              </td>
+              <td class="text-gray-600 dark:text-gray-300">
+                <AppTooltip :text="clipTooltip(row.email)">
+                  <span class="data-table-cell-clip block">{{ row.email || '-' }}</span>
+                </AppTooltip>
+              </td>
+              <td class="tabular-nums text-gray-600 dark:text-gray-300">{{ row.telephone || '-' }}</td>
+              <td class="text-gray-600 dark:text-gray-300">
+                <AppTooltip :text="clipTooltip(row.address)">
+                  <span class="data-table-cell-clip block">{{ row.address || '-' }}</span>
+                </AppTooltip>
+              </td>
+              <td class="text-gray-600 dark:text-gray-300">{{ formatSex(row.sex) }}</td>
+              <td>
                 <AppStatusPill
                   :active="row.status === 1"
                   :disabled="isProtectedUser(row)"
@@ -695,8 +761,8 @@ onMounted(async () => {
                   @click="onToggleStatusClick(row)"
                 />
               </td>
-              <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ formatTime(row.createTime) }}</td>
-              <td class="min-w-[26rem] px-4 py-3 text-right align-middle">
+              <td class="tabular-nums text-gray-600 dark:text-gray-300">{{ formatTime(row.createTime) }}</td>
+              <td class="data-table-sticky-end text-right">
                 <div class="btn-action-group">
                   <button type="button" class="btn-action-edit" @click="onEditClick(row)">
                     <Pencil class="h-3.5 w-3.5" />
@@ -739,6 +805,7 @@ onMounted(async () => {
     <AppModal :open="modalOpen" :title="modalTitle" wide @close="closeModal">
       <form class="form-modal" novalidate @submit.prevent="submitForm">
         <div class="form-grid-pairs">
+          <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ t('system.user.sectionBasic') }}</p>
           <div class="form-grid-row">
             <FormField :label="t('system.user.nickName')" horizontal required>
               <input v-model="form.nickName" type="text" class="field-input" />
@@ -760,7 +827,17 @@ onMounted(async () => {
                 :disabled="isEdit"
               />
             </FormField>
-            <FormField v-if="!isEdit" :label="t('system.user.password')" horizontal required>
+            <FormField :label="t('system.user.workNo')" horizontal>
+              <input
+                v-model="form.workNo"
+                type="text"
+                class="field-input"
+                :placeholder="t('system.user.workNoPlaceholder')"
+              />
+            </FormField>
+          </div>
+          <div v-if="!isEdit" class="form-grid-row">
+            <FormField :label="t('system.user.password')" horizontal required>
               <input
                 v-model="form.password"
                 type="password"
@@ -768,7 +845,77 @@ onMounted(async () => {
                 autocomplete="new-password"
               />
             </FormField>
-            <FormField v-else :label="t('system.user.telephone')" horizontal>
+            <FormField :label="t('system.user.isJob')" horizontal>
+              <select v-model.number="form.isJob" class="field-input">
+                <option :value="0">{{ t('system.user.isJobOn') }}</option>
+                <option :value="1">{{ t('system.user.isJobOff') }}</option>
+              </select>
+            </FormField>
+          </div>
+          <div v-else class="form-grid-row">
+            <FormField :label="t('system.user.isJob')" horizontal>
+              <select v-model.number="form.isJob" class="field-input">
+                <option :value="0">{{ t('system.user.isJobOn') }}</option>
+                <option :value="1">{{ t('system.user.isJobOff') }}</option>
+              </select>
+            </FormField>
+            <FormField :label="t('system.user.sex')" horizontal>
+              <select v-model.number="form.sex" class="field-input">
+                <option :value="0">{{ t('system.user.sexMale') }}</option>
+                <option :value="1">{{ t('system.user.sexFemale') }}</option>
+              </select>
+            </FormField>
+          </div>
+          <div v-if="!isEdit" class="form-grid-row">
+            <FormField :label="t('system.user.sex')" horizontal>
+              <select v-model.number="form.sex" class="field-input">
+                <option :value="0">{{ t('system.user.sexMale') }}</option>
+                <option :value="1">{{ t('system.user.sexFemale') }}</option>
+              </select>
+            </FormField>
+            <FormField :label="t('system.user.status')" horizontal>
+              <div class="form-row-inline">
+                <AppStatusPill
+                  :active="form.status === 1"
+                  :label="t('system.user.status')"
+                  @click="toggleFormStatus"
+                />
+                <span class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ form.status === 1 ? t('system.user.statusOn') : t('system.user.statusOff') }}
+                </span>
+              </div>
+            </FormField>
+          </div>
+          <div v-else class="form-grid-row">
+            <FormField :label="t('system.user.status')" horizontal>
+              <div class="form-row-inline">
+                <AppStatusPill
+                  :active="form.status === 1"
+                  :label="t('system.user.status')"
+                  @click="toggleFormStatus"
+                />
+                <span class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ form.status === 1 ? t('system.user.statusOn') : t('system.user.statusOff') }}
+                </span>
+              </div>
+            </FormField>
+            <FormField :label="t('system.user.posts')" horizontal>
+              <select
+                v-model="selectedPostId"
+                class="field-input"
+                :class="{ 'field-input-empty-display': !postOptions.length && !selectedPostId }"
+              >
+                <option value="">{{ t('system.user.postNone') }}</option>
+                <option v-for="post in postOptions" :key="String(post.id)" :value="String(post.id)">
+                  {{ post.postName }}
+                </option>
+              </select>
+            </FormField>
+          </div>
+
+          <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ t('system.user.sectionContact') }}</p>
+          <div class="form-grid-row">
+            <FormField :label="t('system.user.phone')" horizontal>
               <input
                 v-model="form.telephone"
                 type="text"
@@ -776,81 +923,22 @@ onMounted(async () => {
                 :placeholder="t('system.user.telephonePlaceholder')"
               />
             </FormField>
+            <FormField :label="t('system.user.email')" horizontal>
+              <input v-model="form.email" type="email" class="field-input" autocomplete="email" />
+            </FormField>
           </div>
           <div class="form-grid-row">
-            <template v-if="!isEdit">
-              <FormField :label="t('system.user.telephone')" horizontal>
-                <input
-                  v-model="form.telephone"
-                  type="text"
-                  class="field-input"
-                  :placeholder="t('system.user.telephonePlaceholder')"
-                />
-              </FormField>
-              <FormField :label="t('system.user.email')" horizontal>
-                <input v-model="form.email" type="email" class="field-input" autocomplete="email" />
-              </FormField>
-            </template>
-            <template v-else>
-              <FormField :label="t('system.user.email')" horizontal>
-                <input v-model="form.email" type="email" class="field-input" autocomplete="email" />
-              </FormField>
-              <FormField :label="t('system.user.sex')" horizontal>
-                <select v-model.number="form.sex" class="field-input">
-                  <option :value="0">{{ t('system.user.sexMale') }}</option>
-                  <option :value="1">{{ t('system.user.sexFemale') }}</option>
-                </select>
-              </FormField>
-            </template>
+            <FormField :label="t('system.user.address')" horizontal class="form-field-span-2">
+              <input
+                v-model="form.address"
+                type="text"
+                class="field-input"
+                :placeholder="t('system.user.addressPlaceholder')"
+              />
+            </FormField>
           </div>
-          <div class="form-grid-row">
-            <template v-if="!isEdit">
-              <FormField :label="t('system.user.sex')" horizontal>
-                <select v-model.number="form.sex" class="field-input">
-                  <option :value="0">{{ t('system.user.sexMale') }}</option>
-                  <option :value="1">{{ t('system.user.sexFemale') }}</option>
-                </select>
-              </FormField>
-              <FormField :label="t('system.user.status')" horizontal>
-                <div class="form-row-inline">
-                  <AppStatusPill
-                    :active="form.status === 1"
-                    :label="t('system.user.status')"
-                    @click="toggleFormStatus"
-                  />
-                  <span class="text-sm text-gray-500 dark:text-gray-400">
-                    {{ form.status === 1 ? t('system.user.statusOn') : t('system.user.statusOff') }}
-                  </span>
-                </div>
-              </FormField>
-            </template>
-            <template v-else>
-              <FormField :label="t('system.user.status')" horizontal>
-                <div class="form-row-inline">
-                  <AppStatusPill
-                    :active="form.status === 1"
-                    :label="t('system.user.status')"
-                    @click="toggleFormStatus"
-                  />
-                  <span class="text-sm text-gray-500 dark:text-gray-400">
-                    {{ form.status === 1 ? t('system.user.statusOn') : t('system.user.statusOff') }}
-                  </span>
-                </div>
-              </FormField>
-              <FormField :label="t('system.user.posts')" horizontal>
-                <select
-                  v-model="selectedPostId"
-                  class="field-input"
-                  :class="{ 'field-input-empty-display': !postOptions.length && !selectedPostId }"
-                >
-                  <option value="">{{ t('system.user.postNone') }}</option>
-                  <option v-for="post in postOptions" :key="String(post.id)" :value="String(post.id)">
-                    {{ post.postName }}
-                  </option>
-                </select>
-              </FormField>
-            </template>
-          </div>
+
+          <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ t('system.user.sectionOther') }}</p>
           <div v-if="!isEdit" class="form-grid-row">
             <FormField :label="t('system.user.posts')" horizontal>
               <select

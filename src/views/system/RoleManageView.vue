@@ -22,6 +22,7 @@ import {
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import AppStatusPill from '@/components/ui/AppStatusPill.vue'
+import UserAssignPanel from '@/components/system/UserAssignPanel.vue'
 import { confirm } from '@/composables/useConfirm'
 import { guardAction, guardActionWithRefresh } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
@@ -34,8 +35,9 @@ import { API_SUCCESS_CODE, type MenuVo } from '@/types/api'
 import { normalizePageRes } from '@/types/page'
 import { createEmptyRole, type RoleQuery, type RoleVo, type SysRole } from '@/types/role'
 import type { UserVo } from '@/types/user'
+import { hasFullPermission } from '@/utils/privilege'
 import { collectTreeIds, flattenVisibleTree } from '@/utils/tree'
-import { ChevronDown, ChevronRight, CheckSquare, FoldVertical, Pencil, Plus, RefreshCw, Search, Shield, Square, Trash2, UnfoldVertical, UserPlus, Users } from 'lucide-vue-next'
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, CheckSquare, FoldVertical, Pencil, Plus, RefreshCw, Search, Shield, Square, Trash2, UnfoldVertical, UserPlus, Users } from 'lucide-vue-next'
 
 type MenuTreeNode = MenuVo & { children?: MenuTreeNode[] }
 
@@ -238,6 +240,13 @@ const unauthorizedTotal = ref(0)
 const selectedAuthorizedIds = ref(new Set<string>())
 const selectedUnauthorizedIds = ref(new Set<string>())
 const userAssignSaving = ref(false)
+const batchSelectingAuthorized = ref(false)
+const batchSelectingUnauthorized = ref(false)
+const batchProgress = ref('')
+
+const hasBatchSelection = computed(
+  () => selectedAuthorizedIds.value.size > 0 || selectedUnauthorizedIds.value.size > 0,
+)
 
 const authorizedQuery = reactive({
   pageNum: 1,
@@ -578,6 +587,130 @@ function toggleUnauthorizedSelect(id: number | string) {
   selectedUnauthorizedIds.value = next
 }
 
+function isSuperAdminUser(user?: UserVo | null) {
+  return hasFullPermission(user?.userName)
+}
+
+function selectAllAuthorizedOnPage() {
+  const next = new Set(selectedAuthorizedIds.value)
+  authorizedUsers.value.forEach((user) => {
+    if (user.id != null && !isSuperAdminUser(user)) next.add(String(user.id))
+  })
+  selectedAuthorizedIds.value = next
+}
+
+function deselectAuthorizedOnPage() {
+  const next = new Set(selectedAuthorizedIds.value)
+  authorizedUsers.value.forEach((user) => {
+    if (user.id != null) next.delete(String(user.id))
+  })
+  selectedAuthorizedIds.value = next
+}
+
+function clearAuthorizedSelection() {
+  selectedAuthorizedIds.value = new Set()
+}
+
+function selectAllUnauthorizedOnPage() {
+  const next = new Set(selectedUnauthorizedIds.value)
+  unauthorizedUsers.value.forEach((user) => {
+    if (user.id != null && !isSuperAdminUser(user)) next.add(String(user.id))
+  })
+  selectedUnauthorizedIds.value = next
+}
+
+function deselectUnauthorizedOnPage() {
+  const next = new Set(selectedUnauthorizedIds.value)
+  unauthorizedUsers.value.forEach((user) => {
+    if (user.id != null) next.delete(String(user.id))
+  })
+  selectedUnauthorizedIds.value = next
+}
+
+function clearUnauthorizedSelection() {
+  selectedUnauthorizedIds.value = new Set()
+}
+
+async function fetchAllUserIdsForRole(authorized: boolean) {
+  if (!assignRoleId.value) return []
+
+  const fetchPage = authorized ? getUserByRoleApi : unauthorizedUsersApi
+  const query = authorized ? authorizedQuery : unauthorizedQuery
+  const pageSize = 200
+  let pageNum = 1
+  let total = 0
+  const ids = new Set<string>()
+
+  do {
+    const result = await fetchPage({
+      roleId: assignRoleId.value,
+      pageNum,
+      pageSize,
+      userName: query.userName || undefined,
+    })
+    if (result.code !== API_SUCCESS_CODE || !result.data) {
+      throw new Error(result.msg || t('system.role.loadFailed'))
+    }
+    total = result.data.total ?? 0
+    for (const user of result.data.list ?? []) {
+      if (user.id != null && !isSuperAdminUser(user)) ids.add(String(user.id))
+    }
+    pageNum += 1
+  } while ((pageNum - 1) * pageSize < total)
+
+  return [...ids]
+}
+
+async function selectAllAuthorizedFiltered() {
+  if (!authorizedTotal.value || !assignRoleId.value) return
+  if (
+    authorizedTotal.value > 100 &&
+    !(await confirm({
+      message: t('system.userAssign.selectAllFilteredConfirm', { count: authorizedTotal.value }),
+    }))
+  ) {
+    return
+  }
+
+  batchSelectingAuthorized.value = true
+  batchProgress.value = t('system.userAssign.batchSelectLoading')
+  try {
+    const ids = await fetchAllUserIdsForRole(true)
+    selectedAuthorizedIds.value = new Set(ids)
+    showToast('success', t('system.userAssign.selectAllFilteredOk', { count: ids.length }))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('system.role.loadFailed'))
+  } finally {
+    batchSelectingAuthorized.value = false
+    batchProgress.value = ''
+  }
+}
+
+async function selectAllUnauthorizedFiltered() {
+  if (!unauthorizedTotal.value || !assignRoleId.value) return
+  if (
+    unauthorizedTotal.value > 100 &&
+    !(await confirm({
+      message: t('system.userAssign.selectAllFilteredConfirm', { count: unauthorizedTotal.value }),
+    }))
+  ) {
+    return
+  }
+
+  batchSelectingUnauthorized.value = true
+  batchProgress.value = t('system.userAssign.batchSelectLoading')
+  try {
+    const ids = await fetchAllUserIdsForRole(false)
+    selectedUnauthorizedIds.value = new Set(ids)
+    showToast('success', t('system.userAssign.selectAllFilteredOk', { count: ids.length }))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('system.role.loadFailed'))
+  } finally {
+    batchSelectingUnauthorized.value = false
+    batchProgress.value = ''
+  }
+}
+
 async function loadAuthorizedUsers() {
   if (!assignRoleId.value) return
   authorizedLoading.value = true
@@ -594,9 +727,6 @@ async function loadAuthorizedUsers() {
     const page = normalizePageRes(result.data)
     authorizedUsers.value = page.list ?? []
     authorizedTotal.value = page.total ?? 0
-    selectedAuthorizedIds.value = new Set(
-      [...selectedAuthorizedIds.value].filter((id) => authorizedUsers.value.some((row) => String(row.id) === id)),
-    )
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('system.role.loadFailed'))
   } finally {
@@ -620,9 +750,6 @@ async function loadUnauthorizedUsers() {
     const page = normalizePageRes(result.data)
     unauthorizedUsers.value = page.list ?? []
     unauthorizedTotal.value = page.total ?? 0
-    selectedUnauthorizedIds.value = new Set(
-      [...selectedUnauthorizedIds.value].filter((id) => unauthorizedUsers.value.some((row) => String(row.id) === id)),
-    )
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('system.role.loadFailed'))
   } finally {
@@ -662,6 +789,9 @@ function closeAssignUsers() {
   unauthorizedUsers.value = []
   selectedAuthorizedIds.value = new Set()
   selectedUnauthorizedIds.value = new Set()
+  batchSelectingAuthorized.value = false
+  batchSelectingUnauthorized.value = false
+  batchProgress.value = ''
 }
 
 async function addSelectedUsers() {
@@ -1042,140 +1172,135 @@ onMounted(loadRoles)
       wide
       @close="closeAssignUsers"
     >
-      <div class="assign-dual-panel">
-        <section class="assign-panel">
-          <div class="assign-panel-head">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('system.role.authorizedUsers') }}</h3>
-            <form class="flex flex-wrap items-end gap-2" @submit.prevent="searchAuthorizedUsers">
-              <input
-                v-model="authorizedQuery.userName"
-                type="text"
-                class="field-input min-w-0 flex-1"
-                :placeholder="t('system.role.userNamePlaceholder')"
-              />
-              <button type="submit" class="btn-ghost shrink-0 text-xs">
-                <Search class="h-3.5 w-3.5" />
-              </button>
-            </form>
-          </div>
-          <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-            <table class="w-full text-left text-sm">
-              <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-white/5">
-                <tr>
-                  <th class="w-10 px-3 py-2" />
-                  <th class="px-3 py-2">{{ t('system.role.userName') }}</th>
-                  <th class="px-3 py-2">{{ t('system.role.nickName') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="authorizedLoading">
-                  <td colspan="3" class="px-3 py-8 text-center text-gray-400">{{ t('system.role.loading') }}</td>
-                </tr>
-                <tr v-else-if="!authorizedUsers.length">
-                  <td colspan="3" class="px-3 py-8 text-center text-gray-400">{{ t('system.role.authorizedEmpty') }}</td>
-                </tr>
-                <tr
-                  v-for="user in authorizedUsers"
-                  v-else
-                  :key="String(user.id)"
-                  class="border-t border-gray-50 dark:border-white/5"
-                >
-                  <td class="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      :checked="selectedAuthorizedIds.has(String(user.id))"
-                      @change="toggleAuthorizedSelect(user.id!)"
-                    />
-                  </td>
-                  <td class="px-3 py-2">{{ user.userName }}</td>
-                  <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ user.nickName || '-' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-if="authorizedTotal > authorizedQuery.pageSize" class="mt-2">
-            <AppPagination
-              v-model:page-num="authorizedQuery.pageNum"
-              v-model:page-size="authorizedQuery.pageSize"
-              :total="authorizedTotal"
-            />
-          </div>
+      <div
+        v-if="hasBatchSelection || batchProgress"
+        class="assign-batch-bar"
+      >
+        <div class="min-w-0 flex-1 text-sm text-gray-600 dark:text-gray-300">
+          <span class="font-medium text-gray-900 dark:text-white">{{ t('system.userAssign.batchTitle') }}</span>
+          <span v-if="selectedUnauthorizedIds.size" class="ml-2 tabular-nums">
+            {{ t('system.userAssign.batchPendingAdd', { count: selectedUnauthorizedIds.size }) }}
+          </span>
+          <span v-if="selectedAuthorizedIds.size" class="ml-2 tabular-nums">
+            {{ t('system.userAssign.batchPendingRemove', { count: selectedAuthorizedIds.size }) }}
+          </span>
+          <span v-if="batchProgress" class="ml-2 text-xs text-brand-600 dark:text-brand-300">{{ batchProgress }}</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
           <button
             type="button"
-            class="btn-ghost mt-3 w-full text-red-600 dark:text-red-400"
-            :disabled="!selectedAuthorizedIds.size || userAssignSaving"
-            @click="removeSelectedUsers"
+            class="btn-ghost text-xs"
+            :disabled="userAssignSaving || (!selectedUnauthorizedIds.size && !selectedAuthorizedIds.size)"
+            @click="clearUnauthorizedSelection(); clearAuthorizedSelection()"
           >
-            <Trash2 class="h-4 w-4" /> {{ t('system.role.removeSelected') }}
+            {{ t('system.userAssign.clearSelection') }}
           </button>
-        </section>
-
-        <section class="assign-panel">
-          <div class="assign-panel-head">
-            <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('system.role.unauthorizedUsers') }}</h3>
-            <form class="flex flex-wrap items-end gap-2" @submit.prevent="searchUnauthorizedUsers">
-              <input
-                v-model="unauthorizedQuery.userName"
-                type="text"
-                class="field-input min-w-0 flex-1"
-                :placeholder="t('system.role.userNamePlaceholder')"
-              />
-              <button type="submit" class="btn-ghost shrink-0 text-xs">
-                <Search class="h-3.5 w-3.5" />
-              </button>
-            </form>
-          </div>
-          <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-            <table class="w-full text-left text-sm">
-              <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-white/5">
-                <tr>
-                  <th class="w-10 px-3 py-2" />
-                  <th class="px-3 py-2">{{ t('system.role.userName') }}</th>
-                  <th class="px-3 py-2">{{ t('system.role.nickName') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="unauthorizedLoading">
-                  <td colspan="3" class="px-3 py-8 text-center text-gray-400">{{ t('system.role.loading') }}</td>
-                </tr>
-                <tr v-else-if="!unauthorizedUsers.length">
-                  <td colspan="3" class="px-3 py-8 text-center text-gray-400">{{ t('system.role.unauthorizedEmpty') }}</td>
-                </tr>
-                <tr
-                  v-for="user in unauthorizedUsers"
-                  v-else
-                  :key="String(user.id)"
-                  class="border-t border-gray-50 dark:border-white/5"
-                >
-                  <td class="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      :checked="selectedUnauthorizedIds.has(String(user.id))"
-                      @change="toggleUnauthorizedSelect(user.id!)"
-                    />
-                  </td>
-                  <td class="px-3 py-2">{{ user.userName }}</td>
-                  <td class="px-3 py-2 text-gray-600 dark:text-gray-300">{{ user.nickName || '-' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div v-if="unauthorizedTotal > unauthorizedQuery.pageSize" class="mt-2">
-            <AppPagination
-              v-model:page-num="unauthorizedQuery.pageNum"
-              v-model:page-size="unauthorizedQuery.pageSize"
-              :total="unauthorizedTotal"
-            />
-          </div>
           <button
             type="button"
-            class="btn-primary mt-3 w-full"
+            class="btn-primary text-xs"
             :disabled="!selectedUnauthorizedIds.size || userAssignSaving"
             @click="addSelectedUsers"
           >
-            <UserPlus class="h-4 w-4" /> {{ t('system.role.addSelected') }}
+            <Users class="h-3.5 w-3.5" />
+            {{ t('system.userAssign.batchAdd', { count: selectedUnauthorizedIds.size }) }}
           </button>
-        </section>
+          <button
+            type="button"
+            class="btn-ghost text-xs text-red-600 dark:text-red-400"
+            :disabled="!selectedAuthorizedIds.size || userAssignSaving"
+            @click="removeSelectedUsers"
+          >
+            <Trash2 class="h-3.5 w-3.5" />
+            {{ t('system.userAssign.batchRemove', { count: selectedAuthorizedIds.size }) }}
+          </button>
+        </div>
+      </div>
+
+      <div class="assign-dual-panel assign-dual-panel-transfer">
+        <UserAssignPanel
+          :title="t('system.role.authorizedUsers')"
+          :total="authorizedTotal"
+          :users="authorizedUsers"
+          :loading="authorizedLoading"
+          :batch-selecting="batchSelectingAuthorized"
+          :selected-ids="selectedAuthorizedIds"
+          :user-name="authorizedQuery.userName"
+          :page-num="authorizedQuery.pageNum"
+          :page-size="authorizedQuery.pageSize"
+          :is-super-admin-user="isSuperAdminUser"
+          :empty-text="t('system.role.authorizedEmpty')"
+          @update:user-name="authorizedQuery.userName = $event"
+          @update:page-num="authorizedQuery.pageNum = $event"
+          @update:page-size="authorizedQuery.pageSize = $event"
+          @search="searchAuthorizedUsers"
+          @toggle="toggleAuthorizedSelect"
+          @select-all-page="selectAllAuthorizedOnPage"
+          @deselect-page="deselectAuthorizedOnPage"
+          @clear-selection="clearAuthorizedSelection"
+          @select-all-filtered="selectAllAuthorizedFiltered"
+        />
+
+        <div class="assign-transfer-col">
+          <button
+            type="button"
+            class="btn-primary assign-transfer-btn"
+            :disabled="!selectedUnauthorizedIds.size || userAssignSaving"
+            :title="t('system.role.addSelected')"
+            @click="addSelectedUsers"
+          >
+            <ArrowLeft class="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            class="btn-ghost assign-transfer-btn text-red-600 dark:text-red-400"
+            :disabled="!selectedAuthorizedIds.size || userAssignSaving"
+            :title="t('system.role.removeSelected')"
+            @click="removeSelectedUsers"
+          >
+            <ArrowRight class="h-4 w-4" />
+          </button>
+          <div class="hidden w-full gap-2 xl:hidden">
+            <button
+              type="button"
+              class="btn-primary mt-3 w-full"
+              :disabled="!selectedUnauthorizedIds.size || userAssignSaving"
+              @click="addSelectedUsers"
+            >
+              <UserPlus class="h-4 w-4" /> {{ t('system.role.addSelected') }}
+            </button>
+            <button
+              type="button"
+              class="btn-ghost mt-2 w-full text-red-600 dark:text-red-400"
+              :disabled="!selectedAuthorizedIds.size || userAssignSaving"
+              @click="removeSelectedUsers"
+            >
+              <Trash2 class="h-4 w-4" /> {{ t('system.role.removeSelected') }}
+            </button>
+          </div>
+        </div>
+
+        <UserAssignPanel
+          :title="t('system.role.unauthorizedUsers')"
+          :total="unauthorizedTotal"
+          :users="unauthorizedUsers"
+          :loading="unauthorizedLoading"
+          :batch-selecting="batchSelectingUnauthorized"
+          :selected-ids="selectedUnauthorizedIds"
+          :user-name="unauthorizedQuery.userName"
+          :page-num="unauthorizedQuery.pageNum"
+          :page-size="unauthorizedQuery.pageSize"
+          :is-super-admin-user="isSuperAdminUser"
+          :empty-text="t('system.role.unauthorizedEmpty')"
+          @update:user-name="unauthorizedQuery.userName = $event"
+          @update:page-num="unauthorizedQuery.pageNum = $event"
+          @update:page-size="unauthorizedQuery.pageSize = $event"
+          @search="searchUnauthorizedUsers"
+          @toggle="toggleUnauthorizedSelect"
+          @select-all-page="selectAllUnauthorizedOnPage"
+          @deselect-page="deselectUnauthorizedOnPage"
+          @clear-selection="clearUnauthorizedSelection"
+          @select-all-filtered="selectAllUnauthorizedFiltered"
+        />
       </div>
       <template #footer>
         <button type="button" class="btn-primary" @click="closeAssignUsers">{{ t('system.role.close') }}</button>
@@ -1183,3 +1308,21 @@ onMounted(loadRoles)
     </AppModal>
   </div>
 </template>
+
+<style scoped>
+.assign-dual-panel-transfer {
+  @apply grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)];
+}
+
+.assign-transfer-col {
+  @apply flex flex-row items-center justify-center gap-2 lg:flex-col lg:justify-center lg:px-1;
+}
+
+.assign-transfer-btn {
+  @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full p-0;
+}
+
+.assign-batch-bar {
+  @apply mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-3 dark:border-brand-500/20 dark:bg-brand-500/10;
+}
+</style>
