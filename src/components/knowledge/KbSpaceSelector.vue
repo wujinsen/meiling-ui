@@ -3,7 +3,18 @@ import { computed } from 'vue'
 import { useKbSpace } from '@/composables/useKbSpace'
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 
+const props = withDefaults(
+  defineProps<{
+    editableOnly?: boolean
+  }>(),
+  { editableOnly: false },
+)
+
 const { spaces, selectedSpaceId, hasMultipleSpaces, setSelectedSpaceId } = useKbSpace()
+
+const displaySpaces = computed(() =>
+  props.editableOnly ? spaces.value.filter((s) => s.canEdit === true) : spaces.value,
+)
 
 const selectValue = computed({
   get: () => (selectedSpaceId.value == null ? 'all' : String(selectedSpaceId.value)),
@@ -12,10 +23,13 @@ const selectValue = computed({
   },
 })
 
-/** 与浏览页一致：至少 1 个空间即展示下拉 */
-const visible = computed(() => hasMultipleSpaces.value || spaces.value.length === 1)
+const visible = computed(() =>
+  props.editableOnly
+    ? displaySpaces.value.length > 0
+    : hasMultipleSpaces.value || spaces.value.length === 1,
+)
 </script>
 
 <template>
-  <KbSpaceDropdown v-if="visible" v-model="selectValue" />
+  <KbSpaceDropdown v-if="visible" v-model="selectValue" :editable-only="editableOnly" />
 </template>

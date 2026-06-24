@@ -1,0 +1,32 @@
+-- 文档管理菜单与动作权限（menu_id 906）
+-- 在 04_knowledge_menu.sql 之后执行；执行后重新登录
+
+INSERT INTO `sys_menu` VALUES
+(906, 1, NOW(), 1, NOW(), '文档管理', 'Documents', '文書管理', 900,
+ 'documents', 'knowledge/documents/index', 'KnowledgeDocuments', 'C', 'kb:document:list', 1, 'edit', 2)
+ON DUPLICATE KEY UPDATE
+  menu_name = VALUES(menu_name), menu_name_en = VALUES(menu_name_en), menu_name_ja = VALUES(menu_name_ja),
+  parent_id = VALUES(parent_id), path = VALUES(path), component = VALUES(component), route_name = VALUES(route_name),
+  menu_type = VALUES(menu_type), perms = VALUES(perms), status = VALUES(status), icon = VALUES(icon),
+  order_num = VALUES(order_num), update_time = NOW();
+
+INSERT INTO `sys_action` (`perm_code`, `resource`, `action`, `name`, `menu_id`, `order_num`, `status`) VALUES
+('kb:document:add',     'kb', 'documentAdd',     '新建文档', 906, 1, 1),
+('kb:document:edit',    'kb', 'documentEdit',    '编辑文档', 906, 2, 1),
+('kb:document:publish', 'kb', 'documentPublish', '发布文档', 906, 3, 1),
+('kb:document:archive', 'kb', 'documentArchive', '归档文档', 906, 4, 1),
+('kb:document:remove',  'kb', 'documentRemove',  '删除文档', 906, 5, 1)
+ON DUPLICATE KEY UPDATE
+  resource = VALUES(resource), action = VALUES(action), name = VALUES(name),
+  menu_id = VALUES(menu_id), order_num = VALUES(order_num), status = VALUES(status);
+
+INSERT INTO `sys_role_menu` (`id`, `role_id`, `menu_id`) VALUES
+(910900906, 2, 906),
+(910903906, 3, 906)
+ON DUPLICATE KEY UPDATE role_id = VALUES(role_id), menu_id = VALUES(menu_id);
+
+INSERT INTO `sys_role_action` (`role_id`, `perm_code`) VALUES
+(2, 'kb:document:add'), (2, 'kb:document:edit'), (2, 'kb:document:publish'),
+(2, 'kb:document:archive'), (2, 'kb:document:remove'),
+(3, 'kb:document:add'), (3, 'kb:document:edit'), (3, 'kb:document:publish')
+ON DUPLICATE KEY UPDATE perm_code = VALUES(perm_code);

@@ -45,6 +45,7 @@ const CRM_VIEWS: Record<string, () => Promise<Component>> = {
   'knowledge/graph/index': () => import('@/views/knowledge/KnowledgeGraphView.vue'),
   'knowledge/lint/index': () => import('@/views/knowledge/KnowledgeLintView.vue'),
   'knowledge/spaces/index': () => import('@/views/knowledge/KnowledgeSpaceManageView.vue'),
+  'knowledge/documents/index': () => import('@/views/knowledge/KnowledgeDocumentManageView.vue'),
   // 兼容别名
   'knowledge/index/index': () => import('@/views/knowledge/KnowledgeBrowseView.vue'),
   'knowledge/docs/index': () => import('@/views/knowledge/KnowledgeBrowseView.vue'),

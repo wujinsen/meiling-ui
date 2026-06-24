@@ -115,6 +115,12 @@ export const PERM = {
   KB_SPACE_MEMBER: 'kb:space:member',
   KB_LINT_SCAN: 'kb:lint:scan',
   KB_SYNC_TRIGGER: 'kb:sync:trigger',
+  KB_DOCUMENT_LIST: 'kb:document:list',
+  KB_DOCUMENT_ADD: 'kb:document:add',
+  KB_DOCUMENT_EDIT: 'kb:document:edit',
+  KB_DOCUMENT_PUBLISH: 'kb:document:publish',
+  KB_DOCUMENT_ARCHIVE: 'kb:document:archive',
+  KB_DOCUMENT_REMOVE: 'kb:document:remove',
 
 } as const
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { CheckCircle2, XCircle } from 'lucide-vue-next'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { getKbSyncLogsApi, getKbSyncStatusApi, triggerKbSyncApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
@@ -23,7 +24,38 @@ const logs = ref<KbSyncLog[]>([])
 const total = ref(0)
 const pageNum = ref(1)
 const pageSize = ref(10)
-const lastOutput = ref('')
+const showRawOutput = ref(false)
+
+type SyncResult = {
+  success: boolean
+  output: string
+}
+
+const lastResult = ref<SyncResult | null>(null)
+
+const parsedOutput = computed(() => {
+  const output = lastResult.value?.output?.trim()
+  if (!output) return null
+  const lines = output.split('\n').map((l) => l.trim()).filter(Boolean)
+  const target = lines.find((l) => l.includes('目标空间') || l.includes('space_id'))
+  const summary = lines.find((l) => /insert=\d+/.test(l) || l.includes('同步完成'))
+  const stats: Record<string, number> = {}
+  if (summary) {
+    for (const key of ['insert', 'update', 'skip', 'delete', 'fail'] as const) {
+      const m = summary.match(new RegExp(`${key}=(\\d+)`))
+      if (m) stats[key] = Number(m[1])
+    }
+  }
+  return { target, summary, stats, raw: output }
+})
+
+const STAT_BADGE: Record<string, string> = {
+  insert: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+  update: 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
+  skip: 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300',
+  delete: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  fail: 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+}
 
 async function loadStatus() {
   statusLoading.value = true
@@ -64,7 +96,8 @@ async function trigger() {
     (await guardActionWithRefresh(PERM.KB_SYNC_TRIGGER))
   if (!allowed) return
   triggering.value = true
-  lastOutput.value = ''
+  lastResult.value = null
+  showRawOutput.value = false
   try {
     const params: { spaceId?: number | string; spaceCode?: string } = {}
     const sid = kbQuerySpaceId()
@@ -74,7 +107,7 @@ async function trigger() {
 
     const res = await triggerKbSyncApi(params)
     if (res.code === API_SUCCESS_CODE && res.data) {
-      lastOutput.value = res.data.outputTail ?? ''
+      lastResult.value = { success: res.data.success, output: res.data.outputTail ?? '' }
       if (res.data.success) {
         showToast('success', t('knowledge.sync.triggerOk'))
       } else {
@@ -97,6 +130,11 @@ onMounted(async () => {
 })
 
 watch([pageNum, pageSize], () => loadLogs())
+
+watch(() => kbQuerySpaceId(), () => {
+  lastResult.value = null
+  showRawOutput.value = false
+})
 
 defineExpose({ refreshAll, trigger, busy, triggering, canSync })
 </script>
@@ -139,10 +177,44 @@ defineExpose({ refreshAll, trigger, busy, triggering, canSync })
       </div>
     </div>
 
-    <pre
-      v-if="lastOutput"
-      class="max-h-40 overflow-auto rounded-lg bg-gray-900 p-3 text-xs text-gray-100"
-    >{{ lastOutput }}</pre>
+    <Transition name="kb-sync-result">
+      <div
+        v-if="lastResult && parsedOutput"
+        class="card kb-sync-result"
+        :class="lastResult.success ? 'kb-sync-result-ok' : 'kb-sync-result-fail'"
+      >
+        <div class="flex items-start gap-3">
+          <CheckCircle2 v-if="lastResult.success" class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+          <XCircle v-else class="mt-0.5 h-5 w-5 shrink-0 text-rose-500" />
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-semibold text-gray-900 dark:text-white">
+              {{ lastResult.success ? t('knowledge.sync.outputSuccess') : t('knowledge.sync.outputFailed') }}
+            </p>
+            <p v-if="parsedOutput.target" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ parsedOutput.target }}</p>
+            <div v-if="Object.keys(parsedOutput.stats).length" class="mt-3 flex flex-wrap gap-2">
+              <span
+                v-for="(count, key) in parsedOutput.stats"
+                :key="key"
+                class="badge"
+                :class="STAT_BADGE[key] ?? 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'"
+              >{{ key }}: {{ count }}</span>
+            </div>
+            <button
+              v-if="parsedOutput.raw"
+              type="button"
+              class="mt-3 text-xs text-brand-600 hover:underline dark:text-brand-400"
+              @click="showRawOutput = !showRawOutput"
+            >
+              {{ showRawOutput ? t('knowledge.sync.hideRaw') : t('knowledge.sync.viewRaw') }}
+            </button>
+            <pre v-if="showRawOutput" class="kb-sync-result-raw mt-2">{{ parsedOutput.raw }}</pre>
+          </div>
+          <button type="button" class="btn-ghost shrink-0 p-1.5 text-gray-400" :aria-label="t('common.dismiss')" @click="lastResult = null">
+            ×
+          </button>
+        </div>
+      </div>
+    </Transition>
 
     <div class="card overflow-hidden">
       <p v-if="logsLoading && !logs.length" class="p-8 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>

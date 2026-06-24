@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, FileText, FoldVertical, Link2, Loader2, Search, UnfoldVertical } from 'lucide-vue-next'
+import { ChevronDown, FileText, FoldVertical, Link2, Loader2, Pencil, Search, UnfoldVertical } from 'lucide-vue-next'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
@@ -11,6 +11,7 @@ import { useKbSpace } from '@/composables/useKbSpace'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
+import { toEntityId } from '@/utils/id'
 import type { KbIndex, KbIndexGroup, KbIndexItem, KbPage } from '@/types/knowledge'
 
 const LAST_SLUG_KEY = 'kb_last_active_slug'
@@ -22,6 +23,7 @@ const inflightPages = new Map<string, Promise<KbPage | undefined>>()
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const { selectedSpaceId, selectedSpace, spaces, loadError: spaceLoadError, loading: spaceLoading, ensureSpacesLoaded, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
 
 const noAccessibleSpaces = computed(
@@ -33,7 +35,15 @@ const accessDeniedMessage = computed(() => {
   return ''
 })
 
-const canEdit = computed(() => selectedSpace.value?.canEdit === true)
+/** 附件上传/删除：按当前文档所属空间的 canEdit 判断（「全部空间」时从 page.spaceId 解析） */
+const canEditAttachments = computed(() => {
+  const pageSpaceId = toEntityId(page.value?.spaceId)
+  if (pageSpaceId) {
+    const space = spaces.value.find((s) => toEntityId(s.id) === pageSpaceId)
+    return space?.canEdit === true
+  }
+  return selectedSpace.value?.canEdit === true
+})
 
 const loading = ref(false)
 const loadError = ref('')
@@ -54,7 +64,6 @@ const groupVisibleLimit = ref<Record<string, number>>({})
 const detailRef = ref<HTMLElement | null>(null)
 const treeRef = ref<HTMLElement | null>(null)
 const contentHtml = shallowRef('')
-const attachmentsReady = ref(false)
 const slugLookup = ref<Map<string, string>>(new Map())
 
 let openSeq = 0
@@ -160,30 +169,10 @@ function scheduleMarkdownRender(content?: string) {
   }
 }
 
-function scheduleAttachmentsMount() {
-  attachmentsReady.value = false
-  const run = () => {
-    attachmentsReady.value = true
-  }
-  if (typeof requestIdleCallback === 'function') {
-    requestIdleCallback(run, { timeout: 240 })
-  } else {
-    setTimeout(run, 0)
-  }
-}
-
 watch(
   () => page.value?.content,
   (content) => scheduleMarkdownRender(content),
   { immediate: true },
-)
-
-watch(
-  () => page.value?.docId,
-  (docId) => {
-    attachmentsReady.value = false
-    if (docId) scheduleAttachmentsMount()
-  },
 )
 
 const visibleDocCount = computed(() => {
@@ -260,7 +249,7 @@ function loadMoreGroupItems(group: KbIndexGroup) {
     return
   }
   if (loaded < total) {
-    const nextPage = (groupItemsPage.value[group.type] ?? 1) + 1
+    const nextPage = (groupItemsPage.value[group.type] ?? 0) + 1
     void fetchGroupItems(group.type, nextPage)
   }
 }
@@ -276,7 +265,8 @@ function openGroup(type: string) {
 }
 
 async function ensureGroupItemsLoaded(type: string) {
-  if ((groupItemsCache.value[type]?.length ?? 0) > 0) return
+  // locate / 深链可能只写入 1 条，不能仅凭 cache 非空就跳过首屏分页
+  if (groupItemsPage.value[type] != null) return
   if (groupItemsLoading.value[type]) return
   await fetchGroupItems(type, 1)
 }
@@ -286,8 +276,11 @@ async function fetchGroupItems(type: string, pageNum: number) {
   groupItemsLoading.value = { ...groupItemsLoading.value, [type]: true }
   try {
     const res = await getKbIndexItemsApi(type, kbQuerySpaceId(), pageNum, GROUP_FETCH_SIZE)
-    if (res.code !== API_SUCCESS_CODE || !res.data) return
-    mergeItemsIntoCache(type, res.data.items, pageNum === 1)
+    if (res.code !== API_SUCCESS_CODE || !res.data) {
+      showToast('error', res.msg || t('knowledge.browse.groupLoadFailed'))
+      return
+    }
+    mergeItemsIntoCache(type, res.data.items ?? [], pageNum === 1)
     groupItemsTotal.value = { ...groupItemsTotal.value, [type]: res.data.total }
     groupItemsPage.value = { ...groupItemsPage.value, [type]: pageNum }
     const g = index.value.groups.find((x) => x.type === type)
@@ -536,6 +529,12 @@ function onContentClick(event: MouseEvent) {
   }
 }
 
+function openDocumentEdit() {
+  const docId = page.value?.docId
+  if (docId == null) return
+  void router.push({ path: '/knowledge/documents', query: { editId: String(docId) } })
+}
+
 onMounted(() => {
   void ensureSpacesLoaded()
   const earlySlug = preferredSlug()
@@ -551,7 +550,6 @@ watch(selectedSpaceId, () => {
   page.value = null
   activeSlug.value = ''
   contentHtml.value = ''
-  attachmentsReady.value = false
   void loadIndex()
 })
 
@@ -565,8 +563,11 @@ watch(
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-wrap items-center gap-3">
-      <KbSpaceSelector />
+    <div v-if="!noAccessibleSpaces && !accessDeniedMessage" class="kb-browse-toolbar">
+      <div class="kb-browse-toolbar-scopes">
+        <KbSpaceSelector />
+        <KbAttachmentsPanel :document-id="page?.docId" :can-edit="canEditAttachments" />
+      </div>
     </div>
 
     <KbAccessDenied
@@ -678,7 +679,17 @@ watch(
             <div class="h-full w-1/3 animate-pulse rounded-full bg-brand-400" />
           </div>
           <header class="border-b border-gray-100 pb-4 dark:border-white/5">
-            <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ page.title }}</h2>
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ page.title }}</h2>
+              <button
+                v-if="canEditAttachments && page.docId != null"
+                type="button"
+                class="btn-ghost shrink-0 text-sm"
+                @click="openDocumentEdit"
+              >
+                <Pencil class="h-4 w-4" /> {{ t('knowledge.browse.editDoc') }}
+              </button>
+            </div>
             <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <span class="font-mono text-xs">{{ page.slug }}</span>
               <span v-if="page.kbType">· {{ page.kbType }}</span>
@@ -724,8 +735,6 @@ watch(
               </ul>
             </div>
           </section>
-
-          <KbAttachmentsPanel v-if="attachmentsReady" :document-id="page.docId" :can-edit="canEdit" />
         </article>
       </div>
     </div>

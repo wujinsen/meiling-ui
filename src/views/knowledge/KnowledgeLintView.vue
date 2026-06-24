@@ -5,6 +5,7 @@ import { CheckCircle2, FileWarning, Link2Off, Loader2, Play, RefreshCw, ScanLine
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import KbSyncPanel from '@/components/knowledge/KbSyncPanel.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
+import AppPagination from '@/components/ui/AppPagination.vue'
 import { getKbLintApi, getKbLintIssuesApi, scanKbLintApi, updateKbLintIssueApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { assertAction, guardAction } from '@/composables/useActionPermissions'
@@ -38,6 +39,13 @@ const report = ref<KbLintReport | null>(null)
 const issuesLoading = ref(false)
 const issues = ref<KbLintIssue[]>([])
 const statusFilter = ref<'' | KbLintIssueStatus>('')
+const issuePageNum = ref(1)
+const issuePageSize = ref(10)
+
+const pagedIssues = computed(() => {
+  const start = (issuePageNum.value - 1) * issuePageSize.value
+  return issues.value.slice(start, start + issuePageSize.value)
+})
 
 const counts = computed(() => report.value?.counts)
 
@@ -85,10 +93,19 @@ async function loadIssues() {
       spaceId: kbQuerySpaceId(),
       status: statusFilter.value === '' ? undefined : statusFilter.value,
     })
-    if (res.code === API_SUCCESS_CODE) issues.value = res.data ?? []
+    if (res.code === API_SUCCESS_CODE) {
+      issues.value = res.data ?? []
+      const maxPage = Math.max(1, Math.ceil(issues.value.length / issuePageSize.value))
+      if (issuePageNum.value > maxPage) issuePageNum.value = maxPage
+    }
   } finally {
     issuesLoading.value = false
   }
+}
+
+function onStatusFilterChange() {
+  issuePageNum.value = 1
+  void loadIssues()
 }
 
 async function setIssueStatus(issue: KbLintIssue, status: KbLintIssueStatus) {
@@ -200,41 +217,41 @@ watch(canSync, (allowed) => {
 
       <!-- 三类问题 -->
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <section class="card p-4">
+        <section class="card flex max-h-[22rem] flex-col p-4">
           <h2 class="mb-3 flex items-center gap-1.5 text-sm font-semibold text-rose-600 dark:text-rose-400">
             <Link2Off class="h-4 w-4" /> {{ t('knowledge.lint.broken') }} ({{ report.broken.length }})
           </h2>
           <p v-if="!report.broken.length" class="py-4 text-center text-xs text-gray-400">{{ t('knowledge.lint.none') }}</p>
-          <ul v-else class="space-y-2">
+          <ul v-else class="-mr-1 flex-1 space-y-2 overflow-y-auto pr-1">
             <li v-for="(b, i) in report.broken" :key="i" class="rounded-lg bg-gray-50 px-3 py-2 text-sm dark:bg-white/5">
-              <p class="font-medium text-gray-800 dark:text-gray-100">{{ b.title }}</p>
-              <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">→ {{ b.target }}</p>
+              <p class="truncate font-medium text-gray-800 dark:text-gray-100">{{ b.title }}</p>
+              <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">→ {{ b.target }}</p>
             </li>
           </ul>
         </section>
 
-        <section class="card p-4">
+        <section class="card flex max-h-[22rem] flex-col p-4">
           <h2 class="mb-3 flex items-center gap-1.5 text-sm font-semibold text-amber-600 dark:text-amber-400">
             <FileWarning class="h-4 w-4" /> {{ t('knowledge.lint.orphans') }} ({{ report.orphans.length }})
           </h2>
           <p v-if="!report.orphans.length" class="py-4 text-center text-xs text-gray-400">{{ t('knowledge.lint.none') }}</p>
-          <ul v-else class="space-y-2">
+          <ul v-else class="-mr-1 flex-1 space-y-2 overflow-y-auto pr-1">
             <li v-for="(o, i) in report.orphans" :key="i" class="rounded-lg bg-gray-50 px-3 py-2 text-sm dark:bg-white/5">
-              <p class="font-medium text-gray-800 dark:text-gray-100">{{ o.title }}</p>
-              <p class="mt-0.5 font-mono text-xs text-gray-400">{{ o.slug }}</p>
+              <p class="truncate font-medium text-gray-800 dark:text-gray-100">{{ o.title }}</p>
+              <p class="mt-0.5 truncate font-mono text-xs text-gray-400">{{ o.slug }}</p>
             </li>
           </ul>
         </section>
 
-        <section class="card p-4">
+        <section class="card flex max-h-[22rem] flex-col p-4">
           <h2 class="mb-3 flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-gray-300">
             <FileWarning class="h-4 w-4" /> {{ t('knowledge.lint.noSummary') }} ({{ report.noSummary.length }})
           </h2>
           <p v-if="!report.noSummary.length" class="py-4 text-center text-xs text-gray-400">{{ t('knowledge.lint.none') }}</p>
-          <ul v-else class="space-y-2">
+          <ul v-else class="-mr-1 flex-1 space-y-2 overflow-y-auto pr-1">
             <li v-for="(n, i) in report.noSummary" :key="i" class="rounded-lg bg-gray-50 px-3 py-2 text-sm dark:bg-white/5">
-              <p class="font-medium text-gray-800 dark:text-gray-100">{{ n.title }}</p>
-              <p class="mt-0.5 font-mono text-xs text-gray-400">{{ n.slug }}</p>
+              <p class="truncate font-medium text-gray-800 dark:text-gray-100">{{ n.title }}</p>
+              <p class="mt-0.5 truncate font-mono text-xs text-gray-400">{{ n.slug }}</p>
             </li>
           </ul>
         </section>
@@ -244,7 +261,7 @@ watch(canSync, (allowed) => {
       <div class="card p-5">
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{{ t('knowledge.lint.issues') }}</h2>
-          <select v-model="statusFilter" class="field-input w-auto py-1 text-sm" @change="loadIssues">
+          <select v-model="statusFilter" class="field-input w-auto py-1 text-sm" @change="onStatusFilterChange">
             <option value="">{{ t('knowledge.lint.statusAll') }}</option>
             <option :value="0">{{ t('knowledge.lint.issueStatus.0') }}</option>
             <option :value="1">{{ t('knowledge.lint.issueStatus.1') }}</option>
@@ -254,47 +271,52 @@ watch(canSync, (allowed) => {
 
         <p v-if="issuesLoading" class="py-8 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
         <p v-else-if="!issues.length" class="py-8 text-center text-sm text-gray-400">{{ t('knowledge.lint.none') }}</p>
-        <div v-else class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-          <table class="w-full min-w-[40rem] text-left text-sm">
-            <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-white/5">
-              <tr>
-                <th class="px-4 py-3">{{ t('knowledge.lint.col.type') }}</th>
-                <th class="px-4 py-3">{{ t('knowledge.lint.col.detail') }}</th>
-                <th class="px-4 py-3">{{ t('knowledge.lint.col.status') }}</th>
-                <th class="px-4 py-3 text-right">{{ t('knowledge.lint.col.actions') }}</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-white/5">
-              <tr v-for="issue in issues" :key="issue.id">
-                <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ issue.issueType }}</td>
-                <td class="px-4 py-3 text-gray-700 dark:text-gray-200">{{ issue.detail }}</td>
-                <td class="px-4 py-3">
-                  <span :class="['badge', STATUS_BADGE[issue.status]]">{{ statusLabel(issue.status) }}</span>
-                </td>
-                <td class="px-4 py-3">
-                  <div class="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      class="btn-ghost px-2 py-1 text-xs"
-                      :disabled="issue.status === 1"
-                      @click="setIssueStatus(issue, 1)"
-                    >
-                      {{ t('knowledge.lint.ignore') }}
-                    </button>
-                    <button
-                      type="button"
-                      class="btn-ghost px-2 py-1 text-xs text-emerald-600 dark:text-emerald-400"
-                      :disabled="issue.status === 2"
-                      @click="setIssueStatus(issue, 2)"
-                    >
-                      <CheckCircle2 class="h-3.5 w-3.5" /> {{ t('knowledge.lint.markFixed') }}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <template v-else>
+          <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
+            <table class="w-full min-w-[40rem] text-left text-sm">
+              <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-white/5">
+                <tr>
+                  <th class="px-4 py-3">{{ t('knowledge.lint.col.type') }}</th>
+                  <th class="px-4 py-3">{{ t('knowledge.lint.col.detail') }}</th>
+                  <th class="px-4 py-3">{{ t('knowledge.lint.col.status') }}</th>
+                  <th class="px-4 py-3 text-right">{{ t('knowledge.lint.col.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                <tr v-for="issue in pagedIssues" :key="issue.id">
+                  <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ issue.issueType }}</td>
+                  <td class="px-4 py-3 text-gray-700 dark:text-gray-200">{{ issue.detail }}</td>
+                  <td class="px-4 py-3">
+                    <span :class="['badge', STATUS_BADGE[issue.status]]">{{ statusLabel(issue.status) }}</span>
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        class="btn-ghost px-2 py-1 text-xs"
+                        :disabled="issue.status === 1"
+                        @click="setIssueStatus(issue, 1)"
+                      >
+                        {{ t('knowledge.lint.ignore') }}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-ghost px-2 py-1 text-xs text-emerald-600 dark:text-emerald-400"
+                        :disabled="issue.status === 2"
+                        @click="setIssueStatus(issue, 2)"
+                      >
+                        <CheckCircle2 class="h-3.5 w-3.5" /> {{ t('knowledge.lint.markFixed') }}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="mt-3">
+            <AppPagination v-model:page-num="issuePageNum" v-model:page-size="issuePageSize" :total="issues.length" />
+          </div>
+        </template>
       </div>
     </template>
     </template>

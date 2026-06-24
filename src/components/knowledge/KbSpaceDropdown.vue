@@ -1,16 +1,28 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { toEntityId } from '@/utils/id'
 
+const props = withDefaults(
+  defineProps<{
+    /** 仅展示可编辑空间，且隐藏「全部可读空间」 */
+    editableOnly?: boolean
+  }>(),
+  { editableOnly: false },
+)
+
 /** 单选：'all' 或空间 ID */
 const singleValue = defineModel<string>({ default: 'all' })
 
 const { t } = useI18n()
 const { spaces, loading, loadError, ensureSpacesLoaded } = useKbSpace()
+
+const displaySpaces = computed(() =>
+  props.editableOnly ? spaces.value.filter((s) => s.canEdit === true) : spaces.value,
+)
 
 const open = ref(false)
 const rootRef = ref<HTMLElement | null>(null)
@@ -29,12 +41,13 @@ function spaceLabel(s: { spaceName?: string; visibility?: number }) {
 }
 
 function spaceNameById(id: string) {
-  const space = spaces.value.find((s) => spaceIdValue(s.id) === id)
+  const space = displaySpaces.value.find((s) => spaceIdValue(s.id) === id)
+    ?? spaces.value.find((s) => spaceIdValue(s.id) === id)
   return space ? spaceLabel(space) : id
 }
 
 const triggerLabel = computed(() => {
-  if (singleValue.value === 'all') return t('knowledge.space.allAccessible')
+  if (!props.editableOnly && singleValue.value === 'all') return t('knowledge.space.allAccessible')
   return spaceNameById(singleValue.value)
 })
 
@@ -70,9 +83,24 @@ function onDocumentClick(event: MouseEvent) {
 }
 
 onMounted(() => {
-  ensureSpacesLoaded()
+  void ensureSpacesLoaded().then(() => {
+    if (props.editableOnly && displaySpaces.value.length) {
+      const cur = singleValue.value
+      const ok = displaySpaces.value.some((s) => spaceIdValue(s.id) === cur)
+      if (!ok || cur === 'all') singleValue.value = spaceIdValue(displaySpaces.value[0].id)
+    }
+  })
   document.addEventListener('click', onDocumentClick)
 })
+
+watch(
+  () => displaySpaces.value.map((s) => spaceIdValue(s.id)).join(','),
+  () => {
+    if (!props.editableOnly || !displaySpaces.value.length) return
+    const ok = displaySpaces.value.some((s) => spaceIdValue(s.id) === singleValue.value)
+    if (!ok || singleValue.value === 'all') singleValue.value = spaceIdValue(displaySpaces.value[0].id)
+  },
+)
 onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 </script>
 
@@ -81,7 +109,9 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
     {{ t('knowledge.space.loading') }}
   </div>
   <p v-else-if="loadError" class="text-xs text-rose-500">{{ loadError }}</p>
-  <p v-else-if="!spaces.length" class="text-xs text-gray-400">{{ t('knowledge.accessDenied.emptyTitle') }}</p>
+  <p v-else-if="!displaySpaces.length" class="text-xs text-gray-400">
+    {{ editableOnly ? t('knowledge.docManage.noEditableSpace') : t('knowledge.accessDenied.emptyTitle') }}
+  </p>
   <div v-else ref="rootRef" class="kb-space-dropdown">
     <button
       type="button"
@@ -98,6 +128,7 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
     </button>
     <div v-if="open" class="kb-space-dropdown-panel" @click.stop>
       <button
+        v-if="!editableOnly"
         type="button"
         class="kb-space-dropdown-item"
         :class="isAllActive() && 'kb-space-dropdown-item-active'"
@@ -105,9 +136,9 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
       >
         {{ t('knowledge.space.allAccessible') }}
       </button>
-      <div class="kb-space-dropdown-divider" />
+      <div v-if="!editableOnly" class="kb-space-dropdown-divider" />
       <button
-        v-for="s in spaces"
+        v-for="s in displaySpaces"
         :key="String(s.id)"
         type="button"
         class="kb-space-dropdown-item"

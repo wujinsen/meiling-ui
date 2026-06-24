@@ -345,12 +345,119 @@ export type KbSyncLog = {
 export type KbDocumentDetail = {
   id: number | string
   spaceId?: number | string
+  categoryId?: number | string
   slug?: string
   title: string
   summary?: string
   content?: string
   kbType?: KbType
   domain?: string
-  status?: number
+  source?: 'kb' | 'manual' | string
+  docType?: string
+  status?: KbDocStatus
+  viewCount?: number
+  likeCount?: number
+  versionNo?: number
+  publishTime?: string
+  createTime?: string
+  tagIds?: Array<number | string>
   favorited?: boolean
+}
+
+/** 文档状态：0 草稿 / 1 已发布 / 2 已归档 */
+export type KbDocStatus = 0 | 1 | 2
+
+/** GET /kb/document/search 列表行 */
+export type KbDocumentListItem = {
+  id: number | string
+  spaceId?: number | string
+  categoryId?: number | string
+  slug?: string
+  title: string
+  summary?: string
+  kbType?: KbType
+  domain?: string
+  source?: 'kb' | 'manual' | string
+  status?: KbDocStatus
+  versionNo?: number
+  viewCount?: number
+  updateTime?: string
+  publishTime?: string
+}
+
+/** POST /kb/document */
+export type KbDocumentSaveRequest = {
+  id?: number | string | null
+  spaceId: number | string
+  categoryId?: number | string
+  title: string
+  summary?: string
+  content?: string
+  docType?: string
+  status?: KbDocStatus
+  tagIds?: Array<number | string>
+  changeLog?: string
+}
+
+export type KbDocumentSearchParams = {
+  spaceId?: number | string
+  spaceIds?: Array<number | string>
+  categoryId?: number | string
+  keyword?: string
+  status?: KbDocStatus | ''
+  tagId?: number | string
+  pageNum?: number
+  pageSize?: number
+}
+
+export type KbDocumentVersion = {
+  id: number | string
+  documentId?: number | string
+  versionNo?: number
+  title?: string
+  changeLog?: string
+  createId?: number | string
+  createTime?: string
+}
+
+// ---------------------------------------------------------------------------
+// 5.2 分类 / 5.3 标签
+// ---------------------------------------------------------------------------
+
+export type KbCategoryTree = {
+  id: number | string
+  spaceId?: number | string
+  parentId?: number | string
+  categoryName: string
+  sort?: number
+  children?: KbCategoryTree[]
+}
+
+export type KbCategoryFlatOption = {
+  id: string
+  label: string
+  depth: number
+}
+
+export type KbTag = {
+  id: number | string
+  spaceId?: number | string
+  tagName: string
+  color?: string
+}
+
+export type KbCategorySaveRequest = {
+  id?: number | string | null
+  spaceId: number | string
+  parentId?: number | string
+  categoryName: string
+  icon?: string
+  sort?: number
+}
+
+export type KbTagSaveRequest = {
+  id?: number | string | null
+  spaceId: number | string
+  tagName: string
+  color?: string
 }

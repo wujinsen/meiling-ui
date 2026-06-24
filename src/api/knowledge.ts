@@ -1,11 +1,17 @@
 import { request } from '@/api/http'
+import { kbAttachmentUploadTimeoutMs } from '@/constants/knowledge'
 import { API_SUCCESS_CODE, type MoliResult } from '@/types/api'
 import type {
   KbAccessibleSpace,
   KbAskRequest,
   KbAskResponse,
   KbAttachment,
+  KbCategoryTree,
+  KbCategorySaveRequest,
   KbDocumentDetail,
+  KbDocumentListItem,
+  KbDocumentSaveRequest,
+  KbDocumentSearchParams,
   KbGraph,
   KbGraphEgoParams,
   KbGraphNode,
@@ -19,10 +25,12 @@ import type {
   KbSyncLog,
   KbSyncStatus,
   KbSyncTrigger,
+  KbTag,
+  KbTagSaveRequest,
   MoliPage,
 } from '@/types/knowledge'
 import { getToken } from '@/utils/authSession'
-import { buildEntityQuery, jsonEntityBody } from '@/utils/id'
+import { buildEntityQuery, jsonEntityBody, toEntityId } from '@/utils/id'
 
 /**
  * 网关前缀：网关 StripPrefix=1 去掉 /KnowledgeServer 后转发到 moli-knowledge-server。
@@ -37,8 +45,123 @@ export function isMockKnowledgeEnabled() {
   return USE_MOCK
 }
 
+function buildKbDocumentSearchQuery(params: KbDocumentSearchParams) {
+  const qs = new URLSearchParams()
+  if (params.spaceId != null && params.spaceId !== '') qs.set('spaceId', String(params.spaceId))
+  for (const sid of params.spaceIds ?? []) {
+    if (sid != null && sid !== '') qs.append('spaceIds', String(sid))
+  }
+  if (params.categoryId != null) qs.set('categoryId', String(params.categoryId))
+  if (params.keyword?.trim()) qs.set('keyword', params.keyword.trim())
+  if (params.status !== undefined && params.status !== '') qs.set('status', String(params.status))
+  if (params.tagId != null) qs.set('tagId', String(params.tagId))
+  if (params.pageNum != null) qs.set('pageNum', String(params.pageNum))
+  if (params.pageSize != null) qs.set('pageSize', String(params.pageSize))
+  const query = qs.toString()
+  return query ? `?${query}` : ''
+}
+
 function buildQuery(params?: Record<string, string | number | undefined>) {
   return buildEntityQuery(params)
+}
+
+function mockPageToDetail(p: KbPage): KbDocumentDetail {
+  return {
+    id: p.docId,
+    spaceId: p.spaceId ?? 900000000000000001,
+    slug: p.slug,
+    title: p.title,
+    summary: p.summary,
+    content: p.content,
+    kbType: p.kbType,
+    domain: p.domain,
+    source: 'kb',
+    docType: 'markdown',
+    status: (p.status ?? 1) as import('@/types/knowledge').KbDocStatus,
+    versionNo: 1,
+  }
+}
+
+function mockPageToListItem(p: KbPage): KbDocumentListItem {
+  return {
+    id: p.docId,
+    spaceId: p.spaceId ?? 900000000000000001,
+    slug: p.slug,
+    title: p.title,
+    summary: p.summary,
+    kbType: p.kbType,
+    domain: p.domain,
+    source: 'kb',
+    status: (p.status ?? 1) as import('@/types/knowledge').KbDocStatus,
+    versionNo: 1,
+    updateTime: p.updateTime,
+  }
+}
+
+let mockManualDocSeq = 90100
+const mockManualDocs = new Map<string, KbDocumentDetail>()
+
+const MOCK_CATEGORY_TREE: KbCategoryTree[] = [
+  {
+    id: 900000000000000101,
+    spaceId: 900000000000000001,
+    parentId: 0,
+    categoryName: '技术文档',
+    sort: 1,
+    children: [
+      {
+        id: 900000000000000103,
+        spaceId: 900000000000000001,
+        parentId: 900000000000000101,
+        categoryName: '后端服务',
+        sort: 1,
+        children: [],
+      },
+    ],
+  },
+  {
+    id: 900000000000000102,
+    spaceId: 900000000000000001,
+    parentId: 0,
+    categoryName: '产品规范',
+    sort: 2,
+    children: [],
+  },
+]
+
+const MOCK_TAGS: KbTag[] = [
+  { id: 900001, spaceId: 900000000000000001, tagName: '部署', color: '#6366f1' },
+  { id: 900002, spaceId: 900000000000000001, tagName: '入门', color: '#10b981' },
+  { id: 900003, spaceId: 900000000000000001, tagName: '微服务', color: '#f59e0b' },
+  { id: 900004, spaceId: 900000000000000001, tagName: '权限', color: '#ef4444' },
+]
+
+let mockCategoryTreeState: KbCategoryTree[] = JSON.parse(JSON.stringify(MOCK_CATEGORY_TREE)) as KbCategoryTree[]
+let mockTagsState: KbTag[] = [...MOCK_TAGS]
+let mockCategorySeq = 91000
+let mockTagSeq = 92000
+
+function walkCategoryTree(nodes: KbCategoryTree[], fn: (node: KbCategoryTree, parent: KbCategoryTree[] | null, index: number) => boolean) {
+  for (let i = nodes.length - 1; i >= 0; i -= 1) {
+    const node = nodes[i]
+    if (fn(node, nodes, i)) return true
+    if (node.children?.length && walkCategoryTree(node.children, fn)) return true
+  }
+  return false
+}
+
+function appendMockCategory(parentId: string, node: KbCategoryTree) {
+  if (parentId === '0') {
+    mockCategoryTreeState.push(node)
+    return
+  }
+  walkCategoryTree(mockCategoryTreeState, (item) => {
+    if (String(item.id) === parentId) {
+      item.children = [...(item.children ?? []), node]
+      return true
+    }
+    return false
+  })
 }
 
 function delay(ms: number) {
@@ -679,27 +802,240 @@ export async function feedbackKbAskApi(id: number | string, useful: 0 | 1) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. 文档详情 / 附件
+// 5. 文档管理 / 详情 / 附件
 // ---------------------------------------------------------------------------
+
+export async function searchKbDocumentsApi(params: KbDocumentSearchParams) {
+  if (USE_MOCK) {
+    await delay(180)
+    const kw = params.keyword?.trim().toLowerCase() ?? ''
+    const status = params.status
+    let items: KbDocumentListItem[] = [
+      ...MOCK_PAGES.map(mockPageToListItem),
+      ...[...mockManualDocs.values()].map((d) => ({
+        id: d.id,
+        spaceId: d.spaceId,
+        slug: d.slug,
+        title: d.title,
+        summary: d.summary,
+        kbType: d.kbType,
+        domain: d.domain,
+        source: d.source,
+        status: d.status,
+        versionNo: d.versionNo,
+        updateTime: d.createTime,
+      })),
+    ]
+    const sid = params.spaceId != null ? String(params.spaceId) : ''
+    if (sid) items = items.filter((it) => String(it.spaceId ?? '') === sid)
+    if (status !== undefined && status !== '') items = items.filter((it) => it.status === status)
+    if (kw) {
+      items = items.filter(
+        (it) =>
+          it.title.toLowerCase().includes(kw)
+          || (it.summary?.toLowerCase().includes(kw) ?? false)
+          || (it.slug?.toLowerCase().includes(kw) ?? false),
+      )
+    }
+    const pageNum = params.pageNum ?? 1
+    const pageSize = params.pageSize ?? 15
+    const start = (pageNum - 1) * pageSize
+    const slice = items.slice(start, start + pageSize)
+    return ok<MoliPage<KbDocumentListItem>>({
+      records: slice,
+      total: items.length,
+      size: pageSize,
+      current: pageNum,
+    })
+  }
+  return request<MoliPage<KbDocumentListItem>>(
+    `${KB_BASE}/document/search${buildKbDocumentSearchQuery(params)}`,
+    { method: 'GET' },
+  )
+}
+
+export async function saveKbDocumentApi(data: KbDocumentSaveRequest) {
+  if (USE_MOCK) {
+    await delay(220)
+    const id = data.id != null ? String(data.id) : String(++mockManualDocSeq)
+    const prev = data.id != null ? mockManualDocs.get(String(data.id)) : undefined
+    const detail: KbDocumentDetail = {
+      id,
+      spaceId: data.spaceId,
+      categoryId: data.categoryId,
+      slug: prev?.slug ?? `manual/${id}`,
+      title: data.title,
+      summary: data.summary,
+      content: data.content,
+      kbType: prev?.kbType ?? 'article',
+      domain: prev?.domain,
+      source: prev?.source ?? 'manual',
+      docType: data.docType ?? 'markdown',
+      status: data.status ?? prev?.status ?? 0,
+      versionNo: (prev?.versionNo ?? 0) + (data.id ? 1 : 1),
+      createTime: prev?.createTime ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
+    }
+    mockManualDocs.set(id, detail)
+    return ok<number | string>(id)
+  }
+  return request<number | string>(`${KB_BASE}/document`, {
+    method: 'POST',
+    body: jsonEntityBody(data as Record<string, unknown>),
+  })
+}
+
+export async function publishKbDocumentApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(120)
+    const manual = mockManualDocs.get(String(id))
+    if (manual) {
+      mockManualDocs.set(String(id), { ...manual, status: 1 })
+      return ok<boolean>(true)
+    }
+    if (MOCK_PAGES.some((x) => String(x.docId) === String(id))) return ok<boolean>(true)
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/document/${toEntityId(id)}/publish`, { method: 'PUT' })
+}
+
+export async function archiveKbDocumentApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(120)
+    const d = mockManualDocs.get(String(id))
+    if (d) mockManualDocs.set(String(id), { ...d, status: 2 })
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/document/${toEntityId(id)}/archive`, { method: 'PUT' })
+}
+
+export async function deleteKbDocumentApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(120)
+    mockManualDocs.delete(String(id))
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/document/${toEntityId(id)}`, { method: 'DELETE' })
+}
 
 export async function getKbDocumentApi(id: number | string) {
   if (USE_MOCK) {
     await delay(150)
+    const manual = mockManualDocs.get(String(id))
+    if (manual) return ok<KbDocumentDetail>(manual)
     const p = MOCK_PAGES.find((x) => String(x.docId) === String(id))
     if (!p) return ok<KbDocumentDetail | undefined>(undefined)
-    return ok<KbDocumentDetail>({
-      id: p.docId,
-      spaceId: p.spaceId,
-      slug: p.slug,
-      title: p.title,
-      summary: p.summary,
-      content: p.content,
-      kbType: p.kbType,
-      domain: p.domain,
-      status: p.status,
+    return ok<KbDocumentDetail>(mockPageToDetail(p))
+  }
+  return request<KbDocumentDetail>(`${KB_BASE}/document/${toEntityId(id)}`, { method: 'GET' })
+}
+
+// ---------------------------------------------------------------------------
+// 5.2 分类 / 5.3 标签
+// ---------------------------------------------------------------------------
+
+export async function getKbCategoryTreeApi(spaceId: number | string) {
+  if (USE_MOCK) {
+    await delay(100)
+    return ok<KbCategoryTree[]>(mockCategoryTreeState)
+  }
+  return request<KbCategoryTree[]>(`${KB_BASE}/category/tree${buildQuery({ spaceId })}`, { method: 'GET' })
+}
+
+export async function saveKbCategoryApi(data: KbCategorySaveRequest) {
+  if (USE_MOCK) {
+    await delay(120)
+    const parentId = String(data.parentId ?? 0)
+    if (data.id != null && data.id !== '') {
+      walkCategoryTree(mockCategoryTreeState, (node) => {
+        if (String(node.id) === String(data.id)) {
+          node.categoryName = data.categoryName
+          node.sort = data.sort ?? node.sort
+          return true
+        }
+        return false
+      })
+      return ok<number | string | boolean>(String(data.id))
+    }
+    const id = String(++mockCategorySeq)
+    appendMockCategory(parentId, {
+      id,
+      spaceId: data.spaceId,
+      parentId: parentId === '0' ? 0 : data.parentId,
+      categoryName: data.categoryName,
+      sort: data.sort ?? 0,
+      children: [],
+    })
+    return ok<number | string>(id)
+  }
+  if (data.id != null && data.id !== '') {
+    return request<boolean>(`${KB_BASE}/category`, {
+      method: 'PUT',
+      body: jsonEntityBody(data as Record<string, unknown>),
     })
   }
-  return request<KbDocumentDetail>(`${KB_BASE}/document/${id}`, { method: 'GET' })
+  return request<number | string>(`${KB_BASE}/category`, {
+    method: 'POST',
+    body: jsonEntityBody(data as Record<string, unknown>),
+  })
+}
+
+export async function deleteKbCategoryApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(100)
+    walkCategoryTree(mockCategoryTreeState, (node, parent, index) => {
+      if (String(node.id) === String(id)) {
+        if (node.children?.length) throw new Error('请先删除子分类')
+        parent?.splice(index, 1)
+        return true
+      }
+      return false
+    })
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/category/${toEntityId(id)}`, { method: 'DELETE' })
+}
+
+export async function listKbTagsApi(spaceId: number | string) {
+  if (USE_MOCK) {
+    await delay(100)
+    return ok<KbTag[]>(mockTagsState)
+  }
+  return request<KbTag[]>(`${KB_BASE}/tag/list${buildQuery({ spaceId })}`, { method: 'GET' })
+}
+
+export async function saveKbTagApi(data: KbTagSaveRequest) {
+  if (USE_MOCK) {
+    await delay(120)
+    if (data.id != null && data.id !== '') {
+      const idx = mockTagsState.findIndex((t) => String(t.id) === String(data.id))
+      if (idx >= 0) {
+        mockTagsState[idx] = { ...mockTagsState[idx], tagName: data.tagName, color: data.color }
+      }
+      return ok<number | string | boolean>(String(data.id))
+    }
+    const id = String(++mockTagSeq)
+    mockTagsState.push({ id, spaceId: data.spaceId, tagName: data.tagName, color: data.color })
+    return ok<number | string>(id)
+  }
+  if (data.id != null && data.id !== '') {
+    return request<boolean>(`${KB_BASE}/tag`, {
+      method: 'PUT',
+      body: jsonEntityBody(data as Record<string, unknown>),
+    })
+  }
+  return request<number | string>(`${KB_BASE}/tag`, {
+    method: 'POST',
+    body: jsonEntityBody(data as Record<string, unknown>),
+  })
+}
+
+export async function deleteKbTagApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(100)
+    mockTagsState = mockTagsState.filter((t) => String(t.id) !== String(id))
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/tag/${toEntityId(id)}`, { method: 'DELETE' })
 }
 
 export async function listKbAttachmentsApi(documentId: number | string) {
@@ -724,7 +1060,11 @@ export async function uploadKbAttachmentApi(documentId: number | string, file: F
   const form = new FormData()
   form.append('documentId', String(documentId))
   form.append('file', file)
-  return request<KbAttachment>(`${KB_BASE}/attachment/upload`, { method: 'POST', body: form })
+  return request<KbAttachment>(`${KB_BASE}/attachment/upload`, {
+    method: 'POST',
+    body: form,
+    timeoutMs: kbAttachmentUploadTimeoutMs(file.size),
+  })
 }
 
 export async function deleteKbAttachmentApi(id: number | string) {
