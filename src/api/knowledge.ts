@@ -27,6 +27,25 @@ import type {
   KbSyncTrigger,
   KbTag,
   KbTagSaveRequest,
+  KbWikiPage,
+  KbWikiSaveRequest,
+  KbWikiSaveResult,
+  KbWikiAiReviseRequest,
+  KbWikiAiReviseResult,
+  KbWikiLintPreviewRequest,
+  KbWikiLintPreview,
+  KbRawTreeNode,
+  KbIngestJob,
+  KbIngestJobCreateRequest,
+  KbIngestPlanUpdateRequest,
+  KbIngestDraft,
+  KbIngestGenerateResult,
+  KbIngestLint,
+  KbIngestCommitResult,
+  KbIngestTemplate,
+  KbIngestTemplateCreateRequest,
+  KbIngestJobFromTemplateRequest,
+  KbIngestSaveAsTemplateRequest,
   MoliPage,
 } from '@/types/knowledge'
 import { getToken } from '@/utils/authSession'
@@ -1126,5 +1145,296 @@ export async function triggerKbSyncApi(params?: { spaceId?: number | string; spa
   return request<KbSyncTrigger>(`${KB_BASE}/sync/trigger${buildQuery(params as Record<string, string | number | undefined>)}`, {
     method: 'POST',
     timeoutMs: 320_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// 8. Wiki 在线编辑 /kb/wiki/page（T14a）
+// ---------------------------------------------------------------------------
+
+/** Mock：以 slug 为键存草稿，离线演示读写闭环 */
+const mockWikiFiles = new Map<string, string>()
+
+function mockHash(text: string) {
+  let h = 5381
+  for (let i = 0; i < text.length; i += 1) {
+    h = ((h << 5) + h + text.charCodeAt(i)) >>> 0
+  }
+  return `mock-${text.length}-${h.toString(16)}`
+}
+
+/** GET /kb/wiki/page —— 读 wiki 文件全文（需空间 editor） */
+export async function getKbWikiPageApi(slug: string, spaceId?: number | string) {
+  if (USE_MOCK) {
+    await delay(160)
+    const stored = mockWikiFiles.get(slug)
+    const fromPage = MOCK_PAGES.find((p) => p.slug === slug)
+    const content = stored
+      ?? (fromPage ? `---\ntitle: ${fromPage.title}\nslug: ${fromPage.slug}\n---\n\n${fromPage.content ?? ''}` : '')
+    return ok<KbWikiPage>({
+      slug,
+      spaceId,
+      spaceCode: 'enterprise-kb',
+      relativePath: `wiki/${slug}.md`,
+      content,
+      contentHash: mockHash(content),
+      exists: stored != null || fromPage != null,
+    })
+  }
+  return request<KbWikiPage>(`${KB_BASE}/wiki/page${buildQuery({ slug, spaceId })}`, { method: 'GET' })
+}
+
+/** PUT /kb/wiki/page —— 写 wiki 文件（需空间 editor，保存后需 Sync 才进库） */
+export async function saveKbWikiPageApi(payload: KbWikiSaveRequest) {
+  if (USE_MOCK) {
+    await delay(240)
+    const existed = mockWikiFiles.has(payload.slug) || MOCK_PAGES.some((p) => p.slug === payload.slug)
+    mockWikiFiles.set(payload.slug, payload.content)
+    return ok<KbWikiSaveResult>({
+      slug: payload.slug,
+      spaceId: payload.spaceId,
+      relativePath: `wiki/${payload.slug}.md`,
+      created: !existed,
+      contentHash: mockHash(payload.content),
+      savedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    })
+  }
+  return request<KbWikiSaveResult>(`${KB_BASE}/wiki/page`, {
+    method: 'PUT',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+  })
+}
+
+/** POST /kb/wiki/ai-revise —— AI 改稿建议（不写盘） */
+export async function aiReviseKbWikiApi(payload: KbWikiAiReviseRequest) {
+  if (USE_MOCK) {
+    await delay(900)
+    const base = payload.baselineContent ?? mockWikiFiles.get(payload.slug)
+      ?? MOCK_PAGES.find((p) => p.slug === payload.slug)?.content
+      ?? ''
+    const suggested = `${base}\n\n<!-- AI mock: ${payload.instruction} -->`
+    return ok<KbWikiAiReviseResult>({
+      suggestedContent: suggested.startsWith('---') ? suggested : `---\ntitle: mock\nslug: ${payload.slug}\n---\n\n${suggested}`,
+      provider: 'mock',
+      model: 'mock',
+      notes: 'Mock 模式演示',
+    })
+  }
+  return request<KbWikiAiReviseResult>(`${KB_BASE}/wiki/ai-revise`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+    timeoutMs: 120_000,
+  })
+}
+
+/** POST /kb/wiki/page/lint-preview —— 保存前 lint 预检 */
+export async function previewKbWikiLintApi(payload: KbWikiLintPreviewRequest) {
+  if (USE_MOCK) {
+    await delay(120)
+    const issues: KbWikiLintPreview['issues'] = []
+    if (!payload.content.includes('[[')) {
+      /* no wikilinks */
+    } else if (payload.content.includes('[[不存在的页]]')) {
+      issues.push({ type: 'broken_link', message: '断链：[[不存在的页]]' })
+    }
+    return ok<KbWikiLintPreview>({ issueCount: issues.length, issues })
+  }
+  return request<KbWikiLintPreview>(`${KB_BASE}/wiki/page/lint-preview`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+  })
+}
+
+/* ------------------------------------------------------------------ */
+/* Ingest 工作台（T15a）                                               */
+/* ------------------------------------------------------------------ */
+
+/** GET /kb/ingest/raw-tree —— raw 只读目录树 */
+export async function getKbIngestRawTreeApi(prefix?: string) {
+  if (USE_MOCK) {
+    await delay(160)
+    return ok<KbRawTreeNode[]>([
+      {
+        name: 'design',
+        path: 'design',
+        type: 'dir',
+        children: [
+          { name: 'redis-sentinel.note.md', path: 'design/redis-sentinel.note.md', type: 'file', size: 2048 },
+        ],
+      },
+    ])
+  }
+  return request<KbRawTreeNode[]>(`${KB_BASE}/ingest/raw-tree${buildQuery({ prefix })}`, { method: 'GET' })
+}
+
+/** POST /kb/ingest/jobs —— 创建批次（需空间 editor） */
+export async function createKbIngestJobApi(payload: KbIngestJobCreateRequest) {
+  if (USE_MOCK) {
+    await delay(200)
+    return ok<KbIngestJob>({
+      id: Date.now(),
+      spaceId: payload.spaceId,
+      spaceCode: 'enterprise-kb',
+      batchNo: payload.batchNo ?? `WB-${Date.now()}`,
+      topic: payload.topic,
+      expectTypes: payload.expectTypes,
+      rawPaths: payload.rawPaths,
+      status: 'created',
+      planVersion: 0,
+      canEdit: true,
+    })
+  }
+  return request<KbIngestJob>(`${KB_BASE}/ingest/jobs`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+  })
+}
+
+/** GET /kb/ingest/jobs —— 批次分页 */
+export async function getKbIngestJobsApi(params?: {
+  spaceId?: number | string
+  status?: string
+  pageNum?: number
+  pageSize?: number
+}) {
+  if (USE_MOCK) {
+    await delay(160)
+    return ok<MoliPage<KbIngestJob>>({
+      records: [],
+      total: 0,
+      size: params?.pageSize ?? 10,
+      current: params?.pageNum ?? 1,
+    })
+  }
+  return request<MoliPage<KbIngestJob>>(
+    `${KB_BASE}/ingest/jobs${buildQuery(params as Record<string, string | number | undefined>)}`,
+    { method: 'GET' },
+  )
+}
+
+/** GET /kb/ingest/jobs/{id} —— 批次详情（含最新 plan） */
+export async function getKbIngestJobApi(id: number | string) {
+  return request<KbIngestJob>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}`, { method: 'GET' })
+}
+
+/** POST /kb/ingest/jobs/{id}/plan —— 生成/刷新 Plan（LLM 或骨架） */
+export async function generateKbIngestPlanApi(id: number | string) {
+  return request<KbIngestJob>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/plan`, {
+    method: 'POST',
+    timeoutMs: 120_000,
+  })
+}
+
+/** PUT /kb/ingest/jobs/{id}/plan —— 人工编辑 Plan */
+export async function updateKbIngestPlanApi(id: number | string, payload: KbIngestPlanUpdateRequest) {
+  return request<KbIngestJob>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/plan`, {
+    method: 'PUT',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+  })
+}
+
+/** GET /kb/ingest/jobs/{id}/export-agent-prompt —— 导出 Cursor 提示词 */
+export async function exportKbIngestAgentPromptApi(id: number | string) {
+  return request<string>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/export-agent-prompt`, { method: 'GET' })
+}
+
+/* ---- T15b 生成 / 审阅 ---- */
+
+/** POST /kb/ingest/jobs/{id}/generate —— 按 plan 生成多页草稿；resume 断点续跑 */
+export async function generateKbIngestDraftsApi(id: number | string, resume = false) {
+  return request<KbIngestGenerateResult>(
+    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/generate${buildQuery({ resume: String(resume) })}`,
+    { method: 'POST', timeoutMs: 300_000 },
+  )
+}
+
+/** GET /kb/ingest/jobs/{id}/drafts —— 草稿列表 */
+export async function getKbIngestDraftsApi(id: number | string) {
+  return request<KbIngestDraft[]>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/drafts`, { method: 'GET' })
+}
+
+/** GET /kb/ingest/jobs/{id}/draft?slug= —— 单页草稿 */
+export async function getKbIngestDraftApi(id: number | string, slug: string) {
+  return request<KbIngestDraft>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/draft${buildQuery({ slug })}`, { method: 'GET' })
+}
+
+/** PUT /kb/ingest/jobs/{id}/draft?slug= —— 人工改草稿（enrich 可传 patch） */
+export async function updateKbIngestDraftApi(
+  id: number | string,
+  slug: string,
+  payload: { content?: string; patch?: string },
+) {
+  return request<KbIngestDraft>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/draft${buildQuery({ slug })}`, {
+    method: 'PUT',
+    body: jsonEntityBody(payload),
+  })
+}
+
+/** POST /kb/ingest/jobs/{id}/draft/regenerate?slug= —— 单页重生成 */
+export async function regenerateKbIngestDraftApi(id: number | string, slug: string) {
+  return request<KbIngestDraft>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/draft/regenerate${buildQuery({ slug })}`, {
+    method: 'POST',
+    timeoutMs: 120_000,
+  })
+}
+
+/** PUT /kb/ingest/jobs/{id}/draft/approval?slug=&approval= —— 设置审批 */
+export async function setKbIngestDraftApprovalApi(
+  id: number | string,
+  slug: string,
+  approval: 'approved' | 'rejected' | 'draft',
+) {
+  return request<KbIngestDraft>(
+    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/draft/approval${buildQuery({ slug, approval })}`,
+    { method: 'PUT' },
+  )
+}
+
+/* ---- T15c/d lint + commit + sync ---- */
+
+/** POST /kb/ingest/jobs/{id}/lint —— commit 前 lint 预检 */
+export async function lintKbIngestApi(id: number | string) {
+  return request<KbIngestLint>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/lint`, { method: 'POST' })
+}
+
+/** POST /kb/ingest/jobs/{id}/commit?sync= —— 原子落盘（可选 Sync） */
+export async function commitKbIngestApi(id: number | string, sync = false) {
+  return request<KbIngestCommitResult>(
+    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/commit${buildQuery({ sync: String(sync) })}`,
+    { method: 'POST', timeoutMs: 180_000 },
+  )
+}
+
+/* ---- T15e 模板 ---- */
+
+export async function getKbIngestTemplatesApi(spaceId?: number | string) {
+  return request<KbIngestTemplate[]>(`${KB_BASE}/ingest/templates${buildQuery({ spaceId })}`, { method: 'GET' })
+}
+
+export async function createKbIngestTemplateApi(payload: KbIngestTemplateCreateRequest) {
+  return request<KbIngestTemplate>(`${KB_BASE}/ingest/templates`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+  })
+}
+
+export async function deleteKbIngestTemplateApi(id: number | string) {
+  return request<boolean>(`${KB_BASE}/ingest/templates/${toEntityId(id)}`, { method: 'DELETE' })
+}
+
+export async function createKbIngestJobFromTemplateApi(
+  templateId: number | string,
+  payload?: KbIngestJobFromTemplateRequest,
+) {
+  return request<KbIngestJob>(`${KB_BASE}/ingest/jobs/from-template/${toEntityId(templateId)}`, {
+    method: 'POST',
+    body: jsonEntityBody((payload ?? {}) as Record<string, unknown>),
+  })
+}
+
+export async function saveKbIngestJobAsTemplateApi(id: number | string, payload: KbIngestSaveAsTemplateRequest) {
+  return request<KbIngestTemplate>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/save-as-template`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
   })
 }

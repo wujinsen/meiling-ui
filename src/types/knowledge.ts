@@ -461,3 +461,247 @@ export type KbTagSaveRequest = {
   tagName: string
   color?: string
 }
+
+// ---------------------------------------------------------------------------
+// 8. Wiki 在线编辑 /kb/wiki/page（T14a）
+// ---------------------------------------------------------------------------
+
+/** GET /kb/wiki/page —— wiki 文件全文（frontmatter+正文，权威源） */
+export type KbWikiPage = {
+  slug: string
+  spaceId?: number | string
+  spaceCode?: string
+  /** wiki 文件相对路径（root 起） */
+  relativePath?: string
+  /** 文件全文 */
+  content: string
+  /** 内容 SHA-256（乐观锁/变更比对） */
+  contentHash?: string
+  /** 文件是否已存在（false=可新建） */
+  exists: boolean
+  updatedAt?: string
+}
+
+/** PUT /kb/wiki/page */
+export type KbWikiSaveRequest = {
+  slug: string
+  spaceId?: number | string
+  content: string
+  changeLog?: string
+  /** 打开时的 contentHash；非空时做乐观锁，冲突后端报错 */
+  baselineHash?: string
+}
+
+export type KbWikiSaveResult = {
+  slug: string
+  spaceId?: number | string
+  relativePath?: string
+  created: boolean
+  contentHash?: string
+  savedAt?: string
+}
+
+/** POST /kb/wiki/ai-revise */
+export type KbWikiAiReviseRequest = {
+  slug: string
+  spaceId?: number | string
+  instruction: string
+  baselineContent?: string
+  issueContext?: {
+    issueType?: string
+    detail?: string
+  }
+}
+
+export type KbWikiAiReviseResult = {
+  suggestedContent: string
+  provider?: string
+  model?: string
+  notes?: string
+}
+
+/** POST /kb/wiki/page/lint-preview */
+export type KbWikiLintPreviewRequest = {
+  slug: string
+  spaceId?: number | string
+  content: string
+}
+
+export type KbWikiLintPreviewItem = {
+  type: string
+  message: string
+}
+
+export type KbWikiLintPreview = {
+  issueCount: number
+  issues: KbWikiLintPreviewItem[]
+}
+
+/* ------------------------------------------------------------------ */
+/* Ingest 工作台（T15a）                                               */
+/* ------------------------------------------------------------------ */
+
+/** GET /kb/ingest/raw-tree 节点 */
+export type KbRawTreeNode = {
+  name: string
+  path: string
+  type: 'dir' | 'file'
+  size?: number
+  children?: KbRawTreeNode[]
+}
+
+/** POST /kb/ingest/jobs */
+export type KbIngestJobCreateRequest = {
+  spaceId?: number | string
+  topic: string
+  batchNo?: string
+  expectTypes?: string
+  rawPaths: string[]
+  remark?: string
+}
+
+/** Ingest 批次详情 */
+export type KbIngestJob = {
+  id: number | string
+  spaceId?: number | string
+  spaceCode?: string
+  batchNo?: string
+  topic: string
+  expectTypes?: string
+  rawPaths: string[]
+  status: string
+  planVersion: number
+  planJson?: string
+  planSource?: string
+  remark?: string
+  canEdit?: boolean
+  createTime?: string
+  updateTime?: string
+}
+
+/** PUT /kb/ingest/jobs/{id}/plan */
+export type KbIngestPlanUpdateRequest = {
+  planJson: string
+}
+
+/** Plan JSON 结构（前端解析 planJson 后的形态） */
+export type KbIngestPlanCreateItem = {
+  type?: string
+  slug?: string
+  title?: string
+  sources?: string[]
+  reason?: string
+}
+
+export type KbIngestPlanEnrichItem = {
+  slug?: string
+  action?: string
+  reason?: string
+}
+
+export type KbIngestPlanSkipItem = {
+  raw?: string
+  reason?: string
+}
+
+export type KbIngestPlanEdgeItem = {
+  from?: string
+  to?: string
+  type?: string
+  evidence?: string
+}
+
+export type KbIngestPlan = {
+  batchNo?: string
+  topic?: string
+  create?: KbIngestPlanCreateItem[]
+  enrich?: KbIngestPlanEnrichItem[]
+  skip?: KbIngestPlanSkipItem[]
+  edges?: KbIngestPlanEdgeItem[]
+  conflicts?: string[]
+}
+
+/** Ingest 单页草稿（T15b） */
+export type KbIngestDraft = {
+  id: number | string
+  jobId: number | string
+  slug: string
+  displaySlug: string
+  kbType?: string
+  action: 'create' | 'enrich' | string
+  baseline?: string
+  /** enrich 追加段落 patch（T15e） */
+  patch?: string
+  draft?: string
+  approval: 'draft' | 'approved' | 'rejected' | string
+  updateTime?: string
+}
+
+/** POST /kb/ingest/jobs/{id}/generate 结果（T15e 断点续跑） */
+export type KbIngestGenerateResult = {
+  total: number
+  generated: number
+  skipped: number
+  resume: boolean
+  drafts: KbIngestDraft[]
+}
+
+/** Ingest 批次模板（T15e） */
+export type KbIngestTemplate = {
+  id: number | string
+  spaceId?: number | string
+  spaceCode?: string
+  name: string
+  topic: string
+  expectTypes?: string
+  rawPaths: string[]
+  hasPlan?: boolean
+  createTime?: string
+}
+
+export type KbIngestTemplateCreateRequest = {
+  spaceId?: number | string
+  name: string
+  topic: string
+  expectTypes?: string
+  rawPaths?: string[]
+  planJson?: string
+}
+
+export type KbIngestJobFromTemplateRequest = {
+  batchNo?: string
+  topic?: string
+}
+
+export type KbIngestSaveAsTemplateRequest = {
+  name: string
+  includePlan?: boolean
+}
+
+/** Ingest 批次 lint 预检（T15c） */
+export type KbIngestLintItem = {
+  slug?: string
+  type: string
+  severity: 'ERROR' | 'WARN' | string
+  message: string
+}
+
+export type KbIngestLint = {
+  issueCount: number
+  blockingCount: number
+  commitReady: boolean
+  issues: KbIngestLintItem[]
+}
+
+/** Ingest 落盘报告（T15c/d） */
+export type KbIngestCommitResult = {
+  jobId: number | string
+  created: number
+  updated: number
+  files: string[]
+  edgesAppended: number
+  logAppended: boolean
+  indexUpdated: boolean
+  syncTriggered: boolean
+  syncResult?: KbSyncTrigger
+}
