@@ -140,7 +140,7 @@ watch(
 </script>
 
 <template>
-  <div class="card p-5">
+  <div class="card flex min-h-0 flex-1 flex-col p-5">
     <div class="mb-4 flex flex-wrap items-center gap-2">
       <div class="relative min-w-[12rem] flex-1">
         <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -164,40 +164,24 @@ watch(
       {{ t('knowledge.taxManage.tagSummary', { count: filteredTags.length, total: tags.length }) }}
     </p>
 
-    <div class="data-table-scroll overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-      <table class="data-table w-full min-w-[520px] text-left text-sm">
-        <thead>
-          <tr>
-            <th>{{ t('knowledge.taxManage.colName') }}</th>
-            <th>{{ t('knowledge.taxManage.colColor') }}</th>
-            <th class="text-right">{{ t('knowledge.docManage.colActions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading">
-            <td colspan="3" class="px-4 py-12 text-center text-gray-400">{{ t('common.loading') }}</td>
-          </tr>
-          <tr v-else-if="!filteredTags.length">
-            <td colspan="3" class="px-4 py-12 text-center text-gray-400">{{ t('knowledge.docManage.tagsEmpty') }}</td>
-          </tr>
-          <tr v-for="row in filteredTags" v-else :key="String(row.id)">
-            <td>
-              <span class="kb-tag-chip" :style="tagStyle(row.color)">{{ row.tagName }}</span>
-            </td>
-            <td class="font-mono text-xs text-gray-500">{{ row.color || '—' }}</td>
-            <td class="text-right">
-              <div class="btn-action-group justify-end">
-                <button type="button" class="btn-action-edit" @click="openEdit(row)">
-                  <Pencil class="h-3.5 w-3.5" />{{ t('knowledge.docManage.edit') }}
-                </button>
-                <button type="button" class="btn-action-danger" @click="remove(row)">
-                  <Trash2 class="h-3.5 w-3.5" />{{ t('knowledge.docManage.delete') }}
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="kb-tag-manage-scroll">
+      <p v-if="loading" class="py-12 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
+      <p v-else-if="!filteredTags.length" class="py-12 text-center text-sm text-gray-400">{{ t('knowledge.docManage.tagsEmpty') }}</p>
+      <div v-else class="kb-tag-manage-grid">
+        <div v-for="row in filteredTags" :key="String(row.id)" class="kb-tag-manage-item group">
+          <span class="kb-tag-chip min-w-0 max-w-full truncate" :style="tagStyle(row.color)" :title="row.tagName">
+            {{ row.tagName }}
+          </span>
+          <div class="kb-tag-manage-actions">
+            <button type="button" class="kb-tag-manage-action" :title="t('knowledge.docManage.edit')" @click="openEdit(row)">
+              <Pencil class="h-3 w-3" />
+            </button>
+            <button type="button" class="kb-tag-manage-action kb-tag-manage-action-danger" :title="t('knowledge.docManage.delete')" @click="remove(row)">
+              <Trash2 class="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <AppModal :open="modalOpen" :title="modalTitle" @close="modalOpen = false">

@@ -642,6 +642,7 @@ export type KbIngestGenerateResult = {
   total: number
   generated: number
   skipped: number
+  failed?: number
   resume: boolean
   drafts: KbIngestDraft[]
 }

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Check, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Upload, X } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
+import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import {
   commitKbIngestApi,
   createKbIngestJobApi,
@@ -24,9 +25,11 @@ import {
   updateKbIngestPlanApi,
 } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
+import { assertAction, guardAction } from '@/composables/useActionPermissions'
 import { confirm } from '@/composables/useConfirm'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
+import { PERM } from '@/constants/permissions'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
 import type {
@@ -40,7 +43,7 @@ import type {
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { spaces, ensureSpacesLoaded } = useKbSpace()
+const { spaces, selectedSpaceId, setSelectedSpaceId, ensureSpacesLoaded } = useKbSpace()
 
 const jobId = computed(() => {
   const raw = route.query.id
@@ -63,7 +66,14 @@ const templatesLoading = ref(false)
 const creatingFromTemplate = ref(false)
 
 const defaultSpace = computed(() => spaces.value.find((s) => s.spaceCode === 'enterprise-kb') ?? spaces.value[0])
-const canEdit = computed(() => defaultSpace.value?.canEdit === true)
+const preferredSpace = computed(() => spaces.value.find((s) => s.canEdit === true) ?? defaultSpace.value)
+const selectedSpace = computed(
+  () => spaces.value.find((s) => toEntityId(s.id) === toEntityId(selectedSpaceId.value)) ?? preferredSpace.value,
+)
+const selectedSpaceQueryId = computed(() => toEntityId(selectedSpace.value?.id))
+const canEdit = computed(() => selectedSpace.value?.canEdit === true)
+const canRunIngestJobAction = computed(() => assertAction(PERM.KB_INGEST_JOB))
+const canRunIngestCommitAction = computed(() => assertAction(PERM.KB_INGEST_COMMIT))
 
 type FlatNode = { node: KbRawTreeNode; depth: number }
 const flatTree = computed<FlatNode[]>(() => {
@@ -88,7 +98,10 @@ function toggleRaw(path: string) {
 async function loadJobs() {
   jobsLoading.value = true
   try {
-    const res = await getKbIngestJobsApi({ pageSize: 50 })
+    const res = await getKbIngestJobsApi({
+      spaceId: selectedSpaceQueryId.value,
+      pageSize: 50,
+    })
     if (res.code === API_SUCCESS_CODE && res.data) jobs.value = res.data.records ?? []
   } finally {
     jobsLoading.value = false
@@ -110,7 +123,7 @@ async function loadRawTree() {
 async function loadTemplates() {
   templatesLoading.value = true
   try {
-    const res = await getKbIngestTemplatesApi(toEntityId(defaultSpace.value?.id))
+    const res = await getKbIngestTemplatesApi(selectedSpaceQueryId.value)
     if (res.code === API_SUCCESS_CODE && res.data) templates.value = res.data
   } finally {
     templatesLoading.value = false
@@ -118,6 +131,7 @@ async function loadTemplates() {
 }
 
 async function createJobFromTemplate(tpl: KbIngestTemplate) {
+  if (!guardAction(PERM.KB_INGEST_JOB)) return
   if (creatingFromTemplate.value) return
   creatingFromTemplate.value = true
   try {
@@ -135,6 +149,7 @@ async function createJobFromTemplate(tpl: KbIngestTemplate) {
 }
 
 async function saveAsTemplate() {
+  if (!guardAction(PERM.KB_INGEST_JOB)) return
   if (!jobId.value || !jobCanEdit.value) return
   const name = window.prompt(t('knowledge.ingest.saveAsTemplatePrompt'), job.value?.topic ?? '')
   if (!name?.trim()) return
@@ -149,6 +164,7 @@ async function saveAsTemplate() {
 }
 
 async function createJob() {
+  if (!guardAction(PERM.KB_INGEST_JOB)) return
   if (creating.value) return
   if (!formTopic.value.trim()) {
     showToast('error', t('knowledge.ingest.topic'))
@@ -161,7 +177,7 @@ async function createJob() {
   creating.value = true
   try {
     const res = await createKbIngestJobApi({
-      spaceId: toEntityId(defaultSpace.value?.id),
+      spaceId: selectedSpaceQueryId.value,
       topic: formTopic.value.trim(),
       batchNo: formBatchNo.value.trim() || undefined,
       expectTypes: formExpectTypes.value.trim() || undefined,
@@ -196,7 +212,7 @@ const lint = ref<KbIngestLint | null>(null)
 const linting = ref(false)
 const committing = ref(false)
 
-const lastGenerateStats = ref<{ generated: number; skipped: number; total: number } | null>(null)
+const lastGenerateStats = ref<{ generated: number; skipped: number; failed: number; total: number } | null>(null)
 
 const jobCanEdit = computed(() => job.value?.canEdit === true)
 const isEnrichDraft = computed(() => activeDraft.value?.action === 'enrich')
@@ -227,6 +243,9 @@ const patchDiffRows = computed<DiffRow[]>(() => {
 
 const allApproved = computed(() => drafts.value.length > 0 && drafts.value.every((d) => d.approval !== 'draft'))
 const approvedCount = computed(() => drafts.value.filter((d) => d.approval === 'approved').length)
+const canCommit = computed(
+  () => jobCanEdit.value && allApproved.value && approvedCount.value > 0 && lint.value?.commitReady === true,
+)
 
 function statusLabel(s?: string) {
   const map: Record<string, string> = {
@@ -277,6 +296,7 @@ function prettyJson(s: string) {
 }
 
 async function generatePlan() {
+  if (!guardAction(PERM.KB_INGEST_JOB)) return
   if (!jobId.value || planGenerating.value) return
   planGenerating.value = true
   try {
@@ -292,9 +312,10 @@ async function generatePlan() {
 }
 
 async function savePlan() {
+  if (!guardAction(PERM.KB_INGEST_JOB)) return
   if (!jobId.value || planSaving.value) return
   if (!planObj.value) {
-    showToast('error', 'JSON')
+    showToast('error', t('knowledge.ingest.planJsonInvalid'))
     return
   }
   planSaving.value = true
@@ -333,6 +354,7 @@ async function loadDrafts() {
 }
 
 async function generateDrafts(resume = false) {
+  if (!guardAction(PERM.KB_INGEST_JOB)) return
   if (!jobId.value || draftsGenerating.value) return
   if (!resume) {
     const ok = await confirm({
@@ -351,18 +373,22 @@ async function generateDrafts(resume = false) {
     lastGenerateStats.value = {
       generated: res.data.generated ?? 0,
       skipped: res.data.skipped ?? 0,
+      failed: res.data.failed ?? 0,
       total: res.data.total ?? drafts.value.length,
     }
     lint.value = null
     if (drafts.value.length) selectDraft(drafts.value[0])
     await loadJob()
     showToast(
-      'success',
+      lastGenerateStats.value.failed > 0 ? 'error' : 'success',
       t('knowledge.ingest.generateProgress', {
         generated: lastGenerateStats.value.generated,
         skipped: lastGenerateStats.value.skipped,
         total: lastGenerateStats.value.total,
-      }),
+      }) +
+        (lastGenerateStats.value.failed > 0
+          ? ' ' + t('knowledge.ingest.generateFailed', { failed: lastGenerateStats.value.failed })
+          : ''),
     )
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
@@ -386,6 +412,7 @@ function syncActiveEdit() {
 }
 
 async function saveDraft() {
+  if (!guardAction(PERM.KB_INGEST_JOB)) return
   const d = activeDraft.value
   if (!jobId.value || !d || draftSaving.value) return
   draftSaving.value = true
@@ -405,6 +432,7 @@ async function saveDraft() {
 }
 
 async function regenerateDraft() {
+  if (!guardAction(PERM.KB_INGEST_JOB)) return
   const d = activeDraft.value
   if (!jobId.value || !d || draftRegenerating.value) return
   draftRegenerating.value = true
@@ -422,6 +450,7 @@ async function regenerateDraft() {
 }
 
 async function setApproval(d: KbIngestDraft, approval: 'approved' | 'rejected' | 'draft') {
+  if (!guardAction(PERM.KB_INGEST_JOB)) return
   if (!jobId.value) return
   try {
     const res = await setKbIngestDraftApprovalApi(jobId.value, d.slug, approval)
@@ -452,7 +481,12 @@ async function runLint() {
 }
 
 async function commit(sync: boolean) {
+  if (!guardAction(PERM.KB_INGEST_COMMIT)) return
   if (!jobId.value || committing.value) return
+  if (!canCommit.value) {
+    showToast('error', lint.value ? t('knowledge.ingest.lintNeedApprove') : t('knowledge.ingest.lintNeedRun'))
+    return
+  }
   const ok = await confirm({
     title: sync ? t('knowledge.ingest.commitAndSync') : t('knowledge.ingest.commit'),
     message: t('knowledge.ingest.commitSuccess', { created: approvedCount.value, updated: 0 }),
@@ -505,8 +539,20 @@ watch(jobId, (id) => {
   }
 })
 
+watch(selectedSpaceQueryId, () => {
+  if (!jobId.value) {
+    void loadJobs()
+    void loadTemplates()
+  }
+})
+
 onMounted(async () => {
   await ensureSpacesLoaded()
+  if (!jobId.value && !selectedSpaceId.value) {
+    const preferred = preferredSpace.value
+    const id = toEntityId(preferred?.id)
+    if (id) setSelectedSpaceId(id)
+  }
   if (jobId.value) await loadJob()
   else {
     await loadJobs()
@@ -521,7 +567,10 @@ onMounted(async () => {
     <!-- ===================== 列表 / 新建 ===================== -->
     <template v-if="!jobId">
       <div class="card p-5">
-        <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('knowledge.ingest.pageTitle') }}</h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('knowledge.ingest.pageTitle') }}</h2>
+          <KbSpaceSelector />
+        </div>
         <p class="mt-1 text-xs text-gray-400">{{ t('knowledge.ingest.subtitle') }}</p>
       </div>
 
@@ -579,7 +628,7 @@ onMounted(async () => {
           <button
             type="button"
             class="btn-primary mt-4 self-start text-sm"
-            :disabled="creating || !canEdit || !formTopic.trim() || selectedRaw.size === 0"
+            :disabled="creating || !canEdit || !canRunIngestJobAction || !formTopic.trim() || selectedRaw.size === 0"
             @click="createJob"
           >
             <Loader2 v-if="creating" class="h-4 w-4 animate-spin" />
@@ -631,7 +680,7 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-ghost shrink-0 text-xs"
-              :disabled="creatingFromTemplate || !canEdit"
+              :disabled="creatingFromTemplate || !canEdit || !canRunIngestJobAction"
               @click="createJobFromTemplate(tpl)"
             >
               <Loader2 v-if="creatingFromTemplate" class="h-3.5 w-3.5 animate-spin" />
@@ -658,7 +707,7 @@ onMounted(async () => {
             </div>
           </div>
           <button
-            v-if="jobCanEdit"
+            v-if="jobCanEdit && canRunIngestJobAction"
             type="button"
             class="btn-ghost shrink-0 text-sm"
             @click="saveAsTemplate"
@@ -676,7 +725,12 @@ onMounted(async () => {
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('knowledge.ingest.planSection') }}</h3>
           <div class="flex flex-wrap items-center gap-2">
-            <button type="button" class="btn-ghost text-sm" :disabled="planGenerating || !jobCanEdit" @click="generatePlan">
+            <button
+              type="button"
+              class="btn-ghost text-sm"
+              :disabled="planGenerating || !jobCanEdit || !canRunIngestJobAction"
+              @click="generatePlan"
+            >
               <Loader2 v-if="planGenerating" class="h-4 w-4 animate-spin" />
               <Sparkles v-else class="h-4 w-4" />
               {{ job?.planVersion ? t('knowledge.ingest.regeneratePlan') : t('knowledge.ingest.generatePlan') }}
@@ -684,7 +738,12 @@ onMounted(async () => {
             <button type="button" class="btn-ghost text-sm" :disabled="!job?.planVersion" @click="exportPrompt">
               <ClipboardCopy class="h-4 w-4" /> {{ t('knowledge.ingest.exportPrompt') }}
             </button>
-            <button type="button" class="btn-primary text-sm" :disabled="planSaving || !jobCanEdit || !planObj" @click="savePlan">
+            <button
+              type="button"
+              class="btn-primary text-sm"
+              :disabled="planSaving || !jobCanEdit || !canRunIngestJobAction || !planObj"
+              @click="savePlan"
+            >
               {{ t('knowledge.ingest.savePlan') }}
             </button>
           </div>
@@ -714,7 +773,7 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-ghost text-sm"
-              :disabled="draftsGenerating || !jobCanEdit || !job?.planVersion || !drafts.length"
+              :disabled="draftsGenerating || !jobCanEdit || !canRunIngestJobAction || !job?.planVersion || !drafts.length"
               @click="generateDrafts(true)"
             >
               <Loader2 v-if="draftsGenerating" class="h-4 w-4 animate-spin" />
@@ -724,7 +783,7 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-ghost text-sm"
-              :disabled="draftsGenerating || !jobCanEdit || !job?.planVersion"
+              :disabled="draftsGenerating || !jobCanEdit || !canRunIngestJobAction || !job?.planVersion"
               @click="generateDrafts(false)"
             >
               <RefreshCw class="h-4 w-4" :class="draftsGenerating && 'animate-spin'" />
@@ -768,13 +827,28 @@ onMounted(async () => {
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <SegmentControl v-model="draftTab" :options="draftTabOptions" />
                 <div class="flex flex-wrap items-center gap-2">
-                  <button type="button" class="btn-ghost text-xs" :disabled="draftRegenerating || !jobCanEdit" @click="regenerateDraft">
+                  <button
+                    type="button"
+                    class="btn-ghost text-xs"
+                    :disabled="draftRegenerating || !jobCanEdit || !canRunIngestJobAction"
+                    @click="regenerateDraft"
+                  >
                     <RefreshCw class="h-3.5 w-3.5" :class="draftRegenerating && 'animate-spin'" /> {{ t('knowledge.ingest.regenerate') }}
                   </button>
-                  <button type="button" class="btn-ghost text-xs text-emerald-600 dark:text-emerald-400" :disabled="!jobCanEdit" @click="setApproval(activeDraft, 'approved')">
+                  <button
+                    type="button"
+                    class="btn-ghost text-xs text-emerald-600 dark:text-emerald-400"
+                    :disabled="!jobCanEdit || !canRunIngestJobAction"
+                    @click="setApproval(activeDraft, 'approved')"
+                  >
                     <Check class="h-3.5 w-3.5" /> {{ t('knowledge.ingest.approve') }}
                   </button>
-                  <button type="button" class="btn-ghost text-xs text-rose-500" :disabled="!jobCanEdit" @click="setApproval(activeDraft, 'rejected')">
+                  <button
+                    type="button"
+                    class="btn-ghost text-xs text-rose-500"
+                    :disabled="!jobCanEdit || !canRunIngestJobAction"
+                    @click="setApproval(activeDraft, 'rejected')"
+                  >
                     <X class="h-3.5 w-3.5" /> {{ t('knowledge.ingest.reject') }}
                   </button>
                 </div>
@@ -809,7 +883,12 @@ onMounted(async () => {
                   spellcheck="false"
                   :disabled="!jobCanEdit"
                 />
-                <button type="button" class="btn-primary mt-3 self-start text-sm" :disabled="draftSaving || !jobCanEdit" @click="saveDraft">
+                <button
+                  type="button"
+                  class="btn-primary mt-3 self-start text-sm"
+                  :disabled="draftSaving || !jobCanEdit || !canRunIngestJobAction"
+                  @click="saveDraft"
+                >
                   <Loader2 v-if="draftSaving" class="h-4 w-4 animate-spin" />
                   {{ t('knowledge.ingest.saveDraft') }}
                 </button>
@@ -839,7 +918,12 @@ onMounted(async () => {
                     </tbody>
                   </table>
                 </div>
-                <button type="button" class="btn-primary mt-3 self-start text-sm" :disabled="draftSaving || !jobCanEdit" @click="saveDraft">
+                <button
+                  type="button"
+                  class="btn-primary mt-3 self-start text-sm"
+                  :disabled="draftSaving || !jobCanEdit || !canRunIngestJobAction"
+                  @click="saveDraft"
+                >
                   <Loader2 v-if="draftSaving" class="h-4 w-4 animate-spin" />
                   {{ t('knowledge.ingest.saveDraft') }}
                 </button>
@@ -861,7 +945,7 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-ghost text-sm"
-              :disabled="committing || !jobCanEdit || !allApproved || approvedCount === 0"
+              :disabled="committing || !canRunIngestCommitAction || !canCommit"
               @click="commit(false)"
             >
               {{ t('knowledge.ingest.commit') }}
@@ -869,7 +953,7 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-primary text-sm"
-              :disabled="committing || !jobCanEdit || !allApproved || approvedCount === 0"
+              :disabled="committing || !canRunIngestCommitAction || !canCommit"
               @click="commit(true)"
             >
               <Loader2 v-if="committing" class="h-4 w-4 animate-spin" />

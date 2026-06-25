@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { CheckCircle2, FileWarning, Link2Off, Loader2, Play, RefreshCw, ScanLine } from 'lucide-vue-next'
+import { CheckCircle2, FileWarning, Link2Off, Loader2, Play, RefreshCw, ScanLine, Wrench } from 'lucide-vue-next'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import KbSyncPanel from '@/components/knowledge/KbSyncPanel.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppPagination from '@/components/ui/AppPagination.vue'
-import { getKbLintApi, getKbLintIssuesApi, scanKbLintApi, updateKbLintIssueApi } from '@/api/knowledge'
+import { getKbDocumentApi, getKbLintApi, getKbLintIssuesApi, scanKbLintApi, updateKbLintIssueApi } from '@/api/knowledge'
+import { kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { assertAction, guardAction } from '@/composables/useActionPermissions'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -15,6 +17,7 @@ import type { KbLintIssue, KbLintIssueStatus, KbLintReport } from '@/types/knowl
 import { PERM } from '@/constants/permissions'
 
 const { t } = useI18n()
+const router = useRouter()
 const { selectedSpaceId, ensureSpacesLoaded, kbQuerySpaceId } = useKbSpace()
 
 const canScan = computed(() => assertAction(PERM.KB_LINT_SCAN))
@@ -116,6 +119,37 @@ async function setIssueStatus(issue: KbLintIssue, status: KbLintIssueStatus) {
     await loadIssues()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.lint.updateFailed'))
+  }
+}
+
+const fixingIssueId = ref<string | number | null>(null)
+
+async function fixIssue(issue: KbLintIssue) {
+  if (issue.status === 2 || fixingIssueId.value != null) return
+  fixingIssueId.value = issue.id
+  try {
+    let slug = ''
+    let spaceId = issue.spaceId
+    if (issue.documentId != null) {
+      const res = await getKbDocumentApi(issue.documentId)
+      if (res.code === API_SUCCESS_CODE && res.data?.slug) {
+        slug = res.data.slug
+        spaceId = res.data.spaceId ?? spaceId
+      }
+    }
+    if (!slug) {
+      showToast('error', t('knowledge.lint.fixNoSlug'))
+      return
+    }
+    void router.push(kbWikiEditPath(slug, spaceId, {
+      issueId: issue.id,
+      issueType: issue.issueType,
+      issueDetail: issue.detail,
+    }))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.lint.fixFailed'))
+  } finally {
+    fixingIssueId.value = null
   }
 }
 
@@ -291,6 +325,17 @@ watch(canSync, (allowed) => {
                   </td>
                   <td class="px-4 py-3">
                     <div class="flex justify-end gap-2">
+                      <button
+                        v-if="issue.status === 0 && issue.documentId != null"
+                        type="button"
+                        class="btn-ghost px-2 py-1 text-xs text-brand-600 dark:text-brand-400"
+                        :disabled="fixingIssueId === issue.id"
+                        @click="fixIssue(issue)"
+                      >
+                        <Loader2 v-if="fixingIssueId === issue.id" class="h-3.5 w-3.5 animate-spin" />
+                        <Wrench v-else class="h-3.5 w-3.5" />
+                        {{ t('knowledge.lint.fix') }}
+                      </button>
                       <button
                         type="button"
                         class="btn-ghost px-2 py-1 text-xs"

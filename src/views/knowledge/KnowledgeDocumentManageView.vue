@@ -8,7 +8,6 @@ import SegmentControl from '@/components/ui/SegmentControl.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbCategoryManagePanel from '@/components/knowledge/KbCategoryManagePanel.vue'
 import KbDocumentCreateModal from '@/components/knowledge/KbDocumentCreateModal.vue'
-import KbDocumentEditDrawer from '@/components/knowledge/KbDocumentEditDrawer.vue'
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 import KbCategorySelect from '@/components/knowledge/KbCategorySelect.vue'
 import KbTagManagePanel from '@/components/knowledge/KbTagManagePanel.vue'
@@ -21,15 +20,18 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import type { KbDocStatus, KbDocumentListItem } from '@/types/knowledge'
 import { PERM } from '@/constants/permissions'
+import { kbDocumentEditPath } from '@/router/knowledgeSupplementRoutes'
 import { toEntityId } from '@/utils/id'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { spaces, ensureSpacesLoaded, loading: spaceLoading } = useKbSpace()
+const { spaces, ensureSpacesLoaded, loading: spaceLoading, setSelectedSpaceId } = useKbSpace()
 
 const editableSpaces = computed(() => spaces.value.filter((s) => s.canEdit === true))
-const hasEditableSpace = computed(() => editableSpaces.value.length > 0)
+const hasAccessibleSpace = computed(() => spaces.value.length > 0)
+const currentSpace = computed(() => spaces.value.find((s) => toEntityId(s.id) === docSpaceId.value) ?? null)
+const canEditCurrentSpace = computed(() => currentSpace.value?.canEdit === true)
 
 const docSpaceId = ref('')
 const loading = ref(false)
@@ -55,13 +57,13 @@ const tabOptions = computed(() => [
   { value: 'tags', label: t('knowledge.taxManage.tabTags') },
 ])
 
+const fillViewport = computed(() => activeTab.value === 'tags' || activeTab.value === 'categories')
+
 function onTaxonomyChanged() {
   void reloadMeta()
 }
 
 const createOpen = ref(false)
-const drawerOpen = ref(false)
-const editingId = ref<string | null>(null)
 
 const canCreate = computed(() => assertAction(PERM.KB_DOCUMENT_ADD))
 
@@ -73,9 +75,13 @@ const statusOptions = computed(() => [
 ])
 
 function initDocSpace() {
-  if (!editableSpaces.value.length) return
-  const ok = editableSpaces.value.some((s) => toEntityId(s.id) === docSpaceId.value)
-  if (!ok) docSpaceId.value = toEntityId(editableSpaces.value[0].id) ?? ''
+  if (!spaces.value.length) return
+  const ok = spaces.value.some((s) => toEntityId(s.id) === docSpaceId.value)
+  if (!ok) {
+    const preferred = editableSpaces.value[0] ?? spaces.value[0]
+    docSpaceId.value = toEntityId(preferred.id) ?? ''
+  }
+  if (docSpaceId.value) setSelectedSpaceId(docSpaceId.value)
 }
 
 function statusLabel(status?: KbDocStatus) {
@@ -140,8 +146,7 @@ function openCreate() {
 function openEdit(row: KbDocumentListItem) {
   const id = toEntityId(row.id)
   if (!id) return
-  editingId.value = id
-  drawerOpen.value = true
+  void router.push(kbDocumentEditPath(id))
 }
 
 function openBrowse(row: KbDocumentListItem) {
@@ -152,37 +157,25 @@ function openBrowse(row: KbDocumentListItem) {
 }
 
 function onCreated(id: string) {
-  editingId.value = id
-  drawerOpen.value = true
-  void loadList()
+  void router.push(kbDocumentEditPath(id))
 }
 
-function closeDrawer() {
-  drawerOpen.value = false
-  editingId.value = null
-  const q = { ...route.query }
-  if (q.editId) {
-    delete q.editId
-    void router.replace({ query: q })
-  }
-}
-
-function openEditFromRoute() {
+function redirectLegacyEditQuery() {
   const raw = route.query.editId
   if (typeof raw !== 'string' || !raw) return
-  editingId.value = raw
-  drawerOpen.value = true
+  void router.replace(kbDocumentEditPath(raw))
 }
 
 onMounted(async () => {
   await ensureSpacesLoaded()
   initDocSpace()
-  openEditFromRoute()
+  redirectLegacyEditQuery()
 })
 
 watch(editableSpaces, () => initDocSpace(), { deep: true })
 
-watch(docSpaceId, () => {
+watch(docSpaceId, (id) => {
+  if (id) setSelectedSpaceId(id)
   query.categoryId = ''
   query.tagId = ''
   if (query.pageNum === 1) void loadList()
@@ -192,10 +185,7 @@ watch(docSpaceId, () => {
 watch(
   () => route.query.editId,
   (id) => {
-    if (typeof id === 'string' && id) {
-      editingId.value = id
-      drawerOpen.value = true
-    }
+    if (typeof id === 'string' && id) redirectLegacyEditQuery()
   },
 )
 
@@ -206,19 +196,22 @@ watch(
 </script>
 
 <template>
-  <div class="page-stack" :class="drawerOpen && 'kb-doc-manage-drawer-open'">
+  <div class="page-stack" :class="[fillViewport && 'kb-doc-manage-fill']">
     <KbAccessDenied
-      v-if="!spaceLoading && !hasEditableSpace"
-      :title="t('knowledge.docManage.noEditableSpaceTitle')"
-      :message="t('knowledge.docManage.noEditableSpace')"
-      :hint="t('knowledge.docManage.noEditableSpaceHint')"
+      v-if="!spaceLoading && !hasAccessibleSpace"
+      :title="t('knowledge.docManage.noAccessibleSpaceTitle')"
+      :message="t('knowledge.docManage.noAccessibleSpace')"
+      :hint="t('knowledge.docManage.noAccessibleSpaceHint')"
     />
 
     <template v-else>
       <div class="flex flex-wrap items-center gap-3">
-        <KbSpaceDropdown v-model="docSpaceId" editable-only />
+        <KbSpaceDropdown v-model="docSpaceId" hide-all-option />
         <SegmentControl v-model="activeTab" :options="tabOptions" />
       </div>
+      <p v-if="!canEditCurrentSpace" class="text-xs text-amber-600 dark:text-amber-400">
+        {{ t('knowledge.docManage.readOnlySpaceHint') }}
+      </p>
 
       <template v-if="activeTab === 'documents'">
       <div class="flex flex-wrap items-center gap-2">
@@ -253,7 +246,7 @@ watch(
             <RefreshCw class="h-4 w-4" /> {{ t('knowledge.docManage.reset') }}
           </button>
         </form>
-        <button v-if="canCreate" type="button" class="btn-primary shrink-0" @click="openCreate">
+        <button v-if="canCreate && canEditCurrentSpace" type="button" class="btn-primary shrink-0" @click="openCreate">
           <Plus class="h-4 w-4" /> {{ t('knowledge.docManage.create') }}
         </button>
         <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadList">
@@ -342,14 +335,6 @@ watch(
       :default-space-id="docSpaceId"
       @close="createOpen = false"
       @created="onCreated"
-    />
-
-    <KbDocumentEditDrawer
-      :open="drawerOpen"
-      :document-id="editingId"
-      @close="closeDrawer"
-      @saved="loadList"
-      @deleted="loadList"
     />
   </div>
 </template>

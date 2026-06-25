@@ -8,10 +8,16 @@ import { toEntityId } from '@/utils/id'
 
 const props = withDefaults(
   defineProps<{
-    /** 仅展示可编辑空间，且隐藏「全部可读空间」 */
+    /** 隐藏「全部可读空间」选项（文档管理等必须单选空间） */
+    hideAllOption?: boolean
+    /** 仅展示可编辑空间（新建文档等场景） */
+    writableOnly?: boolean
+    /**
+     * @deprecated 等价于 hideAllOption + writableOnly
+     */
     editableOnly?: boolean
   }>(),
-  { editableOnly: false },
+  { hideAllOption: false, writableOnly: false, editableOnly: false },
 )
 
 /** 单选：'all' 或空间 ID */
@@ -20,8 +26,11 @@ const singleValue = defineModel<string>({ default: 'all' })
 const { t } = useI18n()
 const { spaces, loading, loadError, ensureSpacesLoaded } = useKbSpace()
 
+const hideAll = computed(() => props.hideAllOption || props.editableOnly)
+const writableOnly = computed(() => props.writableOnly || props.editableOnly)
+
 const displaySpaces = computed(() =>
-  props.editableOnly ? spaces.value.filter((s) => s.canEdit === true) : spaces.value,
+  writableOnly.value ? spaces.value.filter((s) => s.canEdit === true) : spaces.value,
 )
 
 const open = ref(false)
@@ -35,9 +44,10 @@ function spaceIdValue(id: number | string) {
   return toEntityId(id) ?? String(id)
 }
 
-function spaceLabel(s: { spaceName?: string; visibility?: number }) {
+function spaceLabel(s: { spaceName?: string; visibility?: number; canEdit?: boolean }) {
   const privateMark = s.visibility === 0 ? ` · ${t('knowledge.space.private')}` : ''
-  return `${s.spaceName ?? ''}${privateMark}`
+  const readOnlyMark = hideAll.value && s.canEdit !== true ? ` · ${t('knowledge.space.readOnly')}` : ''
+  return `${s.spaceName ?? ''}${privateMark}${readOnlyMark}`
 }
 
 function spaceNameById(id: string) {
@@ -47,7 +57,7 @@ function spaceNameById(id: string) {
 }
 
 const triggerLabel = computed(() => {
-  if (!props.editableOnly && singleValue.value === 'all') return t('knowledge.space.allAccessible')
+  if (!hideAll.value && singleValue.value === 'all') return t('knowledge.space.allAccessible')
   return spaceNameById(singleValue.value)
 })
 
@@ -84,7 +94,7 @@ function onDocumentClick(event: MouseEvent) {
 
 onMounted(() => {
   void ensureSpacesLoaded().then(() => {
-    if (props.editableOnly && displaySpaces.value.length) {
+    if (hideAll.value && displaySpaces.value.length) {
       const cur = singleValue.value
       const ok = displaySpaces.value.some((s) => spaceIdValue(s.id) === cur)
       if (!ok || cur === 'all') singleValue.value = spaceIdValue(displaySpaces.value[0].id)
@@ -96,7 +106,7 @@ onMounted(() => {
 watch(
   () => displaySpaces.value.map((s) => spaceIdValue(s.id)).join(','),
   () => {
-    if (!props.editableOnly || !displaySpaces.value.length) return
+    if (!hideAll.value || !displaySpaces.value.length) return
     const ok = displaySpaces.value.some((s) => spaceIdValue(s.id) === singleValue.value)
     if (!ok || singleValue.value === 'all') singleValue.value = spaceIdValue(displaySpaces.value[0].id)
   },
@@ -110,7 +120,7 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
   </div>
   <p v-else-if="loadError" class="text-xs text-rose-500">{{ loadError }}</p>
   <p v-else-if="!displaySpaces.length" class="text-xs text-gray-400">
-    {{ editableOnly ? t('knowledge.docManage.noEditableSpace') : t('knowledge.accessDenied.emptyTitle') }}
+    {{ writableOnly ? t('knowledge.docManage.noEditableSpace') : t('knowledge.accessDenied.emptyTitle') }}
   </p>
   <div v-else ref="rootRef" class="kb-space-dropdown">
     <button
@@ -128,7 +138,7 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
     </button>
     <div v-if="open" class="kb-space-dropdown-panel" @click.stop>
       <button
-        v-if="!editableOnly"
+        v-if="!hideAll"
         type="button"
         class="kb-space-dropdown-item"
         :class="isAllActive() && 'kb-space-dropdown-item-active'"
@@ -136,7 +146,7 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
       >
         {{ t('knowledge.space.allAccessible') }}
       </button>
-      <div v-if="!editableOnly" class="kb-space-dropdown-divider" />
+      <div v-if="!hideAll" class="kb-space-dropdown-divider" />
       <button
         v-for="s in displaySpaces"
         :key="String(s.id)"

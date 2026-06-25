@@ -58,6 +58,8 @@ const SUMMARY_CAP = 50
 const FULL_CAP = 300
 /** 「仅核心节点」时按度数保留的上限 */
 const CORE_LIMIT = 60
+/** 勾选「仅核心节点」时传给后端的最低度数（过滤孤立点） */
+const CORE_MIN_DEG = 1
 /** 最多同时显示这么多标签，避免文字糊成一团 */
 const LABEL_LIMIT = 28
 
@@ -223,12 +225,12 @@ const option = computed(() => {
 })
 
 /** 旧后端无 meta 时客户端按度数裁剪，避免一次渲染全库 */
-function normalizeLoadedGraph(data: KbGraph, mode: KbGraphMode): KbGraph {
+function normalizeLoadedGraph(data: KbGraph, mode: KbGraphMode, maxNodes?: number): KbGraph {
   const nodes = data.nodes ?? []
   const links = data.links ?? []
   if (data.meta) return { nodes, links, meta: data.meta }
 
-  const cap = mode === 'summary' ? SUMMARY_CAP : FULL_CAP
+  const cap = maxNodes ?? (mode === 'summary' ? SUMMARY_CAP : FULL_CAP)
   if (nodes.length <= cap) return { nodes, links, meta: data.meta }
 
   const sorted = [...nodes].sort((a, b) => (b.deg ?? 0) - (a.deg ?? 0)).slice(0, cap)
@@ -251,13 +253,19 @@ function normalizeLoadedGraph(data: KbGraph, mode: KbGraphMode): KbGraph {
 async function loadGraph() {
   loading.value = true
   try {
+    const maxNodes = coreOnly.value
+      ? CORE_LIMIT
+      : graphMode.value === 'summary'
+        ? SUMMARY_CAP
+        : FULL_CAP
     const res = await getKbGraphApi({
       spaceId: kbQuerySpaceId(),
       mode: graphMode.value,
-      maxNodes: graphMode.value === 'summary' ? SUMMARY_CAP : FULL_CAP,
+      maxNodes,
+      minDeg: coreOnly.value ? CORE_MIN_DEG : undefined,
     })
     if (res.code === API_SUCCESS_CODE && res.data) {
-      const normalized = normalizeLoadedGraph(res.data, graphMode.value)
+      const normalized = normalizeLoadedGraph(res.data, graphMode.value, maxNodes)
       graph.value = { nodes: normalized.nodes, links: normalized.links }
       meta.value = normalized.meta ?? null
       expandedIds.value = new Set()
@@ -348,6 +356,8 @@ function onChartDblClick(params: unknown) {
 }
 
 watch(graphMode, () => loadGraph())
+
+watch(coreOnly, () => loadGraph())
 
 watch(
   () => visibleNodes.value.length,

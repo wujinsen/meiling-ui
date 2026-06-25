@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, FileText, FoldVertical, Link2, Loader2, Pencil, Search, UnfoldVertical } from 'lucide-vue-next'
+import { ChevronDown, ExternalLink, FileText, FoldVertical, Link2, Loader2, Pencil, Search, UnfoldVertical } from 'lucide-vue-next'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
@@ -12,6 +12,7 @@ import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
 import { toEntityId } from '@/utils/id'
+import { kbDocumentEditPath, kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
 import type { KbIndex, KbIndexGroup, KbIndexItem, KbPage } from '@/types/knowledge'
 
 const LAST_SLUG_KEY = 'kb_last_active_slug'
@@ -102,6 +103,14 @@ function saveLastActiveSlug(slug: string) {
   }
 }
 
+function clearLastActiveSlug() {
+  try {
+    sessionStorage.removeItem(LAST_SLUG_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
 function pageCacheKey(slug: string, spaceId?: string) {
   return `${spaceId ?? 'all'}::${slug}`
 }
@@ -152,6 +161,12 @@ function preferredSlug(explicit?: string) {
   if (explicit) return explicit
   if (typeof route.query.slug === 'string' && route.query.slug) return route.query.slug
   return readLastActiveSlug()
+}
+
+function preferredSpaceId() {
+  const q = route.query.spaceId
+  if (typeof q === 'string' && q) return q
+  return undefined
 }
 
 function scheduleMarkdownRender(content?: string) {
@@ -407,20 +422,22 @@ function formatTime(value?: string) {
   return value || '-'
 }
 
-async function resolveInitialSlug(slugTarget: string) {
-  const spaceId = kbQuerySpaceId()
+async function resolveInitialSlug(slugTarget: string, explicitSpaceId?: string) {
+  const spaceId = explicitSpaceId ?? kbQuerySpaceId()
   if (slugTarget) {
+    const resolved = resolveSlug(slugTarget)
     try {
       const res = await locateKbIndexApi(slugTarget, spaceId)
       if (res.code === API_SUCCESS_CODE && res.data) {
         mergeItemsIntoCache(res.data.type, [res.data.item])
         openGroup(res.data.type)
-        return resolveSlug(slugTarget)
       }
     } catch {
       /* ignore */
     }
-    return resolveSlug(slugTarget)
+    const pageData = await fetchPage(resolved, spaceId)
+    if (pageData) return resolved
+    clearLastActiveSlug()
   }
   const firstGroup = index.value.groups[0]
   if (firstGroup) {
@@ -434,6 +451,7 @@ async function loadIndex(preferred?: string) {
   loading.value = true
   loadError.value = ''
   const slugTarget = preferredSlug(preferred)
+  const spaceId = preferredSpaceId()
 
   try {
     const res = await getKbIndexApi(kbQuerySpaceId())
@@ -445,9 +463,9 @@ async function loadIndex(preferred?: string) {
     resetTreeExpandState()
     index.value = res.data
 
-    const slug = await resolveInitialSlug(slugTarget)
+    const slug = await resolveInitialSlug(slugTarget, spaceId)
     if (slug && (activeSlug.value !== slug || !page.value)) {
-      void openSlug(slug)
+      await openSlug(slug, spaceId, false, { silent: true })
     }
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : '加载失败，请确认知识库服务(8090)与网关(21000)已启动'
@@ -478,28 +496,36 @@ async function fetchPage(resolved: string, sid?: string) {
   return pending
 }
 
-async function openSlug(slug: string, spaceId?: number | string, scroll = false) {
-  if (!slug) return
+type OpenSlugOptions = { silent?: boolean }
+
+async function openSlug(
+  slug: string,
+  spaceId?: number | string,
+  scroll = false,
+  options?: OpenSlugOptions,
+) {
+  if (!slug) return false
   const resolved = resolveSlug(slug)
   const sid = resolvePageSpaceId(spaceId)
   const cacheKey = pageCacheKey(resolved, sid)
   const seq = ++openSeq
 
   activeSlug.value = resolved
-  saveLastActiveSlug(resolved)
 
   const cached = pageCache.get(cacheKey)
   if (cached) {
     page.value = cached
+    saveLastActiveSlug(resolved)
   } else {
     detailLoading.value = true
   }
 
   try {
     const data = await fetchPage(resolved, sid)
-    if (seq !== openSeq) return
+    if (seq !== openSeq) return false
     if (data) {
       page.value = data
+      saveLastActiveSlug(resolved)
       // 桌面端左右分栏，详情已在视口内，无需移动整页；
       // 仅窄屏（详情堆叠在目录下方）时滚动到详情顶部。
       if (scroll) {
@@ -508,13 +534,26 @@ async function openSlug(slug: string, spaceId?: number | string, scroll = false)
           typeof window.matchMedia !== 'function' || !window.matchMedia('(min-width: 1280px)').matches
         if (stacked) detailRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }
-    } else if (!cached) {
-      showToast('error', t('knowledge.browse.pageNotFound'))
+      return true
     }
+    if (!cached) {
+      activeSlug.value = ''
+      page.value = null
+      if (resolved === readLastActiveSlug()) clearLastActiveSlug()
+      if (!options?.silent) {
+        showToast('error', t('knowledge.browse.pageNotFound'))
+      }
+    }
+    return false
   } catch (e) {
     if (seq === openSeq && !cached) {
-      showToast('error', e instanceof Error ? e.message : t('knowledge.browse.pageLoadFailed'))
+      activeSlug.value = ''
+      page.value = null
+      if (!options?.silent) {
+        showToast('error', e instanceof Error ? e.message : t('knowledge.browse.pageLoadFailed'))
+      }
     }
+    return false
   } finally {
     if (seq === openSeq) detailLoading.value = false
   }
@@ -532,19 +571,25 @@ function onContentClick(event: MouseEvent) {
 function openDocumentEdit() {
   const docId = page.value?.docId
   if (docId == null) return
-  void router.push({ path: '/knowledge/documents', query: { editId: String(docId) } })
+  void router.push(kbDocumentEditPath(String(docId)))
 }
 
-onMounted(() => {
-  void ensureSpacesLoaded()
-  const earlySlug = preferredSlug()
-  if (earlySlug) {
-    void openSlug(earlySlug)
-  }
-  void loadIndex(earlySlug)
+function openWikiEdit() {
+  const slug = page.value?.slug
+  if (!slug) return
+  void router.push(kbWikiEditPath(slug, page.value?.spaceId))
+}
+
+const browseReady = ref(false)
+
+onMounted(async () => {
+  await ensureSpacesLoaded()
+  browseReady.value = true
+  void loadIndex()
 })
 
 watch(selectedSpaceId, () => {
+  if (!browseReady.value) return
   pageCache.clear()
   inflightPages.clear()
   page.value = null
@@ -554,9 +599,11 @@ watch(selectedSpaceId, () => {
 })
 
 watch(
-  () => route.query.slug,
-  (slug) => {
-    if (typeof slug === 'string' && slug && slug !== activeSlug.value) void openSlug(slug)
+  () => [route.query.slug, route.query.spaceId] as const,
+  ([slug]) => {
+    if (typeof slug === 'string' && slug && slug !== activeSlug.value) {
+      void openSlug(slug, preferredSpaceId(), true)
+    }
   },
 )
 </script>
@@ -681,14 +728,28 @@ watch(
           <header class="border-b border-gray-100 pb-4 dark:border-white/5">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ page.title }}</h2>
-              <button
-                v-if="canEditAttachments && page.docId != null"
-                type="button"
-                class="btn-ghost shrink-0 text-sm"
-                @click="openDocumentEdit"
-              >
-                <Pencil class="h-4 w-4" /> {{ t('knowledge.browse.editDoc') }}
-              </button>
+              <div class="flex shrink-0 flex-wrap items-center gap-2">
+                <button
+                  v-if="canEditAttachments && page.slug"
+                  type="button"
+                  class="btn-ghost shrink-0 text-sm"
+                  :title="t('knowledge.browse.editWiki')"
+                  @click="openWikiEdit"
+                >
+                  <Pencil class="h-4 w-4" /> {{ t('knowledge.browse.editWiki') }}
+                  <ExternalLink class="h-3.5 w-3.5 opacity-60" />
+                </button>
+                <button
+                  v-if="canEditAttachments && page.docId != null"
+                  type="button"
+                  class="btn-ghost shrink-0 text-sm"
+                  :title="t('knowledge.browse.editDoc')"
+                  @click="openDocumentEdit"
+                >
+                  <Pencil class="h-4 w-4" /> {{ t('knowledge.browse.editDoc') }}
+                  <ExternalLink class="h-3.5 w-3.5 opacity-60" />
+                </button>
+              </div>
             </div>
             <div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               <span class="font-mono text-xs">{{ page.slug }}</span>

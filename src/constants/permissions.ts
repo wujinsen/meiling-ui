@@ -121,6 +121,10 @@ export const PERM = {
   KB_DOCUMENT_PUBLISH: 'kb:document:publish',
   KB_DOCUMENT_ARCHIVE: 'kb:document:archive',
   KB_DOCUMENT_REMOVE: 'kb:document:remove',
+  KB_WIKI_EDIT: 'kb:wiki:edit',
+  KB_INGEST_LIST: 'kb:ingest:list',
+  KB_INGEST_JOB: 'kb:ingest:job',
+  KB_INGEST_COMMIT: 'kb:ingest:commit',
 
 } as const
 
