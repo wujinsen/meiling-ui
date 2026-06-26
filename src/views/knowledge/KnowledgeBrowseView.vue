@@ -12,7 +12,7 @@ import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
 import { toEntityId } from '@/utils/id'
-import { kbDocumentEditPath, kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
+import { kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
 import type { KbIndex, KbIndexGroup, KbIndexItem, KbPage } from '@/types/knowledge'
 
 const LAST_SLUG_KEY = 'kb_last_active_slug'
@@ -568,12 +568,6 @@ function onContentClick(event: MouseEvent) {
   }
 }
 
-function openDocumentEdit() {
-  const docId = page.value?.docId
-  if (docId == null) return
-  void router.push(kbDocumentEditPath(String(docId)))
-}
-
 function openWikiEdit() {
   const slug = page.value?.slug
   if (!slug) return
@@ -733,20 +727,10 @@ watch(
                   v-if="canEditAttachments && page.slug"
                   type="button"
                   class="btn-ghost shrink-0 text-sm"
-                  :title="t('knowledge.browse.editWiki')"
+                  :title="t('knowledge.browse.edit')"
                   @click="openWikiEdit"
                 >
-                  <Pencil class="h-4 w-4" /> {{ t('knowledge.browse.editWiki') }}
-                  <ExternalLink class="h-3.5 w-3.5 opacity-60" />
-                </button>
-                <button
-                  v-if="canEditAttachments && page.docId != null"
-                  type="button"
-                  class="btn-ghost shrink-0 text-sm"
-                  :title="t('knowledge.browse.editDoc')"
-                  @click="openDocumentEdit"
-                >
-                  <Pencil class="h-4 w-4" /> {{ t('knowledge.browse.editDoc') }}
+                  <Pencil class="h-4 w-4" /> {{ t('knowledge.browse.edit') }}
                   <ExternalLink class="h-3.5 w-3.5 opacity-60" />
                 </button>
               </div>

@@ -11,7 +11,7 @@ import KbDocumentCreateModal from '@/components/knowledge/KbDocumentCreateModal.
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 import KbCategorySelect from '@/components/knowledge/KbCategorySelect.vue'
 import KbTagManagePanel from '@/components/knowledge/KbTagManagePanel.vue'
-import { searchKbDocumentsApi } from '@/api/knowledge'
+import { getKbDocumentApi, searchKbDocumentsApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { useKbDocMeta } from '@/composables/useKbDocMeta'
 import { assertAction, guardAction } from '@/composables/useActionPermissions'
@@ -19,8 +19,9 @@ import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import type { KbDocStatus, KbDocumentListItem } from '@/types/knowledge'
+import type { WikiCreatePayload } from '@/components/knowledge/KbDocumentCreateModal.vue'
 import { PERM } from '@/constants/permissions'
-import { kbDocumentEditPath } from '@/router/knowledgeSupplementRoutes'
+import { kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
 import { toEntityId } from '@/utils/id'
 
 const { t } = useI18n()
@@ -63,9 +64,20 @@ function onTaxonomyChanged() {
   void reloadMeta()
 }
 
+function switchTaxTab(tab: 'documents' | 'categories' | 'tags') {
+  activeTab.value = tab
+}
+
+const showCategoryManageLink = computed(
+  () => canEditCurrentSpace.value && !metaLoading.value && flatCategories.value.length === 0,
+)
+const showTagManageLink = computed(
+  () => canEditCurrentSpace.value && !metaLoading.value && tags.value.length === 0,
+)
+
 const createOpen = ref(false)
 
-const canCreate = computed(() => assertAction(PERM.KB_DOCUMENT_ADD))
+const canCreate = computed(() => assertAction(PERM.KB_WIKI_EDIT))
 
 const statusOptions = computed(() => [
   { value: '', label: t('knowledge.docManage.statusAll') },
@@ -96,8 +108,8 @@ function statusClass(status?: KbDocStatus) {
   return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
 }
 
-function sourceLabel(source?: string) {
-  return source === 'kb' ? t('knowledge.docManage.sourceKb') : t('knowledge.docManage.sourceManual')
+function canWikiEdit(row: KbDocumentListItem) {
+  return Boolean(row.slug)
 }
 
 async function loadList() {
@@ -106,6 +118,7 @@ async function loadList() {
   try {
     const res = await searchKbDocumentsApi({
       spaceId: docSpaceId.value,
+      source: 'kb',
       keyword: query.keyword.trim() || undefined,
       status: query.status === '' ? '' : query.status,
       categoryId: query.categoryId || undefined,
@@ -139,14 +152,16 @@ function resetQuery() {
 }
 
 function openCreate() {
-  if (!guardAction(PERM.KB_DOCUMENT_ADD)) return
+  if (!guardAction(PERM.KB_WIKI_EDIT)) return
   createOpen.value = true
 }
 
 function openEdit(row: KbDocumentListItem) {
-  const id = toEntityId(row.id)
-  if (!id) return
-  void router.push(kbDocumentEditPath(id))
+  if (!canWikiEdit(row)) {
+    showToast('error', t('knowledge.docManage.wikiEditOnly'))
+    return
+  }
+  void router.push(kbWikiEditPath(row.slug!, row.spaceId ?? docSpaceId.value))
 }
 
 function openBrowse(row: KbDocumentListItem) {
@@ -156,14 +171,28 @@ function openBrowse(row: KbDocumentListItem) {
   void router.push({ path: '/knowledge/browse', query: q })
 }
 
-function onCreated(id: string) {
-  void router.push(kbDocumentEditPath(id))
+function onWikiCreated(payload: WikiCreatePayload) {
+  void router.push(kbWikiEditPath(payload.slug, payload.spaceId, { fromCreate: true }))
 }
 
-function redirectLegacyEditQuery() {
+async function redirectLegacyEditQuery() {
   const raw = route.query.editId
   if (typeof raw !== 'string' || !raw) return
-  void router.replace(kbDocumentEditPath(raw))
+  const id = toEntityId(raw)
+  if (!id) return
+  const q = { ...route.query }
+  delete q.editId
+  void router.replace({ path: '/knowledge/documents', query: q })
+  try {
+    const detail = await getKbDocumentApi(id)
+    if (detail.code === API_SUCCESS_CODE && detail.data?.slug) {
+      void router.push(kbWikiEditPath(detail.data.slug, detail.data.spaceId))
+    } else {
+      showToast('error', t('knowledge.docManage.wikiEditOnly'))
+    }
+  } catch {
+    showToast('error', t('knowledge.docManage.wikiEditOnly'))
+  }
 }
 
 onMounted(async () => {
@@ -205,9 +234,11 @@ watch(
     />
 
     <template v-else>
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="kb-doc-manage-toolbar">
         <KbSpaceDropdown v-model="docSpaceId" hide-all-option />
-        <SegmentControl v-model="activeTab" :options="tabOptions" />
+        <nav class="kb-doc-manage-tabs" :aria-label="t('knowledge.docManage.title')">
+          <SegmentControl v-model="activeTab" :options="tabOptions" />
+        </nav>
       </div>
       <p v-if="!canEditCurrentSpace" class="text-xs text-amber-600 dark:text-amber-400">
         {{ t('knowledge.docManage.readOnlySpaceHint') }}
@@ -228,17 +259,37 @@ watch(
           <select v-model="query.status" class="field-input w-auto min-w-[7rem]">
             <option v-for="opt in statusOptions" :key="String(opt.value)" :value="opt.value">{{ opt.label }}</option>
           </select>
-          <KbCategorySelect
-            v-model="query.categoryId"
-            class="w-auto min-w-[8rem]"
-            :options="flatCategories"
-            :loading="metaLoading"
-            :empty-label="t('knowledge.docManage.categoryAll')"
-          />
-          <select v-model="query.tagId" class="field-input w-auto min-w-[8rem]" :disabled="metaLoading">
-            <option value="">{{ t('knowledge.docManage.tagAll') }}</option>
-            <option v-for="tag in tags" :key="String(tag.id)" :value="toEntityId(tag.id)">{{ tag.tagName }}</option>
-          </select>
+          <div class="kb-doc-manage-filter-wrap">
+            <KbCategorySelect
+              v-model="query.categoryId"
+              class="w-auto min-w-[8rem]"
+              :options="flatCategories"
+              :loading="metaLoading"
+              :empty-label="t('knowledge.docManage.categoryAll')"
+            />
+            <button
+              v-if="showCategoryManageLink"
+              type="button"
+              class="kb-doc-manage-tax-link"
+              @click="switchTaxTab('categories')"
+            >
+              {{ t('knowledge.taxManage.manageCategories') }}
+            </button>
+          </div>
+          <div class="kb-doc-manage-filter-wrap">
+            <select v-model="query.tagId" class="field-input w-auto min-w-[8rem]" :disabled="metaLoading">
+              <option value="">{{ t('knowledge.docManage.tagAll') }}</option>
+              <option v-for="tag in tags" :key="String(tag.id)" :value="toEntityId(tag.id)">{{ tag.tagName }}</option>
+            </select>
+            <button
+              v-if="showTagManageLink"
+              type="button"
+              class="kb-doc-manage-tax-link"
+              @click="switchTaxTab('tags')"
+            >
+              {{ t('knowledge.taxManage.manageTags') }}
+            </button>
+          </div>
           <button type="submit" class="btn-primary shrink-0">
             <Search class="h-4 w-4" /> {{ t('knowledge.docManage.search') }}
           </button>
@@ -256,17 +307,17 @@ watch(
       </div>
 
       <div class="card p-5">
-        <p class="mb-4 text-xs text-gray-400">
+        <p class="mb-1 text-xs text-gray-400">
           {{ t('knowledge.docManage.listSummary', { count: total }) }}
         </p>
+        <p class="mb-4 text-xs text-gray-400">{{ t('knowledge.docManage.listWikiHint') }}</p>
         <div class="data-table-scroll overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-          <table class="data-table w-full min-w-[880px] text-left text-sm">
+          <table class="data-table w-full min-w-[760px] text-left text-sm">
             <thead>
               <tr>
                 <th>{{ t('knowledge.docManage.colTitle') }}</th>
                 <th>Slug</th>
                 <th>{{ t('knowledge.docManage.colType') }}</th>
-                <th>{{ t('knowledge.docManage.colSource') }}</th>
                 <th>{{ t('knowledge.docManage.colStatus') }}</th>
                 <th>{{ t('knowledge.docManage.colUpdated') }}</th>
                 <th class="data-table-sticky-end text-right">{{ t('knowledge.docManage.colActions') }}</th>
@@ -274,27 +325,31 @@ watch(
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="7" class="px-4 py-12 text-center text-gray-400">{{ t('common.loading') }}</td>
+                <td colspan="6" class="px-4 py-12 text-center text-gray-400">{{ t('common.loading') }}</td>
               </tr>
               <tr v-else-if="!list.length">
-                <td colspan="7" class="px-4 py-12 text-center text-gray-400">{{ t('knowledge.docManage.empty') }}</td>
+                <td colspan="6" class="px-4 py-12 text-center text-gray-400">{{ t('knowledge.docManage.empty') }}</td>
               </tr>
               <tr
                 v-for="row in list"
                 v-else
                 :key="String(row.id)"
-                class="cursor-pointer"
-                @click="openEdit(row)"
+                :class="canWikiEdit(row) && 'cursor-pointer'"
+                @click="canWikiEdit(row) && openEdit(row)"
               >
                 <td class="max-w-[200px] truncate font-medium">{{ row.title }}</td>
                 <td class="max-w-[180px] truncate font-mono text-xs text-gray-500">{{ row.slug || '—' }}</td>
                 <td><span class="badge bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">{{ row.kbType || '—' }}</span></td>
-                <td><span class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400">{{ sourceLabel(row.source) }}</span></td>
                 <td><span class="badge" :class="statusClass(row.status)">{{ statusLabel(row.status) }}</span></td>
                 <td class="text-gray-500">{{ row.updateTime || row.publishTime || '—' }}</td>
                 <td class="data-table-sticky-end text-right" @click.stop>
                   <div class="btn-action-group justify-end">
-                    <button type="button" class="btn-action-edit" @click="openEdit(row)">
+                    <button
+                      v-if="canWikiEdit(row)"
+                      type="button"
+                      class="btn-action-edit"
+                      @click="openEdit(row)"
+                    >
                       <Pencil class="h-3.5 w-3.5" />{{ t('knowledge.docManage.edit') }}
                     </button>
                     <button
@@ -334,7 +389,7 @@ watch(
       :open="createOpen"
       :default-space-id="docSpaceId"
       @close="createOpen = false"
-      @created="onCreated"
+      @wiki-created="onWikiCreated"
     />
   </div>
 </template>

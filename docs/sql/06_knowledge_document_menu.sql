@@ -1,5 +1,8 @@
 -- 文档管理菜单与动作权限（menu_id 910，避免占用 ingest 的 906）
 -- 在 04_knowledge_menu.sql 之后执行；执行后重新登录
+--
+-- 2026-06-24 起：Web 不再使用 POST /kb/document 直连写库；新建/编辑走 kb:wiki:edit + Wiki 同步。
+-- 下列 kb:document:add/edit/publish/archive/remove 动作权限保留兼容旧角色绑定，前端已不再调用。
 
 INSERT INTO `sys_menu` VALUES
 (910, 1, NOW(), 1, NOW(), '文档管理', 'Documents', '文書管理', 900,
@@ -31,7 +34,7 @@ INSERT INTO `sys_role_action` (`role_id`, `perm_code`) VALUES
 (3, 'kb:document:add'), (3, 'kb:document:edit'), (3, 'kb:document:publish')
 ON DUPLICATE KEY UPDATE perm_code = VALUES(perm_code);
 
--- 文档编辑页（隐藏菜单，不在侧栏展示；前端亦通过 supplement route 注册）
+-- 旧 MySQL 正文编辑路由：仅用于书签重定向到 Wiki 编辑（KnowledgeDocumentEditView）
 INSERT INTO `sys_menu` VALUES
 (907, 1, NOW(), 1, NOW(), '编辑文档', 'Edit document', '文書編集', 910,
  'documents/edit/:id', 'knowledge/documents/edit', 'KnowledgeDocumentEdit', 'C', 'kb:document:edit', 1, '', 99, 1)

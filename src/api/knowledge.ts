@@ -10,7 +10,6 @@ import type {
   KbCategorySaveRequest,
   KbDocumentDetail,
   KbDocumentListItem,
-  KbDocumentSaveRequest,
   KbDocumentSearchParams,
   KbGraph,
   KbGraphEgoParams,
@@ -74,6 +73,7 @@ function buildKbDocumentSearchQuery(params: KbDocumentSearchParams) {
   if (params.keyword?.trim()) qs.set('keyword', params.keyword.trim())
   if (params.status !== undefined && params.status !== '') qs.set('status', String(params.status))
   if (params.tagId != null) qs.set('tagId', String(params.tagId))
+  if (params.source?.trim()) qs.set('source', params.source.trim())
   if (params.pageNum != null) qs.set('pageNum', String(params.pageNum))
   if (params.pageSize != null) qs.set('pageSize', String(params.pageSize))
   const query = qs.toString()
@@ -116,9 +116,6 @@ function mockPageToListItem(p: KbPage): KbDocumentListItem {
     updateTime: p.updateTime,
   }
 }
-
-let mockManualDocSeq = 90100
-const mockManualDocs = new Map<string, KbDocumentDetail>()
 
 const MOCK_CATEGORY_TREE: KbCategoryTree[] = [
   {
@@ -829,24 +826,10 @@ export async function searchKbDocumentsApi(params: KbDocumentSearchParams) {
     await delay(180)
     const kw = params.keyword?.trim().toLowerCase() ?? ''
     const status = params.status
-    let items: KbDocumentListItem[] = [
-      ...MOCK_PAGES.map(mockPageToListItem),
-      ...[...mockManualDocs.values()].map((d) => ({
-        id: d.id,
-        spaceId: d.spaceId,
-        slug: d.slug,
-        title: d.title,
-        summary: d.summary,
-        kbType: d.kbType,
-        domain: d.domain,
-        source: d.source,
-        status: d.status,
-        versionNo: d.versionNo,
-        updateTime: d.createTime,
-      })),
-    ]
+    let items: KbDocumentListItem[] = MOCK_PAGES.map(mockPageToListItem)
     const sid = params.spaceId != null ? String(params.spaceId) : ''
     if (sid) items = items.filter((it) => String(it.spaceId ?? '') === sid)
+    if (params.source === 'kb') items = items.filter((it) => it.source === 'kb')
     if (status !== undefined && status !== '') items = items.filter((it) => it.status === status)
     if (kw) {
       items = items.filter(
@@ -873,74 +856,9 @@ export async function searchKbDocumentsApi(params: KbDocumentSearchParams) {
   )
 }
 
-export async function saveKbDocumentApi(data: KbDocumentSaveRequest) {
-  if (USE_MOCK) {
-    await delay(220)
-    const id = data.id != null ? String(data.id) : String(++mockManualDocSeq)
-    const prev = data.id != null ? mockManualDocs.get(String(data.id)) : undefined
-    const detail: KbDocumentDetail = {
-      id,
-      spaceId: data.spaceId,
-      categoryId: data.categoryId,
-      slug: prev?.slug ?? `manual/${id}`,
-      title: data.title,
-      summary: data.summary,
-      content: data.content,
-      kbType: prev?.kbType ?? 'article',
-      domain: prev?.domain,
-      source: prev?.source ?? 'manual',
-      docType: data.docType ?? 'markdown',
-      status: data.status ?? prev?.status ?? 0,
-      versionNo: (prev?.versionNo ?? 0) + (data.id ? 1 : 1),
-      createTime: prev?.createTime ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
-    }
-    mockManualDocs.set(id, detail)
-    return ok<number | string>(id)
-  }
-  return request<number | string>(`${KB_BASE}/document`, {
-    method: 'POST',
-    body: jsonEntityBody(data as Record<string, unknown>),
-  })
-}
-
-export async function publishKbDocumentApi(id: number | string) {
-  if (USE_MOCK) {
-    await delay(120)
-    const manual = mockManualDocs.get(String(id))
-    if (manual) {
-      mockManualDocs.set(String(id), { ...manual, status: 1 })
-      return ok<boolean>(true)
-    }
-    if (MOCK_PAGES.some((x) => String(x.docId) === String(id))) return ok<boolean>(true)
-    return ok<boolean>(true)
-  }
-  return request<boolean>(`${KB_BASE}/document/${toEntityId(id)}/publish`, { method: 'PUT' })
-}
-
-export async function archiveKbDocumentApi(id: number | string) {
-  if (USE_MOCK) {
-    await delay(120)
-    const d = mockManualDocs.get(String(id))
-    if (d) mockManualDocs.set(String(id), { ...d, status: 2 })
-    return ok<boolean>(true)
-  }
-  return request<boolean>(`${KB_BASE}/document/${toEntityId(id)}/archive`, { method: 'PUT' })
-}
-
-export async function deleteKbDocumentApi(id: number | string) {
-  if (USE_MOCK) {
-    await delay(120)
-    mockManualDocs.delete(String(id))
-    return ok<boolean>(true)
-  }
-  return request<boolean>(`${KB_BASE}/document/${toEntityId(id)}`, { method: 'DELETE' })
-}
-
 export async function getKbDocumentApi(id: number | string) {
   if (USE_MOCK) {
     await delay(150)
-    const manual = mockManualDocs.get(String(id))
-    if (manual) return ok<KbDocumentDetail>(manual)
     const p = MOCK_PAGES.find((x) => String(x.docId) === String(id))
     if (!p) return ok<KbDocumentDetail | undefined>(undefined)
     return ok<KbDocumentDetail>(mockPageToDetail(p))

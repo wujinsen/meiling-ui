@@ -385,20 +385,6 @@ export type KbDocumentListItem = {
   publishTime?: string
 }
 
-/** POST /kb/document */
-export type KbDocumentSaveRequest = {
-  id?: number | string | null
-  spaceId: number | string
-  categoryId?: number | string
-  title: string
-  summary?: string
-  content?: string
-  docType?: string
-  status?: KbDocStatus
-  tagIds?: Array<number | string>
-  changeLog?: string
-}
-
 export type KbDocumentSearchParams = {
   spaceId?: number | string
   spaceIds?: Array<number | string>
@@ -406,6 +392,8 @@ export type KbDocumentSearchParams = {
   keyword?: string
   status?: KbDocStatus | ''
   tagId?: number | string
+  /** kb = wiki 同步文档；文档管理固定传 kb */
+  source?: 'kb' | 'manual' | string
   pageNum?: number
   pageSize?: number
 }

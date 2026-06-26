@@ -21,6 +21,7 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
+import { popWikiDraft } from '@/utils/kbWikiDraft'
 import type { KbWikiLintPreviewItem } from '@/types/knowledge'
 import { PERM } from '@/constants/permissions'
 import { assertAction } from '@/composables/useActionPermissions'
@@ -54,6 +55,11 @@ const issueDetail = computed(() => {
   const raw = route.query.issueDetail
   const v = Array.isArray(raw) ? raw[0] : raw
   return typeof v === 'string' ? v : ''
+})
+const fromCreate = computed(() => {
+  const raw = route.query.fromCreate
+  const v = Array.isArray(raw) ? raw[0] : raw
+  return v === '1' || v === 'true'
 })
 
 const loading = ref(false)
@@ -164,11 +170,21 @@ async function load() {
     }
     baseline.value = res.data.content ?? ''
     baselineHash.value = res.data.contentHash ?? ''
-    content.value = res.data.content ?? ''
     fileExists.value = res.data.exists
     relativePath.value = res.data.relativePath ?? ''
     spaceCode.value = res.data.spaceCode ?? ''
     resolvedSpaceId.value = toEntityId(res.data.spaceId) ?? querySpaceId.value
+
+    content.value = res.data.content ?? ''
+    if (!res.data.exists) {
+      const sid = querySpaceId.value ?? resolvedSpaceId.value ?? ''
+      const draft = sid ? popWikiDraft(sid, slug.value) : null
+      if (draft) {
+        content.value = draft
+        baseline.value = ''
+        baselineHash.value = ''
+      }
+    }
     if (mainTab.value === 'preview') contentHtml.value = renderMarkdown(content.value)
     if (fromLintIssue.value) aiPanelOpen.value = true
   } catch (e) {
@@ -221,12 +237,13 @@ async function persistWiki(): Promise<boolean> {
   if (res.code !== API_SUCCESS_CODE || !res.data) {
     throw new Error(res.msg || t('knowledge.wikiEdit.saveFailed'))
   }
+  const wasCreated = res.data.created === true
   baseline.value = content.value
   baselineHash.value = res.data.contentHash ?? ''
   fileExists.value = true
   changeLog.value = ''
   lintPreviewItems.value = []
-  return true
+  return wasCreated
 }
 
 async function maybeMarkIssueFixed() {
@@ -246,6 +263,24 @@ async function maybeMarkIssueFixed() {
   showToast('success', t('knowledge.lint.updateOk'))
 }
 
+async function maybePromptGovernance(wasCreated: boolean) {
+  if (!wasCreated && !fromCreate.value) return
+  const wantAi = await confirm({
+    title: t('knowledge.wikiEdit.governTitle'),
+    message: t('knowledge.wikiEdit.governMessage'),
+    confirmText: t('knowledge.wikiEdit.governAi'),
+    cancelText: t('knowledge.wikiEdit.governLater'),
+  })
+  if (fromCreate.value) {
+    const q = { ...route.query }
+    delete q.fromCreate
+    void router.replace({ query: q })
+  }
+  if (!wantAi) return
+  aiInstruction.value = t('knowledge.wikiEdit.governAiInstruction')
+  aiPanelOpen.value = true
+}
+
 async function save(options: { sync?: boolean; skipLintConfirm?: boolean } = {}) {
   if (!slug.value || saving.value || syncing.value) return
   if (!content.value.trim()) {
@@ -260,9 +295,10 @@ async function save(options: { sync?: boolean; skipLintConfirm?: boolean } = {})
   saving.value = true
   try {
     if (dirty.value) {
-      await persistWiki()
+      const wasCreated = await persistWiki()
       showToast('success', t('knowledge.wikiEdit.saveOk'))
       await maybeMarkIssueFixed()
+      await maybePromptGovernance(wasCreated)
     }
     if (options.sync) {
       await doSync()
@@ -380,6 +416,9 @@ watch(slug, () => {
               {{ t('knowledge.wikiEdit.pageTitle') }}
             </h2>
             <span v-if="spaceCode" class="badge bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">{{ spaceCode }}</span>
+            <span v-if="fromCreate" class="badge bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+              {{ t('knowledge.wikiEdit.fromCreate') }}
+            </span>
             <span v-if="fromLintIssue" class="badge bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
               {{ t('knowledge.wikiEdit.fromLint') }}
             </span>
