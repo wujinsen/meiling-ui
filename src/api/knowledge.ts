@@ -553,30 +553,31 @@ export async function batchRemoveKbSpaceMembersApi(data: import('@/types/knowled
 // 2. 浏览
 // ---------------------------------------------------------------------------
 
-/** 目录 meta（按类型分组计数，不含 items） */
-export async function getKbIndexApi(spaceId?: number | string) {
+/** 目录 meta（按 groupBy=type|category 分组计数，不含 items） */
+export async function getKbIndexApi(spaceId?: number | string, groupBy: 'type' | 'category' = 'type') {
   if (USE_MOCK) {
     await delay(220)
     return ok<KbIndex>(mockIndexMeta())
   }
-  return request<KbIndex>(`${KB_BASE}/index${buildQuery({ spaceId })}`, { method: 'GET' })
+  return request<KbIndex>(`${KB_BASE}/index${buildQuery({ spaceId, groupBy })}`, { method: 'GET' })
 }
 
-/** 目录分组条目分页 */
+/** 目录分组条目分页（key 为 kb_type 或 categoryId/uncategorized） */
 export async function getKbIndexItemsApi(
-  type: string,
+  key: string,
   spaceId?: number | string,
   pageNum = 1,
   pageSize = 50,
+  groupBy: 'type' | 'category' = 'type',
 ) {
   if (USE_MOCK) {
     await delay(120)
-    const group = MOCK_INDEX.groups.find((g) => g.type === type)
+    const group = MOCK_INDEX.groups.find((g) => g.type === key)
     const items = group?.items ?? []
     const start = (pageNum - 1) * pageSize
     return ok<import('@/types/knowledge').KbIndexItemsPage>({
-      type,
-      label: group?.label ?? type,
+      type: key,
+      label: group?.label ?? key,
       total: items.length,
       pageNum,
       pageSize,
@@ -584,13 +585,13 @@ export async function getKbIndexItemsApi(
     })
   }
   return request<import('@/types/knowledge').KbIndexItemsPage>(
-    `${KB_BASE}/index/items${buildQuery({ spaceId, type, pageNum, pageSize })}`,
+    `${KB_BASE}/index/items${buildQuery({ spaceId, groupBy, key, pageNum, pageSize })}`,
     { method: 'GET' },
   )
 }
 
 /** 目录搜索（服务端过滤） */
-export async function searchKbIndexApi(q: string, spaceId?: number | string, limit = 200) {
+export async function searchKbIndexApi(q: string, spaceId?: number | string, limit = 200, groupBy: 'type' | 'category' = 'type') {
   if (USE_MOCK) {
     await delay(160)
     const kw = q.trim().toLowerCase()
@@ -608,11 +609,11 @@ export async function searchKbIndexApi(q: string, spaceId?: number | string, lim
     const total = groups.reduce((s, g) => s + g.items.length, 0)
     return ok<KbIndex>({ total, groups })
   }
-  return request<KbIndex>(`${KB_BASE}/index/search${buildQuery({ spaceId, q, limit })}`, { method: 'GET' })
+  return request<KbIndex>(`${KB_BASE}/index/search${buildQuery({ spaceId, q, limit, groupBy })}`, { method: 'GET' })
 }
 
 /** 按 slug 定位目录分组 */
-export async function locateKbIndexApi(slug: string, spaceId?: number | string) {
+export async function locateKbIndexApi(slug: string, spaceId?: number | string, groupBy: 'type' | 'category' = 'type') {
   if (USE_MOCK) {
     await delay(80)
     for (const g of MOCK_INDEX.groups) {
@@ -622,8 +623,16 @@ export async function locateKbIndexApi(slug: string, spaceId?: number | string) 
     return ok<import('@/types/knowledge').KbIndexLocate | undefined>(undefined)
   }
   return request<import('@/types/knowledge').KbIndexLocate>(
-    `${KB_BASE}/index/locate${buildQuery({ spaceId, slug })}`,
+    `${KB_BASE}/index/locate${buildQuery({ spaceId, slug, groupBy })}`,
     { method: 'GET' },
+  )
+}
+
+/** 移动文档到另一分类(=目录)：移 wiki 文件 + 改引用 + 触发 Sync */
+export async function moveKbDocumentApi(id: number | string, toCategoryId: number | string) {
+  return request<import('@/types/knowledge').KbDocumentMoveResult>(
+    `${KB_BASE}/document/${toEntityId(id)}/move${buildQuery({ toCategoryId: toEntityId(toCategoryId) })}`,
+    { method: 'PUT' },
   )
 }
 
@@ -870,12 +879,12 @@ export async function getKbDocumentApi(id: number | string) {
 // 5.2 分类 / 5.3 标签
 // ---------------------------------------------------------------------------
 
-export async function getKbCategoryTreeApi(spaceId: number | string) {
+export async function getKbCategoryTreeApi(spaceId: number | string, withCount = false) {
   if (USE_MOCK) {
     await delay(100)
     return ok<KbCategoryTree[]>(mockCategoryTreeState)
   }
-  return request<KbCategoryTree[]>(`${KB_BASE}/category/tree${buildQuery({ spaceId })}`, { method: 'GET' })
+  return request<KbCategoryTree[]>(`${KB_BASE}/category/tree${buildQuery({ spaceId, withCount: withCount ? 'true' : undefined })}`, { method: 'GET' })
 }
 
 export async function saveKbCategoryApi(data: KbCategorySaveRequest) {

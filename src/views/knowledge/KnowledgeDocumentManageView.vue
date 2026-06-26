@@ -2,7 +2,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ExternalLink, Loader2, Pencil, Plus, RefreshCw, Search } from 'lucide-vue-next'
+import { ExternalLink, FolderInput, Loader2, Pencil, Plus, RefreshCw, Search } from 'lucide-vue-next'
+import AppModal from '@/components/ui/AppModal.vue'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
@@ -11,7 +12,7 @@ import KbDocumentCreateModal from '@/components/knowledge/KbDocumentCreateModal.
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 import KbCategorySelect from '@/components/knowledge/KbCategorySelect.vue'
 import KbTagManagePanel from '@/components/knowledge/KbTagManagePanel.vue'
-import { getKbDocumentApi, searchKbDocumentsApi } from '@/api/knowledge'
+import { getKbDocumentApi, moveKbDocumentApi, searchKbDocumentsApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { useKbDocMeta } from '@/composables/useKbDocMeta'
 import { assertAction, guardAction } from '@/composables/useActionPermissions'
@@ -169,6 +170,44 @@ function openBrowse(row: KbDocumentListItem) {
   const q: Record<string, string> = { slug: row.slug }
   if (row.spaceId != null) q.spaceId = String(row.spaceId)
   void router.push({ path: '/knowledge/browse', query: q })
+}
+
+// 移动分类（=目录）：移 wiki 文件 + 改引用 + 触发 Sync
+const moveOpen = ref(false)
+const moving = ref(false)
+const moveRow = ref<KbDocumentListItem | null>(null)
+const moveTargetCategoryId = ref('')
+
+function openMove(row: KbDocumentListItem) {
+  if (!guardAction(PERM.KB_DOCUMENT_EDIT)) return
+  if (!row.slug) {
+    showToast('error', t('knowledge.docManage.wikiEditOnly'))
+    return
+  }
+  moveRow.value = row
+  moveTargetCategoryId.value = toEntityId(row.categoryId) ?? ''
+  moveOpen.value = true
+}
+
+async function submitMove() {
+  const row = moveRow.value
+  if (!row || !moveTargetCategoryId.value) {
+    showToast('error', '请选择目标分类')
+    return
+  }
+  moving.value = true
+  try {
+    const res = await moveKbDocumentApi(row.id, moveTargetCategoryId.value)
+    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || '移动失败')
+    showToast('success', `已移动到 ${res.data.toSlug}${res.data.syncSuccess ? '（已同步）' : '（同步未完成，可稍后手动同步）'}`)
+    moveOpen.value = false
+    await loadList()
+    void reloadMeta()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : '移动失败')
+  } finally {
+    moving.value = false
+  }
 }
 
 function onWikiCreated(payload: WikiCreatePayload) {
@@ -353,6 +392,14 @@ watch(
                       <Pencil class="h-3.5 w-3.5" />{{ t('knowledge.docManage.edit') }}
                     </button>
                     <button
+                      v-if="canEditCurrentSpace && row.slug"
+                      type="button"
+                      class="btn-action-edit"
+                      @click="openMove(row)"
+                    >
+                      <FolderInput class="h-3.5 w-3.5" />移动
+                    </button>
+                    <button
                       v-if="row.slug"
                       type="button"
                       class="btn-action-edit"
@@ -391,5 +438,29 @@ watch(
       @close="createOpen = false"
       @wiki-created="onWikiCreated"
     />
+
+    <AppModal :open="moveOpen" title="移动到分类（=目录）" @close="moveOpen = false">
+      <div class="space-y-3">
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          将文档 <span class="font-medium text-gray-700 dark:text-gray-200">{{ moveRow?.title }}</span>
+          移动到另一分类：会移动 wiki 文件、自动改全路径引用，并按目标分类默认体裁更新 frontmatter，随后触发同步。
+        </p>
+        <KbCategorySelect
+          v-model="moveTargetCategoryId"
+          :options="flatCategories"
+          :loading="metaLoading"
+          :empty-label="'请选择目标分类'"
+        />
+        <p class="text-xs text-amber-600 dark:text-amber-400">
+          注意：移动后 slug 会从「旧目录/名」变为「新目录/名」，旧深链将失效。
+        </p>
+      </div>
+      <template #footer>
+        <button type="button" class="btn-ghost" @click="moveOpen = false">{{ t('confirm.cancel') }}</button>
+        <button type="button" class="btn-primary" :disabled="moving" @click="submitMove">
+          {{ moving ? t('common.loading') : t('confirm.ok') }}
+        </button>
+      </template>
+    </AppModal>
   </div>
 </template>

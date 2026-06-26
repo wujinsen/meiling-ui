@@ -7,12 +7,14 @@ import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import { getKbIndexApi, getKbIndexItemsApi, getKbPageApi, locateKbIndexApi, searchKbIndexApi } from '@/api/knowledge'
+import { assertAction } from '@/composables/useActionPermissions'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
 import { toEntityId } from '@/utils/id'
 import { kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
+import { PERM } from '@/constants/permissions'
 import type { KbIndex, KbIndexGroup, KbIndexItem, KbPage } from '@/types/knowledge'
 
 const LAST_SLUG_KEY = 'kb_last_active_slug'
@@ -46,6 +48,11 @@ const canEditAttachments = computed(() => {
   return selectedSpace.value?.canEdit === true
 })
 
+/** Wiki 编辑：需空间 editor + kb:wiki:edit（不再走 MySQL 正文编辑） */
+const canWikiEdit = computed(
+  () => canEditAttachments.value && assertAction(PERM.KB_WIKI_EDIT) && Boolean(page.value?.slug),
+)
+
 const loading = ref(false)
 const loadError = ref('')
 const detailLoading = ref(false)
@@ -53,6 +60,7 @@ const index = shallowRef<KbIndex>({ total: 0, groups: [] })
 const searchIndex = shallowRef<KbIndex | null>(null)
 const searchLoading = ref(false)
 const keyword = ref('')
+const groupBy = ref<'type' | 'category'>('type')
 const groupItemsCache = ref<Record<string, KbIndexItem[]>>({})
 const groupItemsTotal = ref<Record<string, number>>({})
 const groupItemsPage = ref<Record<string, number>>({})
@@ -290,7 +298,7 @@ async function fetchGroupItems(type: string, pageNum: number) {
   if (groupItemsLoading.value[type]) return
   groupItemsLoading.value = { ...groupItemsLoading.value, [type]: true }
   try {
-    const res = await getKbIndexItemsApi(type, kbQuerySpaceId(), pageNum, GROUP_FETCH_SIZE)
+    const res = await getKbIndexItemsApi(type, kbQuerySpaceId(), pageNum, GROUP_FETCH_SIZE, groupBy.value)
     if (res.code !== API_SUCCESS_CODE || !res.data) {
       showToast('error', res.msg || t('knowledge.browse.groupLoadFailed'))
       return
@@ -336,7 +344,7 @@ function toggleAllGroups() {
 async function ensureGroupOpenFor(slug: string) {
   const spaceId = kbQuerySpaceId()
   try {
-    const res = await locateKbIndexApi(slug, spaceId)
+    const res = await locateKbIndexApi(slug, spaceId, groupBy.value)
     if (res.code === API_SUCCESS_CODE && res.data) {
       mergeItemsIntoCache(res.data.type, [res.data.item])
       if (!isGroupOpen(res.data.type)) openGroup(res.data.type)
@@ -398,7 +406,7 @@ watch(keyword, (kw) => {
 async function runIndexSearch(q: string) {
   searchLoading.value = true
   try {
-    const res = await searchKbIndexApi(q, kbQuerySpaceId())
+    const res = await searchKbIndexApi(q, kbQuerySpaceId(), 200, groupBy.value)
     if (res.code !== API_SUCCESS_CODE || !res.data) return
     if (keyword.value.trim() !== q) return
     searchIndex.value = res.data
@@ -427,7 +435,7 @@ async function resolveInitialSlug(slugTarget: string, explicitSpaceId?: string) 
   if (slugTarget) {
     const resolved = resolveSlug(slugTarget)
     try {
-      const res = await locateKbIndexApi(slugTarget, spaceId)
+      const res = await locateKbIndexApi(slugTarget, spaceId, groupBy.value)
       if (res.code === API_SUCCESS_CODE && res.data) {
         mergeItemsIntoCache(res.data.type, [res.data.item])
         openGroup(res.data.type)
@@ -454,7 +462,7 @@ async function loadIndex(preferred?: string) {
   const spaceId = preferredSpaceId()
 
   try {
-    const res = await getKbIndexApi(kbQuerySpaceId())
+    const res = await getKbIndexApi(kbQuerySpaceId(), groupBy.value)
     if (res.code !== API_SUCCESS_CODE || !res.data) {
       if (res.code !== API_SUCCESS_CODE) loadError.value = res.msg || `接口异常(code=${res.code})`
       return
@@ -592,6 +600,12 @@ watch(selectedSpaceId, () => {
   void loadIndex()
 })
 
+watch(groupBy, () => {
+  if (!browseReady.value) return
+  // 切换分组维度：保留当前打开的文档，仅重建左树分组
+  void loadIndex(activeSlug.value || undefined)
+})
+
 watch(
   () => [route.query.slug, route.query.spaceId] as const,
   ([slug]) => {
@@ -631,6 +645,29 @@ watch(
           <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input v-model="keyword" type="text" class="field-input pl-9 pr-9" :placeholder="t('knowledge.browse.searchPlaceholder')" />
           <Loader2 v-if="searchLoading" class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
+        </div>
+
+        <div class="mb-2 inline-flex rounded-lg border border-gray-200 p-0.5 text-xs dark:border-white/10">
+          <button
+            type="button"
+            :class="[
+              'rounded-md px-2.5 py-1 transition',
+              groupBy === 'type' ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300',
+            ]"
+            @click="groupBy = 'type'"
+          >
+            按体裁
+          </button>
+          <button
+            type="button"
+            :class="[
+              'rounded-md px-2.5 py-1 transition',
+              groupBy === 'category' ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300',
+            ]"
+            @click="groupBy = 'category'"
+          >
+            按分类
+          </button>
         </div>
 
         <div
@@ -724,13 +761,13 @@ watch(
               <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ page.title }}</h2>
               <div class="flex shrink-0 flex-wrap items-center gap-2">
                 <button
-                  v-if="canEditAttachments && page.slug"
+                  v-if="canWikiEdit"
                   type="button"
                   class="btn-ghost shrink-0 text-sm"
-                  :title="t('knowledge.browse.edit')"
+                  :title="t('knowledge.browse.editWiki')"
                   @click="openWikiEdit"
                 >
-                  <Pencil class="h-4 w-4" /> {{ t('knowledge.browse.edit') }}
+                  <Pencil class="h-4 w-4" /> {{ t('knowledge.browse.editWiki') }}
                   <ExternalLink class="h-3.5 w-3.5 opacity-60" />
                 </button>
               </div>

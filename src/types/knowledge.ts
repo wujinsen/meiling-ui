@@ -417,6 +417,13 @@ export type KbCategoryTree = {
   spaceId?: number | string
   parentId?: number | string
   categoryName: string
+  icon?: string
+  /** 绑定的 wiki 子目录名（分类=目录，单一真相源） */
+  dirSlug?: string
+  /** 默认体裁 kb_type；文档移入时按此改 frontmatter type */
+  defaultType?: string
+  /** withCount=true 时返回该分类下文档数 */
+  docCount?: number
   sort?: number
   children?: KbCategoryTree[]
 }
@@ -440,7 +447,20 @@ export type KbCategorySaveRequest = {
   parentId?: number | string
   categoryName: string
   icon?: string
+  /** 绑定 wiki 子目录；创建必填，创建后不可改 */
+  dirSlug?: string
+  /** 默认体裁 kb_type */
+  defaultType?: string
   sort?: number
+}
+
+export type KbDocumentMoveResult = {
+  docId: number | string
+  fromSlug: string
+  toSlug: string
+  categoryId: number | string
+  syncSuccess?: boolean
+  syncOutputTail?: string
 }
 
 export type KbTagSaveRequest = {
