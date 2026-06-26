@@ -33,6 +33,8 @@ import type {
   KbWikiAiReviseResult,
   KbWikiLintPreviewRequest,
   KbWikiLintPreview,
+  KbWikiEnrichRequest,
+  KbWikiEnrichResult,
   KbRawTreeNode,
   KbIngestJob,
   KbIngestJobCreateRequest,
@@ -1169,6 +1171,28 @@ export async function previewKbWikiLintApi(payload: KbWikiLintPreviewRequest) {
   return request<KbWikiLintPreview>(`${KB_BASE}/wiki/page/lint-preview`, {
     method: 'POST',
     body: jsonEntityBody(payload as Record<string, unknown>),
+  })
+}
+
+/** POST /kb/wiki/enrich —— 已有页 enrich + 治理 log/index/edges */
+export async function enrichKbWikiApi(payload: KbWikiEnrichRequest) {
+  if (USE_MOCK) {
+    await delay(400)
+    const slug = payload.slug ?? payload.items?.[0]?.slug ?? 'guides/mock'
+    return ok<KbWikiEnrichResult>({
+      batchNo: payload.batchNo ?? 'mock',
+      topic: payload.topic ?? 'enrich',
+      dryRun: payload.dryRun ?? false,
+      items: [{ slug, patch: payload.patch ?? '## Mock', applied: !payload.dryRun }],
+      logAppended: !payload.dryRun,
+      indexUpdated: !payload.dryRun,
+      edgesAppended: payload.edges?.length ?? 0,
+    })
+  }
+  return request<KbWikiEnrichResult>(`${KB_BASE}/wiki/enrich`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+    timeoutMs: payload.rawPaths?.length || payload.items?.some((i) => i.rawPaths?.length) ? 180_000 : 60_000,
   })
 }
 

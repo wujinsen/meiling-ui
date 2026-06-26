@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, ExternalLink, Loader2, Save, Sparkles, Upload } from 'lucide-vue-next'
+import { ArrowLeft, ExternalLink, GitMerge, Loader2, Save, Sparkles, Upload } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import {
   aiReviseKbWikiApi,
   getKbLlmConfigApi,
   getKbWikiPageApi,
+  enrichKbWikiApi,
   previewKbWikiLintApi,
   saveKbWikiPageApi,
   triggerKbSyncApi,
@@ -22,7 +23,7 @@ import { renderMarkdown } from '@/utils/markdown'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
 import { popWikiDraft } from '@/utils/kbWikiDraft'
-import type { KbWikiLintPreviewItem } from '@/types/knowledge'
+import type { KbWikiEnrichResult, KbWikiLintPreviewItem } from '@/types/knowledge'
 import { PERM } from '@/constants/permissions'
 import { assertAction } from '@/composables/useActionPermissions'
 
@@ -86,16 +87,43 @@ const aiInstruction = ref('')
 const aiGenerating = ref(false)
 const aiNotes = ref('')
 const aiSuggested = ref('')
+const aiMeta = ref<{ provider?: string; model?: string } | null>(null)
+const aiPreviewRef = ref<HTMLElement | null>(null)
+type AiPreset = 'govern' | 'fixLinks' | 'custom'
+const aiPreset = ref<AiPreset>('custom')
 
 const lintPreviewItems = ref<KbWikiLintPreviewItem[]>([])
 const lintChecking = ref(false)
 
+const enrichPanelOpen = ref(false)
+const enriching = ref(false)
+const enrichPatch = ref('')
+const enrichReason = ref('')
+const enrichRawPaths = ref('')
+const enrichBatchNo = ref('')
+const enrichTopic = ref('')
+const enrichGovernance = ref(true)
+const enrichUpdateMeta = ref(true)
+const enrichSyncAfter = ref(false)
+const enrichPreview = ref('')
+const enrichPreviewRows = computed<DiffRow[]>(() => {
+  if (!enrichPreview.value) return []
+  return diffLines(baseline.value, enrichPreview.value)
+})
+
 const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
+const sidePanelOpen = computed(() => aiPanelOpen.value || enrichPanelOpen.value)
 
 const tabOptions = computed(() => [
   { value: 'write', label: t('knowledge.wikiEdit.tabWrite') },
   { value: 'preview', label: t('knowledge.wikiEdit.tabPreview') },
   { value: 'diff', label: t('knowledge.wikiEdit.tabDiff') },
+])
+
+const aiPresetOptions = computed(() => [
+  { value: 'govern', label: t('knowledge.wikiEdit.aiPresetGovern') },
+  { value: 'fixLinks', label: t('knowledge.wikiEdit.aiPresetFixLinks') },
+  { value: 'custom', label: t('knowledge.wikiEdit.aiPresetCustom') },
 ])
 
 const dirty = computed(() => content.value !== baseline.value)
@@ -237,7 +265,8 @@ async function persistWiki(): Promise<boolean> {
   if (res.code !== API_SUCCESS_CODE || !res.data) {
     throw new Error(res.msg || t('knowledge.wikiEdit.saveFailed'))
   }
-  const wasCreated = res.data.created === true
+  const wasNew = !fileExists.value
+  const wasCreated = res.data.created === true || wasNew
   baseline.value = content.value
   baselineHash.value = res.data.contentHash ?? ''
   fileExists.value = true
@@ -263,6 +292,126 @@ async function maybeMarkIssueFixed() {
   showToast('success', t('knowledge.lint.updateOk'))
 }
 
+function instructionForPreset(preset: AiPreset): string {
+  if (preset === 'govern') return t('knowledge.wikiEdit.governAiInstruction')
+  if (preset === 'fixLinks') return t('knowledge.wikiEdit.aiPresetFixLinksInstruction')
+  return ''
+}
+
+function defaultEnrichBatchNo() {
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `WEB-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}`
+}
+
+function toggleAiPanel() {
+  aiPanelOpen.value = !aiPanelOpen.value
+  if (aiPanelOpen.value) enrichPanelOpen.value = false
+}
+
+function toggleEnrichPanel() {
+  enrichPanelOpen.value = !enrichPanelOpen.value
+  if (enrichPanelOpen.value) {
+    aiPanelOpen.value = false
+    if (!enrichBatchNo.value) enrichBatchNo.value = defaultEnrichBatchNo()
+    if (!enrichTopic.value) enrichTopic.value = slug.value
+  }
+}
+
+function openAiGovernance() {
+  aiPanelOpen.value = true
+  enrichPanelOpen.value = false
+  aiPreset.value = 'govern'
+}
+
+function parseRawPathLines(text: string): string[] {
+  return text
+    .split(/[\n,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+async function runEnrich(dryRun: boolean) {
+  if (!slug.value || enriching.value || !canEditSpace.value) return
+  const patch = enrichPatch.value.trim()
+  const rawPaths = parseRawPathLines(enrichRawPaths.value)
+  if (!patch && rawPaths.length === 0) {
+    showToast('error', t('knowledge.wikiEdit.enrichNeedInput'))
+    return
+  }
+  if (!fileExists.value && !dryRun) {
+    showToast('error', t('knowledge.wikiEdit.enrichNeedSavedPage'))
+    return
+  }
+  if (dirty.value) {
+    const ok = await confirm({
+      title: t('knowledge.wikiEdit.enrichDirtyTitle'),
+      message: t('knowledge.wikiEdit.enrichDirtyMessage'),
+      confirmText: t('knowledge.wikiEdit.enrichDirtySave'),
+      cancelText: t('confirm.cancel'),
+    })
+    if (!ok) return
+    await persistWiki()
+  }
+
+  enriching.value = true
+  try {
+    const res = await enrichKbWikiApi({
+      spaceId: querySpaceId.value ?? resolvedSpaceId.value,
+      slug: slug.value,
+      patch: patch || undefined,
+      reason: enrichReason.value.trim() || undefined,
+      rawPaths: rawPaths.length ? rawPaths : undefined,
+      batchNo: enrichBatchNo.value.trim() || defaultEnrichBatchNo(),
+      topic: enrichTopic.value.trim() || slug.value,
+      updateMeta: enrichUpdateMeta.value,
+      appendLog: enrichGovernance.value,
+      appendIndex: enrichGovernance.value,
+      appendEdges: enrichGovernance.value,
+      dryRun,
+      sync: !dryRun && enrichSyncAfter.value && canSync.value,
+    })
+    if (res.code !== API_SUCCESS_CODE || !res.data) {
+      throw new Error(res.msg || t('knowledge.wikiEdit.enrichFailed'))
+    }
+    const item = res.data.items?.[0]
+    if (item?.error) {
+      throw new Error(item.error)
+    }
+    if (dryRun) {
+      enrichPreview.value = item?.mergedPreview ?? item?.patch ?? ''
+      if (!enrichPreview.value) {
+        throw new Error(t('knowledge.wikiEdit.enrichEmptyPreview'))
+      }
+      showToast('success', t('knowledge.wikiEdit.enrichPreviewOk'))
+      return
+    }
+    enrichPreview.value = ''
+    await load()
+    const stats = formatEnrichStats(res.data)
+    showToast('success', t('knowledge.wikiEdit.enrichApplyOk', { stats }))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.wikiEdit.enrichFailed'))
+  } finally {
+    enriching.value = false
+  }
+}
+
+function formatEnrichStats(data: KbWikiEnrichResult): string {
+  const parts: string[] = []
+  if (data.logAppended) parts.push('log')
+  if (data.indexUpdated) parts.push('index')
+  if (data.edgesAppended && data.edgesAppended > 0) parts.push(`edges×${data.edgesAppended}`)
+  if (data.syncTriggered) parts.push('sync')
+  return parts.length ? parts.join(', ') : '—'
+}
+
+watch(aiPreset, (preset) => {
+  if (preset !== 'custom') {
+    aiInstruction.value = instructionForPreset(preset)
+  }
+})
+
 async function maybePromptGovernance(wasCreated: boolean) {
   if (!wasCreated && !fromCreate.value) return
   const wantAi = await confirm({
@@ -270,6 +419,8 @@ async function maybePromptGovernance(wasCreated: boolean) {
     message: t('knowledge.wikiEdit.governMessage'),
     confirmText: t('knowledge.wikiEdit.governAi'),
     cancelText: t('knowledge.wikiEdit.governLater'),
+    danger: false,
+    warm: true,
   })
   if (fromCreate.value) {
     const q = { ...route.query }
@@ -277,8 +428,7 @@ async function maybePromptGovernance(wasCreated: boolean) {
     void router.replace({ query: q })
   }
   if (!wantAi) return
-  aiInstruction.value = t('knowledge.wikiEdit.governAiInstruction')
-  aiPanelOpen.value = true
+  openAiGovernance()
 }
 
 async function save(options: { sync?: boolean; skipLintConfirm?: boolean } = {}) {
@@ -336,11 +486,19 @@ async function saveAndSync() {
   await save({ sync: true })
 }
 
+function parseAiSuggested(data: unknown): string {
+  if (!data || typeof data !== 'object') return ''
+  const d = data as Record<string, unknown>
+  const raw = d.suggestedContent ?? d.suggested_content ?? d.content
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
 async function generateAi() {
   if (!llmAvailable.value || aiGenerating.value || !aiInstruction.value.trim()) return
   aiGenerating.value = true
   aiNotes.value = ''
   aiSuggested.value = ''
+  aiMeta.value = null
   try {
     const res = await aiReviseKbWikiApi({
       slug: slug.value,
@@ -351,11 +509,25 @@ async function generateAi() {
         ? { issueType: issueType.value || undefined, detail: issueDetail.value || undefined }
         : undefined,
     })
-    if (res.code !== API_SUCCESS_CODE || !res.data?.suggestedContent) {
+    if (res.code !== API_SUCCESS_CODE) {
       throw new Error(res.msg || t('knowledge.wikiEdit.aiFailed'))
     }
-    aiSuggested.value = res.data.suggestedContent
-    aiNotes.value = res.data.notes ?? ''
+    const suggested = parseAiSuggested(res.data)
+    if (!suggested) {
+      throw new Error(t('knowledge.wikiEdit.aiEmptyResult'))
+    }
+    aiSuggested.value = suggested
+    if (res.data && typeof res.data === 'object') {
+      const d = res.data as Record<string, unknown>
+      aiNotes.value = typeof d.notes === 'string' ? d.notes : ''
+      aiMeta.value = {
+        provider: typeof d.provider === 'string' ? d.provider : undefined,
+        model: typeof d.model === 'string' ? d.model : undefined,
+      }
+    }
+    showToast('success', t('knowledge.wikiEdit.aiGenerateOk'))
+    await nextTick()
+    aiPreviewRef.value?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.wikiEdit.aiFailed'))
   } finally {
@@ -435,10 +607,20 @@ watch(slug, () => {
           <button
             type="button"
             class="btn-ghost shrink-0 text-sm"
+            :class="enrichPanelOpen && 'ring-1 ring-violet-300 dark:ring-violet-500/40'"
+            :disabled="!canEditSpace || !fileExists"
+            :title="fileExists ? t('knowledge.wikiEdit.enrichToggle') : t('knowledge.wikiEdit.enrichNeedSavedPage')"
+            @click="toggleEnrichPanel"
+          >
+            <GitMerge class="h-4 w-4" /> {{ t('knowledge.wikiEdit.enrichGovern') }}
+          </button>
+          <button
+            type="button"
+            class="btn-ghost shrink-0 text-sm"
             :class="aiPanelOpen && 'ring-1 ring-brand-300 dark:ring-brand-500/40'"
             :disabled="!llmAvailable"
             :title="llmAvailable ? t('knowledge.wikiEdit.aiToggle') : t('knowledge.wikiEdit.aiDisabled')"
-            @click="aiPanelOpen = !aiPanelOpen"
+            @click="toggleAiPanel"
           >
             <Sparkles class="h-4 w-4" /> {{ t('knowledge.wikiEdit.aiAssist') }}
           </button>
@@ -486,8 +668,11 @@ watch(slug, () => {
         {{ loadError }}
       </p>
 
-      <div v-else class="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
-        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div v-else class="mt-4 flex min-h-0 flex-1 flex-col gap-4 xl:flex-row xl:items-stretch">
+        <div
+          class="flex min-h-0 min-w-0 flex-col"
+          :class="sidePanelOpen ? 'flex-1 xl:max-w-[58%]' : 'flex-1'"
+        >
           <div class="flex flex-wrap items-center justify-between gap-2">
             <SegmentControl v-model="mainTab" :options="tabOptions" />
             <div class="flex items-center gap-3 text-xs text-gray-400">
@@ -565,23 +750,40 @@ watch(slug, () => {
           </label>
         </div>
 
-        <!-- AI 协助面板 -->
+        <!-- AI 协助面板（含单篇治理预设） -->
         <aside
           v-if="aiPanelOpen"
-          class="flex w-full shrink-0 flex-col rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-white/5 dark:bg-white/[0.02] xl:w-80"
+          class="relative flex min-h-[540px] w-full min-w-0 flex-col rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-white/5 dark:bg-white/[0.02] xl:min-w-[22rem] xl:max-w-[36rem] xl:flex-[0_0_42%]"
         >
-          <h3 class="mb-2 flex items-center gap-1.5 text-sm font-semibold text-gray-800 dark:text-gray-100">
+          <div
+            v-if="aiGenerating"
+            class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-white/85 px-4 text-center backdrop-blur-[2px] dark:bg-gray-900/85"
+          >
+            <Loader2 class="h-6 w-6 animate-spin text-brand-500" />
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ t('knowledge.wikiEdit.aiGenerating') }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.wikiEdit.aiGeneratingHint') }}</p>
+          </div>
+
+          <h3 class="mb-1 flex items-center gap-1.5 text-sm font-semibold text-gray-800 dark:text-gray-100">
             <Sparkles class="h-4 w-4 text-brand-500" /> {{ t('knowledge.wikiEdit.aiPanelTitle') }}
           </h3>
           <p v-if="!llmAvailable" class="mb-3 text-xs text-gray-400">{{ t('knowledge.wikiEdit.aiDisabled') }}</p>
+          <template v-else>
+            <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.wikiEdit.aiPanelIntro') }}</p>
+            <SegmentControl v-model="aiPreset" :options="aiPresetOptions" />
+          </template>
+
+          <label class="mt-3 shrink-0 text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.wikiEdit.aiInstructionLabel') }}</label>
           <textarea
             v-model="aiInstruction"
-            rows="4"
-            class="field-input resize-y text-sm"
+            rows="5"
+            class="field-input mt-1 max-h-40 min-h-[7.5rem] shrink-0 resize-y text-sm leading-relaxed"
             :placeholder="t('knowledge.wikiEdit.aiInstructionPlaceholder')"
             :disabled="!llmAvailable || aiGenerating"
+            @input="aiPreset = 'custom'"
           />
-          <div class="mt-2 flex flex-wrap gap-2">
+
+          <div class="mt-3 flex shrink-0 flex-wrap gap-2">
             <button
               type="button"
               class="btn-primary text-sm"
@@ -589,19 +791,163 @@ watch(slug, () => {
               @click="generateAi"
             >
               <Loader2 v-if="aiGenerating" class="h-4 w-4 animate-spin" />
-              {{ t('knowledge.wikiEdit.aiGenerate') }}
+              {{ aiGenerating ? t('knowledge.wikiEdit.aiGenerating') : t('knowledge.wikiEdit.aiGenerate') }}
             </button>
             <button
               type="button"
-              class="btn-ghost text-sm"
-              :disabled="!aiSuggested"
+              class="text-sm"
+              :class="aiSuggested ? 'btn-primary' : 'btn-ghost'"
+              :disabled="!aiSuggested || aiGenerating"
               @click="applyAiSuggestion"
             >
               {{ t('knowledge.wikiEdit.aiApply') }}
             </button>
           </div>
-          <p v-if="aiNotes" class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ aiNotes }}</p>
-          <p class="mt-2 text-xs text-gray-400">{{ t('knowledge.wikiEdit.aiHint') }}</p>
+
+          <div
+            ref="aiPreviewRef"
+            class="mt-3 flex min-h-0 flex-1 flex-col"
+          >
+            <div class="mb-1.5 flex shrink-0 flex-wrap items-center justify-between gap-1">
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('knowledge.wikiEdit.aiPreviewTitle') }}</span>
+              <span v-if="aiSuggested" class="text-xs text-gray-400">{{ t('knowledge.wikiEdit.aiPreviewChars', { count: aiSuggested.length }) }}</span>
+            </div>
+            <textarea
+              v-if="aiSuggested"
+              :value="aiSuggested"
+              readonly
+              class="field-input min-h-[min(48vh,28rem)] flex-1 resize-y font-mono text-xs leading-relaxed"
+              spellcheck="false"
+            />
+            <div
+              v-else
+              class="flex min-h-[min(48vh,28rem)] flex-1 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white/60 px-4 text-center text-xs leading-relaxed text-gray-400 dark:border-white/10 dark:bg-white/[0.02]"
+            >
+              {{ t('knowledge.wikiEdit.aiPreviewEmpty') }}
+            </div>
+            <p
+              v-if="aiSuggested && (aiMeta?.provider || aiMeta?.model)"
+              class="mt-1.5 shrink-0 text-[11px] text-gray-400"
+            >
+              {{ t('knowledge.wikiEdit.aiModelInfo', { provider: aiMeta?.provider ?? '—', model: aiMeta?.model ?? '—' }) }}
+            </p>
+          </div>
+
+          <p v-if="aiNotes" class="mt-2 shrink-0 rounded-md bg-gray-100/80 px-2 py-1.5 text-xs text-gray-600 dark:bg-white/5 dark:text-gray-300">
+            {{ aiNotes }}
+          </p>
+          <p class="mt-2 shrink-0 text-xs text-gray-400">{{ t('knowledge.wikiEdit.aiHint') }}</p>
+        </aside>
+
+        <!-- Enrich 治理面板 -->
+        <aside
+          v-if="enrichPanelOpen"
+          class="relative flex min-h-[540px] w-full min-w-0 flex-col rounded-lg border border-violet-100 bg-violet-50/30 p-4 dark:border-violet-500/20 dark:bg-violet-500/5 xl:min-w-[22rem] xl:max-w-[36rem] xl:flex-[0_0_42%]"
+        >
+          <div
+            v-if="enriching"
+            class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-lg bg-white/85 px-4 text-center backdrop-blur-[2px] dark:bg-gray-900/85"
+          >
+            <Loader2 class="h-6 w-6 animate-spin text-violet-500" />
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ t('knowledge.wikiEdit.enrichRunning') }}</p>
+          </div>
+
+          <h3 class="mb-1 flex items-center gap-1.5 text-sm font-semibold text-gray-800 dark:text-gray-100">
+            <GitMerge class="h-4 w-4 text-violet-500" /> {{ t('knowledge.wikiEdit.enrichPanelTitle') }}
+          </h3>
+          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.wikiEdit.enrichPanelIntro') }}</p>
+
+          <label class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.wikiEdit.enrichPatchLabel') }}</label>
+          <textarea
+            v-model="enrichPatch"
+            rows="6"
+            class="field-input mt-1 min-h-[8rem] resize-y font-mono text-xs leading-relaxed"
+            :placeholder="t('knowledge.wikiEdit.enrichPatchPlaceholder')"
+            :disabled="enriching"
+          />
+
+          <label class="mt-3 text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.wikiEdit.enrichRawLabel') }}</label>
+          <textarea
+            v-model="enrichRawPaths"
+            rows="2"
+            class="field-input mt-1 resize-y text-xs leading-relaxed"
+            :placeholder="t('knowledge.wikiEdit.enrichRawPlaceholder')"
+            :disabled="enriching"
+          />
+
+          <label class="mt-3 text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.wikiEdit.enrichReasonLabel') }}</label>
+          <input
+            v-model="enrichReason"
+            type="text"
+            class="field-input mt-1 text-sm"
+            :placeholder="t('knowledge.wikiEdit.enrichReasonPlaceholder')"
+            :disabled="enriching"
+          />
+
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <label class="flex flex-col gap-1">
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.wikiEdit.enrichBatchNo') }}</span>
+              <input v-model="enrichBatchNo" type="text" class="field-input text-xs" :disabled="enriching" />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.wikiEdit.enrichTopic') }}</span>
+              <input v-model="enrichTopic" type="text" class="field-input text-xs" :disabled="enriching" />
+            </label>
+          </div>
+
+          <div class="mt-3 flex flex-col gap-2 text-xs text-gray-600 dark:text-gray-300">
+            <label class="flex cursor-pointer items-center gap-2">
+              <input v-model="enrichGovernance" type="checkbox" class="rounded" :disabled="enriching" />
+              {{ t('knowledge.wikiEdit.enrichGovernance') }}
+            </label>
+            <label class="flex cursor-pointer items-center gap-2">
+              <input v-model="enrichUpdateMeta" type="checkbox" class="rounded" :disabled="enriching" />
+              {{ t('knowledge.wikiEdit.enrichUpdateMeta') }}
+            </label>
+            <label v-if="canSync" class="flex cursor-pointer items-center gap-2">
+              <input v-model="enrichSyncAfter" type="checkbox" class="rounded" :disabled="enriching" />
+              {{ t('knowledge.wikiEdit.enrichSyncAfter') }}
+            </label>
+          </div>
+
+          <div class="mt-3 flex shrink-0 flex-wrap gap-2">
+            <button type="button" class="btn-ghost text-sm" :disabled="enriching" @click="runEnrich(true)">
+              {{ t('knowledge.wikiEdit.enrichPreview') }}
+            </button>
+            <button type="button" class="btn-primary text-sm" :disabled="enriching" @click="runEnrich(false)">
+              <Loader2 v-if="enriching" class="h-4 w-4 animate-spin" />
+              {{ t('knowledge.wikiEdit.enrichApply') }}
+            </button>
+          </div>
+
+          <div v-if="enrichPreview" class="mt-3 flex min-h-0 flex-1 flex-col">
+            <span class="mb-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">
+              {{ t('knowledge.wikiEdit.enrichPreviewTitle') }}
+            </span>
+            <div
+              class="min-h-[12rem] flex-1 overflow-auto rounded-lg border border-gray-100 bg-white/80 font-mono text-xs leading-relaxed dark:border-white/10 dark:bg-white/[0.02]"
+            >
+              <table class="w-full border-collapse">
+                <tbody>
+                  <tr
+                    v-for="(row, i) in enrichPreviewRows"
+                    :key="i"
+                    :class="{
+                      'bg-emerald-50 dark:bg-emerald-500/10': row.type === 'add',
+                      'bg-rose-50 dark:bg-rose-500/10': row.type === 'del',
+                    }"
+                  >
+                    <td class="select-none px-2 align-top text-emerald-600 dark:text-emerald-400">
+                      {{ row.type === 'add' ? '+' : row.type === 'del' ? '-' : ' ' }}
+                    </td>
+                    <td class="whitespace-pre-wrap break-all px-2 align-top text-gray-700 dark:text-gray-200">{{ row.text }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <p class="mt-2 shrink-0 text-xs text-gray-400">{{ t('knowledge.wikiEdit.enrichHint') }}</p>
         </aside>
       </div>
 

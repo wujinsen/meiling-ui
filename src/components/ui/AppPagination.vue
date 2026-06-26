@@ -25,7 +25,12 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const totalPages = computed(() => Math.max(1, Math.ceil(props.total / props.pageSize)))
+const normalizedTotal = computed(() => {
+  const n = Number(props.total)
+  return Number.isFinite(n) && n >= 0 ? n : 0
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(normalizedTotal.value / props.pageSize)))
 
 function go(page: number) {
   const next = Math.min(Math.max(1, page), totalPages.value)
@@ -42,7 +47,7 @@ function onPageSizeChange(event: Event) {
 
 <template>
   <div class="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400">
-    <span>{{ t('common.paginationTotal', { total }) }}</span>
+    <span>{{ t('common.paginationTotal', { total: normalizedTotal }) }}</span>
     <div class="flex flex-wrap items-center gap-2">
       <label v-if="showPageSize" class="inline-flex items-center gap-1.5">
         <span class="text-xs">{{ t('common.pageSize') }}</span>

@@ -86,7 +86,7 @@ router.beforeEach(async (to) => {
     }
   }
 
-  if (to.meta.skipMenuGuard) {
+  if (to.meta.skipMenuGuard || to.matched.some((record) => record.meta.skipMenuGuard)) {
     return true
   }
 

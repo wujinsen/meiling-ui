@@ -2,8 +2,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Check, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Upload, X } from 'lucide-vue-next'
+import { ArrowLeft, Check, ChevronDown, ChevronRight, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Upload, X } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
+import AppModal from '@/components/ui/AppModal.vue'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import {
   commitKbIngestApi,
@@ -25,11 +26,9 @@ import {
   updateKbIngestPlanApi,
 } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
-import { assertAction, guardAction } from '@/composables/useActionPermissions'
 import { confirm } from '@/composables/useConfirm'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { PERM } from '@/constants/permissions'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
 import type {
@@ -64,6 +63,9 @@ const creating = ref(false)
 const templates = ref<KbIngestTemplate[]>([])
 const templatesLoading = ref(false)
 const creatingFromTemplate = ref(false)
+const saveTemplateOpen = ref(false)
+const saveTemplateName = ref('')
+const saveTemplateSaving = ref(false)
 
 const defaultSpace = computed(() => spaces.value.find((s) => s.spaceCode === 'enterprise-kb') ?? spaces.value[0])
 const preferredSpace = computed(() => spaces.value.find((s) => s.canEdit === true) ?? defaultSpace.value)
@@ -72,21 +74,74 @@ const selectedSpace = computed(
 )
 const selectedSpaceQueryId = computed(() => toEntityId(selectedSpace.value?.id))
 const canEdit = computed(() => selectedSpace.value?.canEdit === true)
-const canRunIngestJobAction = computed(() => assertAction(PERM.KB_INGEST_JOB))
-const canRunIngestCommitAction = computed(() => assertAction(PERM.KB_INGEST_COMMIT))
+const editableSpaces = computed(() => spaces.value.filter((s) => s.canEdit === true))
 
-type FlatNode = { node: KbRawTreeNode; depth: number }
-const flatTree = computed<FlatNode[]>(() => {
-  const out: FlatNode[] = []
+function guardIngestEdit(): boolean {
+  const ok = jobId.value ? jobCanEdit.value : canEdit.value
+  if (ok) return true
+  showToast('error', t('knowledge.ingest.readOnlyHint'))
+  return false
+}
+
+function initIngestSpace() {
+  if (jobId.value || !spaces.value.length) return
+  const cur = toEntityId(selectedSpaceId.value)
+  const ok = editableSpaces.value.some((s) => toEntityId(s.id) === cur)
+  const pick = editableSpaces.value[0] ?? preferredSpace.value
+  const id = toEntityId(pick?.id)
+  if (id && (!ok || cur == null)) setSelectedSpaceId(id)
+}
+
+type RawFlatNode = { node: KbRawTreeNode; depth: number; hasChildren: boolean }
+const rawExpandedDirs = ref<Set<string>>(new Set())
+
+function collectRawDirPaths(nodes: KbRawTreeNode[]): string[] {
+  const paths: string[] = []
+  const walk = (list: KbRawTreeNode[]) => {
+    for (const n of list) {
+      if (n.type === 'dir') {
+        paths.push(n.path)
+        if (n.children?.length) walk(n.children)
+      }
+    }
+  }
+  walk(nodes)
+  return paths
+}
+
+const rawFlatTree = computed<RawFlatNode[]>(() => {
+  const out: RawFlatNode[] = []
   const walk = (nodes: KbRawTreeNode[], depth: number) => {
     for (const n of nodes) {
-      out.push({ node: n, depth })
-      if (n.type === 'dir' && n.children?.length) walk(n.children, depth + 1)
+      const hasChildren = n.type === 'dir' && Boolean(n.children?.length)
+      out.push({ node: n, depth, hasChildren })
+      if (hasChildren && rawExpandedDirs.value.has(n.path)) {
+        walk(n.children!, depth + 1)
+      }
     }
   }
   walk(rawTree.value, 0)
   return out
 })
+
+function isRawDirExpanded(path: string) {
+  return rawExpandedDirs.value.has(path)
+}
+
+function toggleRawDir(path: string) {
+  const next = new Set(rawExpandedDirs.value)
+  if (next.has(path)) next.delete(path)
+  else next.add(path)
+  rawExpandedDirs.value = next
+}
+
+function expandAllRawDirs() {
+  rawExpandedDirs.value = new Set(collectRawDirPaths(rawTree.value))
+}
+
+function collapseAllRawDirs() {
+  rawExpandedDirs.value = new Set()
+}
 
 function toggleRaw(path: string) {
   const next = new Set(selectedRaw.value)
@@ -131,7 +186,7 @@ async function loadTemplates() {
 }
 
 async function createJobFromTemplate(tpl: KbIngestTemplate) {
-  if (!guardAction(PERM.KB_INGEST_JOB)) return
+  if (!guardIngestEdit()) return
   if (creatingFromTemplate.value) return
   creatingFromTemplate.value = true
   try {
@@ -148,23 +203,39 @@ async function createJobFromTemplate(tpl: KbIngestTemplate) {
   }
 }
 
-async function saveAsTemplate() {
-  if (!guardAction(PERM.KB_INGEST_JOB)) return
+function openSaveTemplateModal() {
+  if (!guardIngestEdit()) return
   if (!jobId.value || !jobCanEdit.value) return
-  const name = window.prompt(t('knowledge.ingest.saveAsTemplatePrompt'), job.value?.topic ?? '')
-  if (!name?.trim()) return
+  saveTemplateName.value = job.value?.topic?.trim() ?? ''
+  saveTemplateOpen.value = true
+}
+
+async function submitSaveTemplate() {
+  const name = saveTemplateName.value.trim()
+  if (!name) {
+    showToast('error', t('knowledge.ingest.saveAsTemplateNameRequired'))
+    return
+  }
+  if (!jobId.value || saveTemplateSaving.value) return
+  saveTemplateSaving.value = true
   try {
-    const res = await saveKbIngestJobAsTemplateApi(jobId.value, { name: name.trim(), includePlan: Boolean(job.value?.planVersion) })
+    const res = await saveKbIngestJobAsTemplateApi(jobId.value, {
+      name,
+      includePlan: Boolean(job.value?.planVersion),
+    })
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
-    showToast('success', t('knowledge.ingest.saveAsTemplate'))
+    saveTemplateOpen.value = false
+    showToast('success', t('knowledge.ingest.saveAsTemplateOk'))
     void loadTemplates()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
+  } finally {
+    saveTemplateSaving.value = false
   }
 }
 
 async function createJob() {
-  if (!guardAction(PERM.KB_INGEST_JOB)) return
+  if (!guardIngestEdit()) return
   if (creating.value) return
   if (!formTopic.value.trim()) {
     showToast('error', t('knowledge.ingest.topic'))
@@ -195,6 +266,7 @@ async function createJob() {
 /* ---------------- 批次详情模式 ---------------- */
 const job = ref<KbIngestJob | null>(null)
 const jobLoading = ref(false)
+const jobLoadError = ref('')
 const planText = ref('')
 const planGenerating = ref(false)
 const planSaving = ref(false)
@@ -247,6 +319,55 @@ const canCommit = computed(
   () => jobCanEdit.value && allApproved.value && approvedCount.value > 0 && lint.value?.commitReady === true,
 )
 
+const hasSavedPlan = computed(() => Boolean(job.value?.planVersion && job.value.planVersion > 0))
+
+const planGenerateHint = computed(() => {
+  if (planGenerating.value) return t('knowledge.ingest.planGenerating')
+  if (!jobCanEdit.value) return t('knowledge.ingest.readOnlyHint')
+  return null
+})
+const exportPromptHint = computed(() => {
+  if (!hasSavedPlan.value) return t('knowledge.ingest.hintNeedSavedPlan')
+  return null
+})
+const savePlanHint = computed(() => {
+  if (planSaving.value) return t('knowledge.ingest.planSaving')
+  if (!jobCanEdit.value) return t('knowledge.ingest.readOnlyHint')
+  if (!planText.value.trim()) return t('knowledge.ingest.hintPlanEmpty')
+  if (!planObj.value) return t('knowledge.ingest.planJsonInvalid')
+  return null
+})
+const generateDraftsHint = computed(() => {
+  if (draftsGenerating.value) return t('knowledge.ingest.draftsGenerating')
+  if (!jobCanEdit.value) return t('knowledge.ingest.readOnlyHint')
+  if (!hasSavedPlan.value) {
+    if (planText.value.trim()) return t('knowledge.ingest.hintSavePlanBeforeDrafts')
+    return t('knowledge.ingest.needPlanFirst')
+  }
+  return null
+})
+const resumeGenerateHint = computed(() => {
+  const base = generateDraftsHint.value
+  if (base) return base
+  if (!drafts.value.length) return t('knowledge.ingest.hintNeedDraftsForResume')
+  return null
+})
+const commitHint = computed(() => {
+  if (committing.value) return t('knowledge.ingest.committing')
+  if (!jobCanEdit.value) return t('knowledge.ingest.readOnlyHint')
+  if (!allApproved.value) return t('knowledge.ingest.lintNeedApprove')
+  if (!lint.value) return t('knowledge.ingest.lintNeedRun')
+  if (!lint.value.commitReady) {
+    if (lint.value.blockingCount) return t('knowledge.ingest.lintBlocked', { count: lint.value.blockingCount })
+    return t('knowledge.ingest.lintNeedRun')
+  }
+  return null
+})
+
+function hintTitle(reason: string | null) {
+  return reason ?? undefined
+}
+
 function statusLabel(s?: string) {
   const map: Record<string, string> = {
     created: t('knowledge.ingest.statusCreated'),
@@ -274,6 +395,7 @@ const conflicts = computed<string[]>(() => {
 async function loadJob() {
   if (!jobId.value) return
   jobLoading.value = true
+  jobLoadError.value = ''
   try {
     const res = await getKbIngestJobApi(jobId.value)
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.loadFailed'))
@@ -281,7 +403,9 @@ async function loadJob() {
     planText.value = res.data.planJson ? prettyJson(res.data.planJson) : ''
     await loadDrafts()
   } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.loadFailed'))
+    job.value = null
+    jobLoadError.value = e instanceof Error ? e.message : t('knowledge.ingest.loadFailed')
+    showToast('error', jobLoadError.value)
   } finally {
     jobLoading.value = false
   }
@@ -296,7 +420,7 @@ function prettyJson(s: string) {
 }
 
 async function generatePlan() {
-  if (!guardAction(PERM.KB_INGEST_JOB)) return
+  if (!guardIngestEdit()) return
   if (!jobId.value || planGenerating.value) return
   planGenerating.value = true
   try {
@@ -312,7 +436,7 @@ async function generatePlan() {
 }
 
 async function savePlan() {
-  if (!guardAction(PERM.KB_INGEST_JOB)) return
+  if (!guardIngestEdit()) return
   if (!jobId.value || planSaving.value) return
   if (!planObj.value) {
     showToast('error', t('knowledge.ingest.planJsonInvalid'))
@@ -354,7 +478,7 @@ async function loadDrafts() {
 }
 
 async function generateDrafts(resume = false) {
-  if (!guardAction(PERM.KB_INGEST_JOB)) return
+  if (!guardIngestEdit()) return
   if (!jobId.value || draftsGenerating.value) return
   if (!resume) {
     const ok = await confirm({
@@ -412,7 +536,7 @@ function syncActiveEdit() {
 }
 
 async function saveDraft() {
-  if (!guardAction(PERM.KB_INGEST_JOB)) return
+  if (!guardIngestEdit()) return
   const d = activeDraft.value
   if (!jobId.value || !d || draftSaving.value) return
   draftSaving.value = true
@@ -432,7 +556,7 @@ async function saveDraft() {
 }
 
 async function regenerateDraft() {
-  if (!guardAction(PERM.KB_INGEST_JOB)) return
+  if (!guardIngestEdit()) return
   const d = activeDraft.value
   if (!jobId.value || !d || draftRegenerating.value) return
   draftRegenerating.value = true
@@ -450,7 +574,7 @@ async function regenerateDraft() {
 }
 
 async function setApproval(d: KbIngestDraft, approval: 'approved' | 'rejected' | 'draft') {
-  if (!guardAction(PERM.KB_INGEST_JOB)) return
+  if (!guardIngestEdit()) return
   if (!jobId.value) return
   try {
     const res = await setKbIngestDraftApprovalApi(jobId.value, d.slug, approval)
@@ -481,7 +605,7 @@ async function runLint() {
 }
 
 async function commit(sync: boolean) {
-  if (!guardAction(PERM.KB_INGEST_COMMIT)) return
+  if (!guardIngestEdit()) return
   if (!jobId.value || committing.value) return
   if (!canCommit.value) {
     showToast('error', lint.value ? t('knowledge.ingest.lintNeedApprove') : t('knowledge.ingest.lintNeedRun'))
@@ -526,6 +650,10 @@ function approvalLabel(approval: string) {
   return t('knowledge.ingest.draftPending')
 }
 
+watch(rawTree, (tree) => {
+  if (tree.length) expandAllRawDirs()
+})
+
 watch(jobId, (id) => {
   job.value = null
   drafts.value = []
@@ -546,13 +674,13 @@ watch(selectedSpaceQueryId, () => {
   }
 })
 
+watch(() => spaces.value.length, () => {
+  initIngestSpace()
+})
+
 onMounted(async () => {
   await ensureSpacesLoaded()
-  if (!jobId.value && !selectedSpaceId.value) {
-    const preferred = preferredSpace.value
-    const id = toEntityId(preferred?.id)
-    if (id) setSelectedSpaceId(id)
-  }
+  initIngestSpace()
   if (jobId.value) await loadJob()
   else {
     await loadJobs()
@@ -569,9 +697,15 @@ onMounted(async () => {
       <div class="card p-5">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('knowledge.ingest.pageTitle') }}</h2>
-          <KbSpaceSelector />
+          <KbSpaceSelector editable-only />
         </div>
         <p class="mt-1 text-xs text-gray-400">{{ t('knowledge.ingest.subtitle') }}</p>
+        <p v-if="!editableSpaces.length" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+          {{ t('knowledge.ingest.noEditableSpace') }}
+        </p>
+        <p v-else-if="!canEdit" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+          {{ t('knowledge.ingest.readOnlyHint') }}
+        </p>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-2">
@@ -594,30 +728,60 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="mt-4 flex items-center justify-between">
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
             <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('knowledge.ingest.rawTree') }}</span>
-            <span class="text-xs text-gray-400">{{ t('knowledge.ingest.selected', { count: selectedRaw.size }) }}</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs text-gray-400">{{ t('knowledge.ingest.selected', { count: selectedRaw.size }) }}</span>
+              <button
+                v-if="rawFlatTree.length"
+                type="button"
+                class="btn-ghost px-2 py-0.5 text-xs"
+                @click="expandAllRawDirs"
+              >
+                {{ t('common.expandAll') }}
+              </button>
+              <button
+                v-if="rawFlatTree.length"
+                type="button"
+                class="btn-ghost px-2 py-0.5 text-xs"
+                @click="collapseAllRawDirs"
+              >
+                {{ t('common.collapseAll') }}
+              </button>
+            </div>
           </div>
           <div class="mt-2 max-h-72 flex-1 overflow-auto rounded-lg border border-gray-100 p-2 dark:border-white/5">
             <p v-if="rawLoading" class="p-3 text-xs text-gray-400">{{ t('common.loading') }}</p>
-            <p v-else-if="!flatTree.length" class="p-3 text-xs text-gray-400">{{ t('knowledge.ingest.rawTreeEmpty') }}</p>
+            <p v-else-if="!rawFlatTree.length" class="p-3 text-xs text-gray-400">{{ t('knowledge.ingest.rawTreeEmpty') }}</p>
             <template v-else>
               <div
-                v-for="item in flatTree"
+                v-for="item in rawFlatTree"
                 :key="item.node.path"
-                class="flex items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-gray-50 dark:hover:bg-white/5"
+                class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs hover:bg-gray-50 dark:hover:bg-white/5"
+                :class="item.node.type === 'file' ? 'no-tilt-drag cursor-pointer' : item.hasChildren ? 'no-tilt-drag cursor-pointer' : ''"
                 :style="{ paddingLeft: `${item.depth * 14 + 6}px` }"
+                @click="item.node.type === 'file' ? toggleRaw(item.node.path) : item.hasChildren && toggleRawDir(item.node.path)"
               >
                 <template v-if="item.node.type === 'dir'">
+                  <ChevronDown
+                    v-if="item.hasChildren && isRawDirExpanded(item.node.path)"
+                    class="h-3.5 w-3.5 shrink-0 text-gray-400"
+                  />
+                  <ChevronRight
+                    v-else-if="item.hasChildren"
+                    class="h-3.5 w-3.5 shrink-0 text-gray-400"
+                  />
+                  <span v-else class="inline-block h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   <Folder class="h-3.5 w-3.5 shrink-0 text-amber-500" />
                   <span class="truncate text-gray-500 dark:text-gray-400">{{ item.node.name }}</span>
                 </template>
                 <template v-else>
+                  <span class="inline-block h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   <input
                     type="checkbox"
-                    class="h-3.5 w-3.5 shrink-0"
+                    class="pointer-events-none h-3.5 w-3.5 shrink-0"
                     :checked="selectedRaw.has(item.node.path)"
-                    @change="toggleRaw(item.node.path)"
+                    tabindex="-1"
                   />
                   <span class="truncate text-gray-700 dark:text-gray-200">{{ item.node.name }}</span>
                 </template>
@@ -628,13 +792,14 @@ onMounted(async () => {
           <button
             type="button"
             class="btn-primary mt-4 self-start text-sm"
-            :disabled="creating || !canEdit || !canRunIngestJobAction || !formTopic.trim() || selectedRaw.size === 0"
+            :disabled="creating || !canEdit || !formTopic.trim() || selectedRaw.size === 0"
             @click="createJob"
           >
             <Loader2 v-if="creating" class="h-4 w-4 animate-spin" />
             {{ creating ? t('knowledge.ingest.creating') : t('knowledge.ingest.create') }}
           </button>
-          <p v-if="!canEdit" class="mt-2 text-xs text-amber-600 dark:text-amber-400">{{ t('knowledge.ingest.readOnlyHint') }}</p>
+          <p v-if="canEdit && !formTopic.trim()" class="mt-2 text-xs text-gray-400">{{ t('knowledge.ingest.createNeedTopic') }}</p>
+          <p v-else-if="canEdit && selectedRaw.size === 0" class="mt-2 text-xs text-gray-400">{{ t('knowledge.ingest.createNeedRaw') }}</p>
         </div>
 
         <!-- 历史批次 -->
@@ -646,7 +811,7 @@ onMounted(async () => {
             <li
               v-for="j in jobs"
               :key="String(j.id)"
-              class="flex cursor-pointer items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm hover:border-brand-200 hover:bg-brand-50/40 dark:border-white/5 dark:hover:bg-white/5"
+              class="no-tilt-drag flex cursor-pointer items-center justify-between rounded-lg border border-gray-100 px-3 py-2 text-sm hover:border-brand-200 hover:bg-brand-50/40 dark:border-white/5 dark:hover:bg-white/5"
               @click="router.push({ path: '/knowledge/ingest', query: { id: String(j.id) } })"
             >
               <div class="min-w-0">
@@ -680,7 +845,7 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-ghost shrink-0 text-xs"
-              :disabled="creatingFromTemplate || !canEdit || !canRunIngestJobAction"
+              :disabled="creatingFromTemplate || !canEdit"
               @click="createJobFromTemplate(tpl)"
             >
               <Loader2 v-if="creatingFromTemplate" class="h-3.5 w-3.5 animate-spin" />
@@ -693,6 +858,16 @@ onMounted(async () => {
 
     <!-- ===================== 批次详情 ===================== -->
     <template v-else>
+      <div v-if="jobLoading" class="card flex items-center justify-center p-12 text-sm text-gray-400">
+        <Loader2 class="mr-2 h-5 w-5 animate-spin" /> {{ t('common.loading') }}
+      </div>
+      <div v-else-if="jobLoadError" class="card flex flex-col items-center gap-3 p-12 text-center">
+        <p class="text-sm text-rose-500">{{ jobLoadError }}</p>
+        <button type="button" class="btn-primary text-sm" @click="backToList">
+          {{ t('knowledge.ingest.backToList') }}
+        </button>
+      </div>
+      <template v-else>
       <div class="card p-5">
         <div class="flex flex-wrap items-center gap-3">
           <button type="button" class="btn-ghost shrink-0 text-sm" @click="backToList">
@@ -707,10 +882,10 @@ onMounted(async () => {
             </div>
           </div>
           <button
-            v-if="jobCanEdit && canRunIngestJobAction"
+            v-if="jobCanEdit"
             type="button"
             class="btn-ghost shrink-0 text-sm"
-            @click="saveAsTemplate"
+            @click="openSaveTemplateModal"
           >
             {{ t('knowledge.ingest.saveAsTemplate') }}
           </button>
@@ -728,31 +903,44 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-ghost text-sm"
-              :disabled="planGenerating || !jobCanEdit || !canRunIngestJobAction"
+              :disabled="planGenerating || !jobCanEdit"
+              :title="hintTitle(planGenerateHint)"
               @click="generatePlan"
             >
               <Loader2 v-if="planGenerating" class="h-4 w-4 animate-spin" />
               <Sparkles v-else class="h-4 w-4" />
               {{ job?.planVersion ? t('knowledge.ingest.regeneratePlan') : t('knowledge.ingest.generatePlan') }}
             </button>
-            <button type="button" class="btn-ghost text-sm" :disabled="!job?.planVersion" @click="exportPrompt">
+            <button
+              type="button"
+              class="btn-ghost text-sm"
+              :disabled="!job?.planVersion"
+              :title="hintTitle(exportPromptHint)"
+              @click="exportPrompt"
+            >
               <ClipboardCopy class="h-4 w-4" /> {{ t('knowledge.ingest.exportPrompt') }}
             </button>
             <button
               type="button"
               class="btn-primary text-sm"
-              :disabled="planSaving || !jobCanEdit || !canRunIngestJobAction || !planObj"
+              :disabled="planSaving || !jobCanEdit || !planObj"
+              :title="hintTitle(savePlanHint)"
               @click="savePlan"
             >
               {{ t('knowledge.ingest.savePlan') }}
             </button>
           </div>
         </div>
-        <p v-if="job && !job.planVersion && !planText" class="mt-3 text-xs text-gray-400">{{ t('knowledge.ingest.planEmpty') }}</p>
+        <p v-if="planGenerateHint || exportPromptHint || savePlanHint" class="mt-2 rounded-md bg-amber-50/90 px-2.5 py-1.5 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+          <span v-if="planGenerateHint && (planGenerating || !jobCanEdit)">{{ planGenerateHint }}</span>
+          <span v-else-if="exportPromptHint && !job?.planVersion">{{ exportPromptHint }}</span>
+          <span v-else-if="savePlanHint">{{ savePlanHint }}</span>
+        </p>
+        <p v-else-if="job && !job.planVersion && !planText" class="mt-3 text-xs text-gray-400">{{ t('knowledge.ingest.planEmpty') }}</p>
         <p v-if="job?.planSource" class="mt-2 text-xs text-gray-400">{{ t('knowledge.ingest.planSource', { source: job.planSource }) }}</p>
         <textarea
           v-model="planText"
-          class="field-input mt-3 min-h-[200px] resize-y font-mono text-xs leading-relaxed"
+          class="field-input mt-3 min-h-[min(40vh,26rem)] resize-y font-mono text-xs leading-relaxed"
           :placeholder="t('knowledge.ingest.planEditorPlaceholder')"
           spellcheck="false"
           :disabled="!jobCanEdit"
@@ -773,7 +961,8 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-ghost text-sm"
-              :disabled="draftsGenerating || !jobCanEdit || !canRunIngestJobAction || !job?.planVersion || !drafts.length"
+              :disabled="draftsGenerating || !jobCanEdit || !job?.planVersion || !drafts.length"
+              :title="hintTitle(resumeGenerateHint)"
               @click="generateDrafts(true)"
             >
               <Loader2 v-if="draftsGenerating" class="h-4 w-4 animate-spin" />
@@ -783,7 +972,8 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-ghost text-sm"
-              :disabled="draftsGenerating || !jobCanEdit || !canRunIngestJobAction || !job?.planVersion"
+              :disabled="draftsGenerating || !jobCanEdit || !job?.planVersion"
+              :title="hintTitle(generateDraftsHint)"
               @click="generateDrafts(false)"
             >
               <RefreshCw class="h-4 w-4" :class="draftsGenerating && 'animate-spin'" />
@@ -792,11 +982,27 @@ onMounted(async () => {
           </div>
         </div>
 
+        <p v-if="generateDraftsHint" class="mt-2 rounded-md bg-amber-50/90 px-2.5 py-1.5 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+          {{ generateDraftsHint }}
+        </p>
+        <p v-else-if="resumeGenerateHint && !drafts.length" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {{ resumeGenerateHint }}
+        </p>
+
         <p v-if="lastGenerateStats" class="mt-2 text-xs text-gray-400">
           {{ t('knowledge.ingest.generateProgress', lastGenerateStats) }}
         </p>
 
-        <p v-if="!drafts.length" class="mt-3 text-xs text-gray-400">{{ t('knowledge.ingest.noDrafts') }}</p>
+        <div
+          v-if="!drafts.length"
+          class="mt-3 flex min-h-[min(36vh,22rem)] flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50/40 px-6 py-8 text-center dark:border-white/10 dark:bg-white/[0.02]"
+        >
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.noDrafts') }}</p>
+          <p v-if="hasSavedPlan && !generateDraftsHint" class="mt-2 text-xs text-brand-600 dark:text-brand-300">
+            {{ t('knowledge.ingest.hintClickGenerateDrafts') }}
+          </p>
+          <p v-else-if="generateDraftsHint" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ generateDraftsHint }}</p>
+        </div>
 
         <div v-else class="mt-4 flex flex-col gap-4 lg:flex-row">
           <!-- 草稿列表 -->
@@ -830,7 +1036,7 @@ onMounted(async () => {
                   <button
                     type="button"
                     class="btn-ghost text-xs"
-                    :disabled="draftRegenerating || !jobCanEdit || !canRunIngestJobAction"
+                    :disabled="draftRegenerating || !jobCanEdit"
                     @click="regenerateDraft"
                   >
                     <RefreshCw class="h-3.5 w-3.5" :class="draftRegenerating && 'animate-spin'" /> {{ t('knowledge.ingest.regenerate') }}
@@ -838,7 +1044,7 @@ onMounted(async () => {
                   <button
                     type="button"
                     class="btn-ghost text-xs text-emerald-600 dark:text-emerald-400"
-                    :disabled="!jobCanEdit || !canRunIngestJobAction"
+                    :disabled="!jobCanEdit"
                     @click="setApproval(activeDraft, 'approved')"
                   >
                     <Check class="h-3.5 w-3.5" /> {{ t('knowledge.ingest.approve') }}
@@ -846,7 +1052,7 @@ onMounted(async () => {
                   <button
                     type="button"
                     class="btn-ghost text-xs text-rose-500"
-                    :disabled="!jobCanEdit || !canRunIngestJobAction"
+                    :disabled="!jobCanEdit"
                     @click="setApproval(activeDraft, 'rejected')"
                   >
                     <X class="h-3.5 w-3.5" /> {{ t('knowledge.ingest.reject') }}
@@ -856,7 +1062,7 @@ onMounted(async () => {
 
               <div
                 v-if="draftTab === 'diff'"
-                class="mt-3 max-h-[460px] flex-1 overflow-auto rounded-lg border border-gray-100 bg-gray-50/50 font-mono text-xs leading-relaxed dark:border-white/5 dark:bg-white/[0.02]"
+                class="mt-3 min-h-[min(44vh,28rem)] flex-1 overflow-auto rounded-lg border border-gray-100 bg-gray-50/50 font-mono text-xs leading-relaxed dark:border-white/5 dark:bg-white/[0.02]"
               >
                 <table class="w-full border-collapse">
                   <tbody>
@@ -879,14 +1085,14 @@ onMounted(async () => {
               <template v-else-if="draftTab === 'edit'">
                 <textarea
                   v-model="draftEditContent"
-                  class="field-input mt-3 min-h-[400px] flex-1 resize-y font-mono text-xs leading-relaxed"
+                  class="field-input mt-3 min-h-[min(44vh,28rem)] flex-1 resize-y font-mono text-xs leading-relaxed"
                   spellcheck="false"
                   :disabled="!jobCanEdit"
                 />
                 <button
                   type="button"
                   class="btn-primary mt-3 self-start text-sm"
-                  :disabled="draftSaving || !jobCanEdit || !canRunIngestJobAction"
+                  :disabled="draftSaving || !jobCanEdit"
                   @click="saveDraft"
                 >
                   <Loader2 v-if="draftSaving" class="h-4 w-4 animate-spin" />
@@ -898,7 +1104,7 @@ onMounted(async () => {
                 <p class="mt-2 text-xs text-gray-400">{{ t('knowledge.ingest.patchEditHint') }}</p>
                 <textarea
                   v-model="draftPatchContent"
-                  class="field-input mt-2 min-h-[280px] flex-1 resize-y font-mono text-xs leading-relaxed"
+                  class="field-input mt-2 min-h-[min(36vh,22rem)] flex-1 resize-y font-mono text-xs leading-relaxed"
                   spellcheck="false"
                   :disabled="!jobCanEdit"
                 />
@@ -921,7 +1127,7 @@ onMounted(async () => {
                 <button
                   type="button"
                   class="btn-primary mt-3 self-start text-sm"
-                  :disabled="draftSaving || !jobCanEdit || !canRunIngestJobAction"
+                  :disabled="draftSaving || !jobCanEdit"
                   @click="saveDraft"
                 >
                   <Loader2 v-if="draftSaving" class="h-4 w-4 animate-spin" />
@@ -945,7 +1151,8 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-ghost text-sm"
-              :disabled="committing || !canRunIngestCommitAction || !canCommit"
+              :disabled="committing || !canCommit"
+              :title="hintTitle(commitHint)"
               @click="commit(false)"
             >
               {{ t('knowledge.ingest.commit') }}
@@ -953,7 +1160,8 @@ onMounted(async () => {
             <button
               type="button"
               class="btn-primary text-sm"
-              :disabled="committing || !canRunIngestCommitAction || !canCommit"
+              :disabled="committing || !canCommit"
+              :title="hintTitle(commitHint)"
               @click="commit(true)"
             >
               <Loader2 v-if="committing" class="h-4 w-4 animate-spin" />
@@ -963,7 +1171,11 @@ onMounted(async () => {
           </div>
         </div>
 
-        <p v-if="!allApproved" class="mt-3 text-xs text-amber-600 dark:text-amber-400">{{ t('knowledge.ingest.lintNeedApprove') }}</p>
+        <p v-if="commitHint && !canCommit" class="mt-2 rounded-md bg-amber-50/90 px-2.5 py-1.5 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+          {{ commitHint }}
+        </p>
+
+        <p v-if="!allApproved && canCommit === false && !commitHint" class="mt-3 text-xs text-amber-600 dark:text-amber-400">{{ t('knowledge.ingest.lintNeedApprove') }}</p>
 
         <div v-if="lint" class="mt-3">
           <p v-if="lint.commitReady" class="text-xs font-medium text-emerald-600 dark:text-emerald-400">{{ t('knowledge.ingest.lintReady') }}</p>
@@ -985,6 +1197,35 @@ onMounted(async () => {
           </ul>
         </div>
       </div>
+      </template>
     </template>
+
+    <AppModal
+      :open="saveTemplateOpen"
+      :title="t('knowledge.ingest.saveAsTemplate')"
+      @close="saveTemplateOpen = false"
+    >
+      <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.saveAsTemplateDesc') }}</p>
+      <label class="flex flex-col gap-1.5">
+        <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.saveAsTemplatePrompt') }}</span>
+        <input
+          v-model="saveTemplateName"
+          type="text"
+          class="field-input"
+          :placeholder="t('knowledge.ingest.saveAsTemplatePlaceholder')"
+          @keydown.enter.prevent="submitSaveTemplate"
+        />
+      </label>
+      <p v-if="job?.planVersion" class="mt-2 text-xs text-gray-400">{{ t('knowledge.ingest.saveAsTemplateIncludePlan') }}</p>
+      <template #footer>
+        <button type="button" class="btn-ghost" :disabled="saveTemplateSaving" @click="saveTemplateOpen = false">
+          {{ t('confirm.cancel') }}
+        </button>
+        <button type="button" class="btn-primary" :disabled="saveTemplateSaving || !saveTemplateName.trim()" @click="submitSaveTemplate">
+          <Loader2 v-if="saveTemplateSaving" class="h-4 w-4 animate-spin" />
+          {{ saveTemplateSaving ? t('common.loading') : t('confirm.ok') }}
+        </button>
+      </template>
+    </AppModal>
   </div>
 </template>

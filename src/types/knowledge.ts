@@ -545,6 +545,59 @@ export type KbWikiLintPreview = {
   issues: KbWikiLintPreviewItem[]
 }
 
+/** POST /kb/wiki/enrich */
+export type KbWikiEnrichEdge = {
+  from: string
+  to: string
+  type?: string
+  evidence?: string
+}
+
+export type KbWikiEnrichItem = {
+  slug: string
+  patch?: string
+  reason?: string
+  rawPaths?: string[]
+}
+
+export type KbWikiEnrichRequest = {
+  spaceId?: number | string
+  batchNo?: string
+  topic?: string
+  slug?: string
+  patch?: string
+  reason?: string
+  rawPaths?: string[]
+  items?: KbWikiEnrichItem[]
+  edges?: KbWikiEnrichEdge[]
+  updateMeta?: boolean
+  appendLog?: boolean
+  appendIndex?: boolean
+  appendEdges?: boolean
+  dryRun?: boolean
+  sync?: boolean
+}
+
+export type KbWikiEnrichItemResult = {
+  slug: string
+  patch?: string
+  mergedPreview?: string
+  applied?: boolean
+  error?: string
+}
+
+export type KbWikiEnrichResult = {
+  batchNo?: string
+  topic?: string
+  dryRun?: boolean
+  items?: KbWikiEnrichItemResult[]
+  logAppended?: boolean
+  indexUpdated?: boolean
+  edgesAppended?: number
+  syncTriggered?: boolean
+  syncResult?: KbSyncTrigger
+}
+
 /* ------------------------------------------------------------------ */
 /* Ingest 工作台（T15a）                                               */
 /* ------------------------------------------------------------------ */

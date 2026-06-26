@@ -131,7 +131,7 @@ async function loadList() {
       throw new Error(res.msg || t('knowledge.docManage.loadFailed'))
     }
     list.value = res.data.records ?? []
-    total.value = res.data.total ?? 0
+    total.value = Number(res.data.total ?? 0) || 0
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.docManage.loadFailed'))
   } finally {
@@ -158,6 +158,7 @@ function openCreate() {
 }
 
 function openEdit(row: KbDocumentListItem) {
+  if (!guardAction(PERM.KB_WIKI_EDIT)) return
   if (!canWikiEdit(row)) {
     showToast('error', t('knowledge.docManage.wikiEditOnly'))
     return

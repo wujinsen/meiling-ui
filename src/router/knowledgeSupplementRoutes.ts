@@ -19,6 +19,7 @@ export const KNOWLEDGE_DOCUMENT_EDIT_ROUTE: RouteRecordRaw = {
   meta: {
     titleKey: 'knowledge.docManage.editPageTitle',
     perms: 'kb:wiki:edit',
+    skipMenuGuard: true,
   },
 }
 
@@ -30,6 +31,7 @@ export const KNOWLEDGE_WIKI_EDIT_ROUTE: RouteRecordRaw = {
   meta: {
     titleKey: 'knowledge.wikiEdit.pageTitle',
     perms: 'kb:wiki:edit',
+    skipMenuGuard: true,
   },
 }
 
