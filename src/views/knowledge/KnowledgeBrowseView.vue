@@ -27,7 +27,7 @@ const inflightPages = new Map<string, Promise<KbPage | undefined>>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { selectedSpaceId, selectedSpace, spaces, loadError: spaceLoadError, loading: spaceLoading, ensureSpacesLoaded, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
+const { selectedSpaceCode, selectedSpace, spaces, loadError: spaceLoadError, loading: spaceLoading, ensureSpacesLoaded, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
 
 const noAccessibleSpaces = computed(
   () => !spaceLoading.value && spaces.value.length === 0 && !spaceLoadError.value,
@@ -174,7 +174,7 @@ function preferredSlug(explicit?: string) {
 function preferredSpaceId() {
   const q = route.query.spaceId
   if (typeof q === 'string' && q) return q
-  return undefined
+  return kbQuerySpaceId()
 }
 
 function scheduleMarkdownRender(content?: string) {
@@ -590,13 +590,16 @@ onMounted(async () => {
   void loadIndex()
 })
 
-watch(selectedSpaceId, () => {
+watch(selectedSpaceCode, () => {
   if (!browseReady.value) return
   pageCache.clear()
   inflightPages.clear()
   page.value = null
   activeSlug.value = ''
   contentHtml.value = ''
+  resetTreeExpandState()
+  index.value = { total: 0, groups: [] }
+  loadError.value = ''
   void loadIndex()
 })
 

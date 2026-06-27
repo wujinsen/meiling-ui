@@ -22,6 +22,9 @@ import {
   Share2,
   MessageCircleQuestion,
   Activity,
+  Hammer,
+  Lightbulb,
+  Puzzle,
 } from 'lucide-vue-next'
 
 const ICON_MAP: Record<string, Component> = {
@@ -50,6 +53,9 @@ const ICON_MAP: Record<string, Component> = {
   query: MessageCircleQuestion,
   graph: Share2,
   health: Activity,
+  build: Hammer,
+  example: Lightbulb,
+  component: Puzzle,
 }
 
 export type MenuIconKey = keyof typeof ICON_MAP

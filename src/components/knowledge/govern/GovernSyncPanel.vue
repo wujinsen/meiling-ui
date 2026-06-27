@@ -22,7 +22,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { selectedSpace, kbQuerySpaceId } = useKbSpace()
+const { selectedSpace, kbSpaceQuery } = useKbSpace()
 const syncPanelRef = ref<InstanceType<typeof KbSyncPanel> | null>(null)
 const showLogs = ref(false)
 const triggering = ref(false)
@@ -38,9 +38,10 @@ async function triggerSync() {
 
   triggering.value = true
   try {
+    const scope = kbSpaceQuery()
     const params: { spaceId?: number | string; spaceCode?: string } = {}
-    const sid = kbQuerySpaceId()
-    if (sid != null) params.spaceId = sid
+    if (scope.spaceId != null) params.spaceId = scope.spaceId
+    else if (scope.spaceCode) params.spaceCode = scope.spaceCode
     else if (selectedSpace.value?.spaceCode) params.spaceCode = selectedSpace.value.spaceCode
     else params.spaceCode = 'enterprise-kb'
 

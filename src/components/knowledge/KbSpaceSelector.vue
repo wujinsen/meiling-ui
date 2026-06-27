@@ -10,16 +10,16 @@ const props = withDefaults(
   { editableOnly: false },
 )
 
-const { spaces, selectedSpaceId, hasMultipleSpaces, setSelectedSpaceId } = useKbSpace()
+const { spaces, selectedSpaceCode, hasMultipleSpaces, setSelectedSpaceCode } = useKbSpace()
 
 const displaySpaces = computed(() =>
   props.editableOnly ? spaces.value.filter((s) => s.canEdit === true) : spaces.value,
 )
 
 const selectValue = computed({
-  get: () => (selectedSpaceId.value == null ? 'all' : String(selectedSpaceId.value)),
+  get: () => selectedSpaceCode.value ?? 'all',
   set: (v: string) => {
-    setSelectedSpaceId(v === 'all' ? null : v)
+    setSelectedSpaceCode(v === 'all' ? null : v)
   },
 })
 

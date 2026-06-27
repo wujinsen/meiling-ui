@@ -13,7 +13,7 @@ import { PERM } from '@/constants/permissions'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 
 const { t } = useI18n()
-const { selectedSpace, kbQuerySpaceId, ensureSpacesLoaded } = useKbSpace()
+const { selectedSpace, kbQuerySpaceId, kbSpaceQuery, ensureSpacesLoaded } = useKbSpace()
 
 const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
 
@@ -100,9 +100,10 @@ async function trigger() {
   lastResult.value = null
   showRawOutput.value = false
   try {
+    const scope = kbSpaceQuery()
     const params: { spaceId?: number | string; spaceCode?: string } = {}
-    const sid = kbQuerySpaceId()
-    if (sid != null) params.spaceId = sid
+    if (scope.spaceId != null) params.spaceId = scope.spaceId
+    else if (scope.spaceCode) params.spaceCode = scope.spaceCode
     else if (selectedSpace.value?.spaceCode) params.spaceCode = selectedSpace.value.spaceCode
     else params.spaceCode = 'enterprise-kb'
 

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { ChevronDown } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { useKbSpace } from '@/composables/useKbSpace'
+import type { KbAccessibleSpace } from '@/types/knowledge'
 import { toEntityId } from '@/utils/id'
 
 const props = withDefaults(
@@ -16,11 +17,13 @@ const props = withDefaults(
      * @deprecated 等价于 hideAllOption + writableOnly
      */
     editableOnly?: boolean
+    /** v-model 绑定 spaceCode（默认）或 spaceId */
+    valueField?: 'code' | 'id'
   }>(),
-  { hideAllOption: false, writableOnly: false, editableOnly: false },
+  { hideAllOption: false, writableOnly: false, editableOnly: false, valueField: 'code' },
 )
 
-/** 单选：'all' 或空间 ID */
+/** 单选：'all' 或空间 code/id */
 const singleValue = defineModel<string>({ default: 'all' })
 
 const { t } = useI18n()
@@ -44,29 +47,41 @@ function spaceIdValue(id: number | string) {
   return toEntityId(id) ?? String(id)
 }
 
+function spaceOptionValue(s: KbAccessibleSpace) {
+  return props.valueField === 'id' ? spaceIdValue(s.id) : s.spaceCode
+}
+
 function spaceLabel(s: { spaceName?: string; visibility?: number; canEdit?: boolean }) {
   const privateMark = s.visibility === 0 ? ` · ${t('knowledge.space.private')}` : ''
   const readOnlyMark = hideAll.value && s.canEdit !== true ? ` · ${t('knowledge.space.readOnly')}` : ''
   return `${s.spaceName ?? ''}${privateMark}${readOnlyMark}`
 }
 
-function spaceNameById(id: string) {
-  const space = displaySpaces.value.find((s) => spaceIdValue(s.id) === id)
-    ?? spaces.value.find((s) => spaceIdValue(s.id) === id)
-  return space ? spaceLabel(space) : id
+function findSpaceByValue(value: string) {
+  if (props.valueField === 'id') {
+    return displaySpaces.value.find((s) => spaceIdValue(s.id) === value)
+      ?? spaces.value.find((s) => spaceIdValue(s.id) === value)
+  }
+  return displaySpaces.value.find((s) => s.spaceCode === value)
+    ?? spaces.value.find((s) => s.spaceCode === value)
+}
+
+function spaceNameByValue(value: string) {
+  const space = findSpaceByValue(value)
+  return space ? spaceLabel(space) : value
 }
 
 const triggerLabel = computed(() => {
   if (!hideAll.value && singleValue.value === 'all') return t('knowledge.space.allAccessible')
-  return spaceNameById(singleValue.value)
+  return spaceNameByValue(singleValue.value)
 })
 
 function isAllActive() {
   return singleValue.value === 'all'
 }
 
-function isSpaceActive(id: string) {
-  return singleValue.value === id
+function isSpaceActive(value: string) {
+  return singleValue.value === value
 }
 
 function closePanel() {
@@ -82,9 +97,16 @@ function selectAll() {
   closePanel()
 }
 
-function selectSpace(id: string) {
-  singleValue.value = id
+function selectSpace(value: string) {
+  singleValue.value = value
   closePanel()
+}
+
+function ensureValidSelection() {
+  if (!hideAll.value || !displaySpaces.value.length) return
+  const cur = singleValue.value
+  const ok = displaySpaces.value.some((s) => spaceOptionValue(s) === cur)
+  if (!ok || cur === 'all') singleValue.value = spaceOptionValue(displaySpaces.value[0])
 }
 
 function onDocumentClick(event: MouseEvent) {
@@ -93,23 +115,13 @@ function onDocumentClick(event: MouseEvent) {
 }
 
 onMounted(() => {
-  void ensureSpacesLoaded().then(() => {
-    if (hideAll.value && displaySpaces.value.length) {
-      const cur = singleValue.value
-      const ok = displaySpaces.value.some((s) => spaceIdValue(s.id) === cur)
-      if (!ok || cur === 'all') singleValue.value = spaceIdValue(displaySpaces.value[0].id)
-    }
-  })
+  void ensureSpacesLoaded().then(() => ensureValidSelection())
   document.addEventListener('click', onDocumentClick)
 })
 
 watch(
-  () => displaySpaces.value.map((s) => spaceIdValue(s.id)).join(','),
-  () => {
-    if (!hideAll.value || !displaySpaces.value.length) return
-    const ok = displaySpaces.value.some((s) => spaceIdValue(s.id) === singleValue.value)
-    if (!ok || singleValue.value === 'all') singleValue.value = spaceIdValue(displaySpaces.value[0].id)
-  },
+  () => [displaySpaces.value.map((s) => spaceOptionValue(s)).join(','), props.valueField] as const,
+  () => ensureValidSelection(),
 )
 onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 </script>
@@ -149,11 +161,11 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
       <div v-if="!hideAll" class="kb-space-dropdown-divider" />
       <button
         v-for="s in displaySpaces"
-        :key="String(s.id)"
+        :key="spaceOptionValue(s)"
         type="button"
         class="kb-space-dropdown-item"
-        :class="isSpaceActive(spaceIdValue(s.id)) && 'kb-space-dropdown-item-active'"
-        @click="selectSpace(spaceIdValue(s.id))"
+        :class="isSpaceActive(spaceOptionValue(s)) && 'kb-space-dropdown-item-active'"
+        @click="selectSpace(spaceOptionValue(s))"
       >
         <span class="truncate">{{ spaceLabel(s) }}</span>
       </button>

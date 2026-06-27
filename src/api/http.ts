@@ -6,6 +6,12 @@ import { clearAuthSession, getToken } from '@/utils/authSession'
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 const DEFAULT_TIMEOUT_MS = 8_000
 
+/** Quote ≥16-digit JSON integers before parse — snowflake IDs exceed Number.MAX_SAFE_INTEGER. */
+function parseResponseJson<T>(text: string): T {
+  const safe = text.replace(/([:\[,]\s*)(-?\d{16,})(?=\s*[,}\]])/g, '$1"$2"')
+  return JSON.parse(safe) as T
+}
+
 export async function request<T>(
   path: string,
   options: RequestInit & { timeoutMs?: number } = {},
@@ -43,7 +49,8 @@ export async function request<T>(
 
   let result: MoliResult<T>
   try {
-    result = await response.json()
+    const text = await response.text()
+    result = parseResponseJson<MoliResult<T>>(text)
   } catch {
     if (response.status === 405) {
       throw new Error(

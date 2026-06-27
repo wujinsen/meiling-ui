@@ -74,7 +74,7 @@ const { t } = useI18n()
 
 const router = useRouter()
 
-const { selectedSpaceId, selectedSpace, ensureSpacesLoaded } = useKbSpace()
+const { selectedSpaceId, ensureSpacesLoaded, kbSpaceQuery, resolveSelectedSpace } = useKbSpace()
 
 
 
@@ -103,11 +103,8 @@ const fixProgress = ref<GovernFixProgress | null>(null)
 
 
 const canEdit = computed(() => {
-
   if (selectedSpaceId.value == null) return false
-
-  return selectedSpace.value?.canEdit === true
-
+  return resolveSelectedSpace()?.canEdit === true
 })
 
 
@@ -152,11 +149,27 @@ async function runLint(options?: { asRelint?: boolean }) {
 
   try {
 
+    const scope = kbSpaceQuery()
+
+    if (!scope.spaceId) {
+
+      showToast('error', t('knowledge.wikiGovern.pickSpace'))
+
+      return
+
+    }
+
+    if (!scope.spaceCode) {
+
+      showToast('error', t('knowledge.space.spaceResolveFailed'))
+
+      return
+
+    }
+
     const res = await lintWikiSpaceApi({
 
-      spaceId: selectedSpaceId.value ?? undefined,
-
-      spaceCode: selectedSpace.value?.spaceCode,
+      ...scope,
 
       strict: strictLint.value,
 
@@ -169,6 +182,20 @@ async function runLint(options?: { asRelint?: boolean }) {
     }
 
     const data = res.data
+
+    if (data.spaceCode && data.spaceCode !== scope.spaceCode) {
+
+      showToast('error', t('knowledge.wikiGovern.lintSpaceMismatch', {
+
+        expected: scope.spaceCode,
+
+        got: data.spaceCode,
+
+      }))
+
+      return
+
+    }
 
     if (asRelint) {
 

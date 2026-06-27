@@ -281,7 +281,7 @@ watch(
 
     <template v-else>
       <div class="kb-doc-manage-toolbar">
-        <KbSpaceDropdown v-model="docSpaceId" hide-all-option />
+        <KbSpaceDropdown v-model="docSpaceId" hide-all-option value-field="id" />
         <nav class="kb-doc-manage-tabs" :aria-label="t('knowledge.docManage.title')">
           <SegmentControl v-model="activeTab" :options="tabOptions" />
         </nav>
