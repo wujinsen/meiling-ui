@@ -39,15 +39,16 @@ const form = ref({
   sort: 0,
 })
 
-const TYPE_OPTIONS = [
+const TYPE_OPTIONS = computed(() => [
   { value: '', label: '—' },
-  { value: 'guide', label: '操作指导 guide' },
-  { value: 'service', label: '微服务 service' },
-  { value: 'concept', label: '概念 concept' },
-  { value: 'article', label: '技术文章 article' },
-  { value: 'interview', label: '面试题 interview' },
-  { value: 'output', label: '综合 output' },
-]
+  { value: 'guide', label: t('knowledge.docManage.kbType.guide') },
+  { value: 'service', label: t('knowledge.docManage.kbType.service') },
+  { value: 'concept', label: t('knowledge.docManage.kbType.concept') },
+  { value: 'article', label: t('knowledge.docManage.kbType.article') },
+  { value: 'interview', label: t('knowledge.docManage.kbType.interview') },
+  { value: 'output', label: t('knowledge.docManage.kbType.output') },
+  { value: 'exam', label: t('knowledge.docManage.kbType.exam') },
+])
 const DIR_SLUG_RE = /^[A-Za-z0-9_-]{1,64}$/
 
 const { expanded, toggleExpand, expandAllIfEmpty } = useTreeExpand()

@@ -35,10 +35,22 @@ export const KNOWLEDGE_WIKI_EDIT_ROUTE: RouteRecordRaw = {
   },
 }
 
+/** T16：Wiki 治理工作台（文件真值 Lint + 批量 enrich） */
+export const KNOWLEDGE_WIKI_GOVERN_ROUTE: RouteRecordRaw = {
+  path: 'wiki-govern',
+  name: 'KnowledgeWikiGovern',
+  component: () => import('@/views/knowledge/KnowledgeWikiGovernView.vue'),
+  meta: {
+    titleKey: 'knowledge.wikiGovern.title',
+    perms: 'kb:wiki:govern',
+  },
+}
+
 const SUPPLEMENT_ROUTES: RouteRecordRaw[] = [
   KNOWLEDGE_DOCUMENTS_ROUTE,
   KNOWLEDGE_DOCUMENT_EDIT_ROUTE,
   KNOWLEDGE_WIKI_EDIT_ROUTE,
+  KNOWLEDGE_WIKI_GOVERN_ROUTE,
 ]
 
 /** 后端未执行 06_knowledge_document_menu.sql 时，补全「文档管理」侧栏与路由 */
@@ -55,6 +67,22 @@ const KNOWLEDGE_DOCUMENTS_MENU: MenuVo = {
   perms: 'kb:document:list',
   orderNum: 2,
   meta: { titleKey: 'knowledge.docManage.title', icon: 'edit' },
+}
+
+/** 后端未配置 Wiki 治理菜单时补全侧栏 */
+const KNOWLEDGE_WIKI_GOVERN_MENU: MenuVo = {
+  id: 'kb-supplement-wiki-govern',
+  menuName: 'Wiki 治理',
+  menuNameEn: 'Wiki Governance',
+  menuNameJa: 'Wiki ガバナンス',
+  name: 'KnowledgeWikiGovern',
+  path: 'wiki-govern',
+  component: 'knowledge/wiki-govern/index',
+  menuType: 'C',
+  icon: 'tool',
+  perms: 'kb:wiki:govern',
+  orderNum: 4,
+  meta: { titleKey: 'knowledge.wikiGovern.title', icon: 'tool' },
 }
 
 function normalizeMenuPath(path?: string) {
@@ -79,6 +107,19 @@ function hasDocumentsMenu(children: MenuVo[]) {
   })
 }
 
+function hasWikiGovernMenu(children: MenuVo[]) {
+  return children.some((child) => {
+    const path = normalizeMenuPath(child.path)
+    const component = (child.component || '').replace(/\/index$/i, '')
+    return (
+      path === 'wiki-govern'
+      || component === 'knowledge/wiki-govern'
+      || child.name === 'KnowledgeWikiGovern'
+      || child.routeName === 'KnowledgeWikiGovern'
+    )
+  })
+}
+
 function sortMenuChildren(children: MenuVo[]) {
   return [...children].sort((a, b) => (a.orderNum ?? 999) - (b.orderNum ?? 999))
 }
@@ -87,10 +128,19 @@ export function mergeKnowledgeSupplementMenus(menus: MenuVo[]): MenuVo[] {
   return menus.map((menu) => {
     const children = menu.children?.length ? mergeKnowledgeSupplementMenus(menu.children) : menu.children
 
-    if (menu.menuType === 'M' && children?.length && isKnowledgeParentMenu(menu) && !hasDocumentsMenu(children)) {
-      return {
-        ...menu,
-        children: sortMenuChildren([...children, KNOWLEDGE_DOCUMENTS_MENU]),
+    if (menu.menuType === 'M' && children?.length && isKnowledgeParentMenu(menu)) {
+      let nextChildren = children
+      if (!hasDocumentsMenu(children)) {
+        nextChildren = [...nextChildren, KNOWLEDGE_DOCUMENTS_MENU]
+      }
+      if (!hasWikiGovernMenu(children)) {
+        nextChildren = [...nextChildren, KNOWLEDGE_WIKI_GOVERN_MENU]
+      }
+      if (nextChildren !== children) {
+        return {
+          ...menu,
+          children: sortMenuChildren(nextChildren),
+        }
       }
     }
 

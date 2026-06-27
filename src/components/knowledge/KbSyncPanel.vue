@@ -10,6 +10,7 @@ import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { KbSyncLog, KbSyncStatus } from '@/types/knowledge'
 import { PERM } from '@/constants/permissions'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 
 const { t } = useI18n()
 const { selectedSpace, kbQuerySpaceId, ensureSpacesLoaded } = useKbSpace()
@@ -23,7 +24,7 @@ const status = ref<KbSyncStatus | null>(null)
 const logs = ref<KbSyncLog[]>([])
 const total = ref(0)
 const pageNum = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(DEFAULT_PAGE_SIZE)
 const showRawOutput = ref(false)
 
 type SyncResult = {

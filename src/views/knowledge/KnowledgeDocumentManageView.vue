@@ -193,19 +193,25 @@ function openMove(row: KbDocumentListItem) {
 async function submitMove() {
   const row = moveRow.value
   if (!row || !moveTargetCategoryId.value) {
-    showToast('error', '请选择目标分类')
+    showToast('error', t('knowledge.docManage.moveNeedCategory'))
     return
   }
   moving.value = true
   try {
     const res = await moveKbDocumentApi(row.id, moveTargetCategoryId.value)
-    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || '移动失败')
-    showToast('success', `已移动到 ${res.data.toSlug}${res.data.syncSuccess ? '（已同步）' : '（同步未完成，可稍后手动同步）'}`)
+    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.docManage.moveFailed'))
+    const slug = res.data.toSlug
+    showToast(
+      'success',
+      res.data.syncSuccess
+        ? t('knowledge.docManage.moveOk', { slug })
+        : t('knowledge.docManage.moveOkSyncPending', { slug }),
+    )
     moveOpen.value = false
     await loadList()
     void reloadMeta()
   } catch (e) {
-    showToast('error', e instanceof Error ? e.message : '移动失败')
+    showToast('error', e instanceof Error ? e.message : t('knowledge.docManage.moveFailed'))
   } finally {
     moving.value = false
   }
@@ -398,7 +404,7 @@ watch(
                       class="btn-action-edit"
                       @click="openMove(row)"
                     >
-                      <FolderInput class="h-3.5 w-3.5" />移动
+                      <FolderInput class="h-3.5 w-3.5" />{{ t('knowledge.docManage.move') }}
                     </button>
                     <button
                       v-if="row.slug"
@@ -440,20 +446,19 @@ watch(
       @wiki-created="onWikiCreated"
     />
 
-    <AppModal :open="moveOpen" title="移动到分类（=目录）" @close="moveOpen = false">
+    <AppModal :open="moveOpen" :title="t('knowledge.docManage.moveTitle')" @close="moveOpen = false">
       <div class="space-y-3">
         <p class="text-sm text-gray-500 dark:text-gray-400">
-          将文档 <span class="font-medium text-gray-700 dark:text-gray-200">{{ moveRow?.title }}</span>
-          移动到另一分类：会移动 wiki 文件、自动改全路径引用，并按目标分类默认体裁更新 frontmatter，随后触发同步。
+          {{ t('knowledge.docManage.moveDesc', { title: moveRow?.title ?? '' }) }}
         </p>
         <KbCategorySelect
           v-model="moveTargetCategoryId"
           :options="flatCategories"
           :loading="metaLoading"
-          :empty-label="'请选择目标分类'"
+          :empty-label="t('knowledge.docManage.moveTargetPlaceholder')"
         />
         <p class="text-xs text-amber-600 dark:text-amber-400">
-          注意：移动后 slug 会从「旧目录/名」变为「新目录/名」，旧深链将失效。
+          {{ t('knowledge.docManage.moveWarning') }}
         </p>
       </div>
       <template #footer>

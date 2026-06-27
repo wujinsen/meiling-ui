@@ -236,6 +236,44 @@ export type KbLintIssue = {
 }
 
 // ---------------------------------------------------------------------------
+// 4.6 文件级空间 Lint（T16 · Wiki 治理工作台）
+// ---------------------------------------------------------------------------
+
+export type KbWikiLintIssueLevel = 'error' | 'warn' | 'info'
+
+export type KbWikiLintIssue = {
+  level: KbWikiLintIssueLevel
+  kind: string
+  page: string
+  detail?: string
+  suggest?: string
+}
+
+export type KbWikiSpaceLintStats = {
+  pages?: number
+  issues?: number
+  errors?: number
+  warnings?: number
+  infos?: number
+  by_kind?: Record<string, number>
+}
+
+export type KbWikiSpaceLintRequest = {
+  spaceId?: number | string
+  spaceCode?: string
+  strict?: boolean
+}
+
+export type KbWikiSpaceLintResult = {
+  spaceCode: string
+  wikiDir: string
+  stats: KbWikiSpaceLintStats
+  issues: KbWikiLintIssue[]
+  exitCode?: number
+  outputTail?: string
+}
+
+// ---------------------------------------------------------------------------
 // 空间 /kb/space
 // ---------------------------------------------------------------------------
 
@@ -610,6 +648,36 @@ export type KbRawTreeNode = {
   size?: number
   children?: KbRawTreeNode[]
 }
+
+/** GET /kb/ingest/raw-coverage 覆盖项 */
+export type KbRawCoverageItem = {
+  path: string
+  coverage: 'open' | 'covered' | 'cluster'
+  matchKind: 'exact' | 'dir_prefix' | 'none'
+  wikiSlugs: string[]
+  inFlightJobIds: Array<number | string>
+}
+
+export type KbRawCoverageSummary = {
+  totalFiles: number
+  covered: number
+  cluster: number
+  open: number
+}
+
+/** GET /kb/ingest/raw-coverage */
+export type KbRawCoverage = {
+  spaceId: number | string
+  spaceCode: string
+  wikiDir: string
+  indexedAt?: string
+  wikiPageCount: number
+  filter: 'all' | 'open' | 'covered' | 'cluster'
+  summary: KbRawCoverageSummary
+  items: KbRawCoverageItem[]
+}
+
+export type KbRawCoverageFilter = 'all' | 'open' | 'covered' | 'cluster'
 
 /** POST /kb/ingest/jobs */
 export type KbIngestJobCreateRequest = {

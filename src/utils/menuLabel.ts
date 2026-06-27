@@ -44,6 +44,7 @@ const MENU_COMPONENT_TITLE_KEYS: Record<string, string> = {
   'knowledge/lint/index': 'knowledge.lint.title',
   'knowledge/health/index': 'knowledge.lint.title',
   'knowledge/ingest/index': 'knowledge.ingest.title',
+  'knowledge/wiki-govern/index': 'knowledge.wikiGovern.title',
   'knowledge/documents/index': 'knowledge.docManage.title',
   'knowledge/documents/edit': 'knowledge.docManage.editPageTitle',
 }

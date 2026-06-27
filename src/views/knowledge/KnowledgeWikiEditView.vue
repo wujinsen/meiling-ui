@@ -170,6 +170,20 @@ watch(issueDetail, (detail) => {
   }
 }, { immediate: true })
 
+watch(
+  issueType,
+  (type) => {
+    if (!fromLintIssue.value || !type) return
+    const normalized = type.toLowerCase()
+    if (normalized.includes('broken') || normalized.includes('link')) {
+      aiPreset.value = 'fixLinks'
+    } else if (normalized.includes('orphan') || normalized.includes('summary')) {
+      aiPreset.value = 'govern'
+    }
+  },
+  { immediate: true },
+)
+
 async function loadLlmConfig() {
   try {
     const res = await getKbLlmConfigApi()

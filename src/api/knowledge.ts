@@ -33,9 +33,13 @@ import type {
   KbWikiAiReviseResult,
   KbWikiLintPreviewRequest,
   KbWikiLintPreview,
+  KbWikiSpaceLintRequest,
+  KbWikiSpaceLintResult,
   KbWikiEnrichRequest,
   KbWikiEnrichResult,
   KbRawTreeNode,
+  KbRawCoverage,
+  KbRawCoverageFilter,
   KbIngestJob,
   KbIngestJobCreateRequest,
   KbIngestPlanUpdateRequest,
@@ -419,7 +423,7 @@ export async function getKbAccessibleSpacesApi() {
         spaceName: '企业知识库',
         description: '公司级知识沉淀',
         visibility: 2,
-        canEdit: false,
+        canEdit: true,
         canAdmin: false,
       },
       {
@@ -428,7 +432,7 @@ export async function getKbAccessibleSpacesApi() {
         spaceName: '日本語試験（FE/AP）',
         description: '基本情報・応用情報备考',
         visibility: 0,
-        canEdit: false,
+        canEdit: true,
         canAdmin: false,
       },
     ])
@@ -1174,18 +1178,102 @@ export async function previewKbWikiLintApi(payload: KbWikiLintPreviewRequest) {
   })
 }
 
+/** POST /kb/wiki/lint-space —— 空间级文件 Lint（文件真值，T16a） */
+export async function lintWikiSpaceApi(payload: KbWikiSpaceLintRequest) {
+  if (USE_MOCK) {
+    await delay(600)
+    return ok<KbWikiSpaceLintResult>({
+      spaceCode: payload.spaceCode ?? 'enterprise-kb',
+      wikiDir: 'wiki',
+      stats: {
+        pages: 42,
+        issues: 5,
+        errors: 2,
+        warnings: 2,
+        infos: 1,
+        by_kind: {
+          broken_link: 1,
+          orphan: 1,
+          missing_source: 2,
+          missing_dates: 1,
+        },
+      },
+      issues: [
+        {
+          level: 'error',
+          kind: 'broken_link',
+          page: 'guides/本地启动指南',
+          detail: '→ [[不存在的页]]',
+          suggest: '建该页或改链',
+        },
+        {
+          level: 'error',
+          kind: 'orphan',
+          page: 'concepts/孤儿概念',
+          detail: '无入链',
+          suggest: '在相关页添加 [[concepts/孤儿概念]]',
+        },
+        {
+          level: 'warn',
+          kind: 'missing_source',
+          page: 'guides/本地启动指南',
+          detail: 'frontmatter 缺 sources',
+          suggest: '补全 sources 数组',
+        },
+        {
+          level: 'warn',
+          kind: 'missing_source',
+          page: 'services/用户中心',
+          detail: 'sources 为空',
+          suggest: '添加 raw/prd 引用',
+        },
+        {
+          level: 'info',
+          kind: 'missing_dates',
+          page: 'guides/增量ingest指南',
+          detail: '缺 updated 字段',
+          suggest: '补 frontmatter updated',
+        },
+      ],
+      exitCode: 1,
+      outputTail: '[FAIL] 体检未通过（errors=2 warnings=2）',
+    })
+  }
+  return request<KbWikiSpaceLintResult>(`${KB_BASE}/wiki/lint-space`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+    timeoutMs: 130_000,
+  })
+}
+
 /** POST /kb/wiki/enrich —— 已有页 enrich + 治理 log/index/edges */
 export async function enrichKbWikiApi(payload: KbWikiEnrichRequest) {
   if (USE_MOCK) {
     await delay(400)
-    const slug = payload.slug ?? payload.items?.[0]?.slug ?? 'guides/mock'
+    const dryRun = payload.dryRun ?? false
+    if (payload.items?.length) {
+      return ok<KbWikiEnrichResult>({
+        batchNo: payload.batchNo ?? 'mock',
+        topic: payload.topic ?? 'enrich',
+        dryRun,
+        items: payload.items.map((item) => ({
+          slug: item.slug,
+          patch: item.patch ?? '## Mock enrich',
+          applied: !dryRun,
+        })),
+        logAppended: !dryRun,
+        indexUpdated: !dryRun,
+        edgesAppended: payload.edges?.length ?? 0,
+      })
+    }
+    const slug = payload.slug ?? 'guides/mock'
     return ok<KbWikiEnrichResult>({
       batchNo: payload.batchNo ?? 'mock',
       topic: payload.topic ?? 'enrich',
-      dryRun: payload.dryRun ?? false,
-      items: [{ slug, patch: payload.patch ?? '## Mock', applied: !payload.dryRun }],
-      logAppended: !payload.dryRun,
-      indexUpdated: !payload.dryRun,
+      dryRun,
+      items: [{ slug, patch: payload.patch ?? '## Mock', applied: !dryRun }],
+      logAppended: !dryRun,
+      indexUpdated: !dryRun,
       edgesAppended: payload.edges?.length ?? 0,
     })
   }
@@ -1216,6 +1304,51 @@ export async function getKbIngestRawTreeApi(prefix?: string) {
     ])
   }
   return request<KbRawTreeNode[]>(`${KB_BASE}/ingest/raw-tree${buildQuery({ prefix })}`, { method: 'GET' })
+}
+
+/** GET /kb/ingest/raw-coverage —— wiki sources 反向索引（筛未 ingest raw） */
+export async function getKbIngestRawCoverageApi(params?: {
+  spaceId?: number | string
+  prefix?: string
+  filter?: KbRawCoverageFilter
+  refresh?: boolean
+}) {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok<KbRawCoverage>({
+      spaceId: params?.spaceId ?? '900000000000000001',
+      spaceCode: 'enterprise-kb',
+      wikiDir: 'wiki',
+      wikiPageCount: 12,
+      filter: params?.filter ?? 'all',
+      summary: { totalFiles: 2, covered: 1, cluster: 0, open: 1 },
+      items: [
+        {
+          path: 'design/redis-sentinel.note.md',
+          coverage: 'covered',
+          matchKind: 'exact',
+          wikiSlugs: ['concepts/redis-哨兵'],
+          inFlightJobIds: [],
+        },
+        {
+          path: 'design/new-topic.note.md',
+          coverage: 'open',
+          matchKind: 'none',
+          wikiSlugs: [],
+          inFlightJobIds: [],
+        },
+      ],
+    })
+  }
+  return request<KbRawCoverage>(
+    `${KB_BASE}/ingest/raw-coverage${buildQuery({
+      spaceId: params?.spaceId,
+      prefix: params?.prefix,
+      filter: params?.filter,
+      refresh: params?.refresh ? 'true' : undefined,
+    })}`,
+    { method: 'GET' },
+  )
 }
 
 /** POST /kb/ingest/jobs —— 创建批次（需空间 editor） */

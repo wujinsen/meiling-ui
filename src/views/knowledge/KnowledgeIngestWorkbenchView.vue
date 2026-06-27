@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Check, ChevronDown, ChevronRight, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Upload, X } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppModal from '@/components/ui/AppModal.vue'
-import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
+import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 import {
   commitKbIngestApi,
   createKbIngestJobApi,
@@ -17,6 +17,7 @@ import {
   getKbIngestJobsApi,
   getKbIngestDraftsApi,
   getKbIngestRawTreeApi,
+  getKbIngestRawCoverageApi,
   getKbIngestTemplatesApi,
   lintKbIngestApi,
   regenerateKbIngestDraftApi,
@@ -26,23 +27,31 @@ import {
   updateKbIngestPlanApi,
 } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
+import { useActionPermissions } from '@/composables/useActionPermissions'
 import { confirm } from '@/composables/useConfirm'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
 import type {
+  KbRawCoverage,
+  KbRawCoverageFilter,
+  KbRawCoverageItem,
   KbIngestDraft,
   KbIngestJob,
   KbIngestLint,
   KbIngestTemplate,
   KbRawTreeNode,
+  KbAccessibleSpace,
 } from '@/types/knowledge'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { spaces, selectedSpaceId, setSelectedSpaceId, ensureSpacesLoaded } = useKbSpace()
+const { spaces, ensureSpacesLoaded } = useKbSpace()
+const { fullPermission } = useActionPermissions()
+
+const ingestSpaceId = ref('')
 
 const jobId = computed(() => {
   const raw = route.query.id
@@ -55,6 +64,10 @@ const jobs = ref<KbIngestJob[]>([])
 const jobsLoading = ref(false)
 const rawTree = ref<KbRawTreeNode[]>([])
 const rawLoading = ref(false)
+const rawCoverageFilter = ref<KbRawCoverageFilter>('all')
+const rawCoverageByPath = ref<Map<string, KbRawCoverageItem>>(new Map())
+const rawCoverageSummary = ref<KbRawCoverage['summary'] | null>(null)
+const rawCoverageLoading = ref(false)
 const selectedRaw = ref<Set<string>>(new Set())
 const formTopic = ref('')
 const formBatchNo = ref('')
@@ -68,13 +81,31 @@ const saveTemplateName = ref('')
 const saveTemplateSaving = ref(false)
 
 const defaultSpace = computed(() => spaces.value.find((s) => s.spaceCode === 'enterprise-kb') ?? spaces.value[0])
-const preferredSpace = computed(() => spaces.value.find((s) => s.canEdit === true) ?? defaultSpace.value)
+
+function spaceCanIngestEdit(space: KbAccessibleSpace | null | undefined): boolean {
+  if (!space) return false
+  if (fullPermission.value) return true
+  if (space.canEdit === true) return true
+  if (space.canAdmin === true) return true
+  if (space.canEdit === undefined) return true
+  return false
+}
+
+const editableSpaces = computed(() => spaces.value.filter((s) => spaceCanIngestEdit(s)))
 const selectedSpace = computed(
-  () => spaces.value.find((s) => toEntityId(s.id) === toEntityId(selectedSpaceId.value)) ?? preferredSpace.value,
+  () => spaces.value.find((s) => toEntityId(s.id) === toEntityId(ingestSpaceId.value)) ?? null,
 )
 const selectedSpaceQueryId = computed(() => toEntityId(selectedSpace.value?.id))
-const canEdit = computed(() => selectedSpace.value?.canEdit === true)
-const editableSpaces = computed(() => spaces.value.filter((s) => s.canEdit === true))
+const canEdit = computed(() => spaceCanIngestEdit(selectedSpace.value))
+
+function initIngestSpace() {
+  if (jobId.value || !spaces.value.length) return
+  const cur = toEntityId(ingestSpaceId.value)
+  const ok = editableSpaces.value.some((s) => toEntityId(s.id) === cur)
+  const pick = editableSpaces.value[0] ?? defaultSpace.value
+  const id = toEntityId(pick?.id)
+  if (id && (!ok || !cur)) ingestSpaceId.value = id
+}
 
 function guardIngestEdit(): boolean {
   const ok = jobId.value ? jobCanEdit.value : canEdit.value
@@ -83,14 +114,35 @@ function guardIngestEdit(): boolean {
   return false
 }
 
-function initIngestSpace() {
-  if (jobId.value || !spaces.value.length) return
-  const cur = toEntityId(selectedSpaceId.value)
-  const ok = editableSpaces.value.some((s) => toEntityId(s.id) === cur)
-  const pick = editableSpaces.value[0] ?? preferredSpace.value
-  const id = toEntityId(pick?.id)
-  if (id && (!ok || cur == null)) setSelectedSpaceId(id)
-}
+const createDisabledReason = computed(() => {
+  if (creating.value) return ''
+  if (!editableSpaces.value.length) return t('knowledge.ingest.noEditableSpace')
+  if (!canEdit.value) return t('knowledge.ingest.readOnlyHint')
+  if (!formTopic.value.trim()) return t('knowledge.ingest.createNeedTopic')
+  if (selectedRaw.value.size === 0) {
+    if (rawFilterHidesAll.value) return t('knowledge.ingest.rawCoverageFilterEmpty')
+    return t('knowledge.ingest.createNeedRaw')
+  }
+  return ''
+})
+
+const rawFileCount = computed(() => {
+  let n = 0
+  const walk = (nodes: KbRawTreeNode[]) => {
+    for (const node of nodes) {
+      if (node.type === 'file') n += 1
+      else if (node.children?.length) walk(node.children)
+    }
+  }
+  walk(rawTree.value)
+  return n
+})
+
+const rawFilterHidesAll = computed(() => {
+  if (rawCoverageFilter.value === 'all' || rawLoading.value || rawCoverageLoading.value) return false
+  if (!rawFileCount.value) return false
+  return !filteredRawFlatTree.value.some((item) => item.node.type === 'file')
+})
 
 type RawFlatNode = { node: KbRawTreeNode; depth: number; hasChildren: boolean }
 const rawExpandedDirs = ref<Set<string>>(new Set())
@@ -124,6 +176,72 @@ const rawFlatTree = computed<RawFlatNode[]>(() => {
   return out
 })
 
+const rawCoverageFilterOptions = computed(() => [
+  { value: 'open' as const, label: t('knowledge.ingest.rawCoverageOpen') },
+  { value: 'cluster' as const, label: t('knowledge.ingest.rawCoverageCluster') },
+  { value: 'covered' as const, label: t('knowledge.ingest.rawCoverageCovered') },
+  { value: 'all' as const, label: t('knowledge.ingest.rawCoverageAll') },
+])
+
+function coverageForPath(path: string): KbRawCoverageItem | undefined {
+  return rawCoverageByPath.value.get(path)
+}
+
+function pathMatchesCoverageFilter(path: string): boolean {
+  if (rawCoverageFilter.value === 'all') return true
+  const cov = coverageForPath(path)?.coverage ?? 'open'
+  return cov === rawCoverageFilter.value
+}
+
+const visibleRawFilePaths = computed(() => {
+  const set = new Set<string>()
+  const walk = (nodes: KbRawTreeNode[]) => {
+    for (const n of nodes) {
+      if (n.type === 'file') {
+        if (pathMatchesCoverageFilter(n.path)) set.add(n.path)
+      } else if (n.children?.length) walk(n.children)
+    }
+  }
+  walk(rawTree.value)
+  return set
+})
+
+function dirHasVisibleFiles(dirPath: string): boolean {
+  if (rawCoverageFilter.value === 'all') return true
+  for (const p of visibleRawFilePaths.value) {
+    if (p.startsWith(`${dirPath}/`)) return true
+  }
+  return false
+}
+
+const filteredRawFlatTree = computed<RawFlatNode[]>(() => {
+  if (rawCoverageFilter.value === 'all') return rawFlatTree.value
+  return rawFlatTree.value.filter((item) => {
+    if (item.node.type === 'file') return pathMatchesCoverageFilter(item.node.path)
+    return dirHasVisibleFiles(item.node.path)
+  })
+})
+
+function rawCoverageBadgeClass(path: string): string {
+  const cov = coverageForPath(path)?.coverage ?? 'open'
+  if (cov === 'covered') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+  if (cov === 'cluster') return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+  return 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'
+}
+
+function rawCoverageBadgeLabel(path: string): string {
+  const cov = coverageForPath(path)?.coverage ?? 'open'
+  if (cov === 'covered') return t('knowledge.ingest.rawCoverageCovered')
+  if (cov === 'cluster') return t('knowledge.ingest.rawCoverageCluster')
+  return t('knowledge.ingest.rawCoverageOpen')
+}
+
+function rawCoverageTitle(path: string): string {
+  const item = coverageForPath(path)
+  if (!item?.wikiSlugs?.length) return rawCoverageBadgeLabel(path)
+  return `${rawCoverageBadgeLabel(path)} → ${item.wikiSlugs.join(', ')}`
+}
+
 function isRawDirExpanded(path: string) {
   return rawExpandedDirs.value.has(path)
 }
@@ -146,7 +264,13 @@ function collapseAllRawDirs() {
 function toggleRaw(path: string) {
   const next = new Set(selectedRaw.value)
   if (next.has(path)) next.delete(path)
-  else next.add(path)
+  else {
+    const item = coverageForPath(path)
+    if (item?.coverage === 'covered') {
+      showToast('success', t('knowledge.ingest.rawAlreadyCoveredHint'))
+    }
+    next.add(path)
+  }
   selectedRaw.value = next
 }
 
@@ -173,6 +297,31 @@ async function loadRawTree() {
   } finally {
     rawLoading.value = false
   }
+}
+
+async function loadRawCoverage(refresh = false) {
+  rawCoverageLoading.value = true
+  try {
+    const res = await getKbIngestRawCoverageApi({
+      spaceId: selectedSpaceQueryId.value,
+      filter: 'all',
+      refresh,
+    })
+    if (res.code === API_SUCCESS_CODE && res.data) {
+      const map = new Map<string, KbRawCoverageItem>()
+      for (const item of res.data.items ?? []) map.set(item.path, item)
+      rawCoverageByPath.value = map
+      rawCoverageSummary.value = res.data.summary ?? null
+    }
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.rawCoverageLoadFailed'))
+  } finally {
+    rawCoverageLoading.value = false
+  }
+}
+
+async function reloadRawSources() {
+  await Promise.all([loadRawTree(), loadRawCoverage(true)])
 }
 
 async function loadTemplates() {
@@ -286,7 +435,12 @@ const committing = ref(false)
 
 const lastGenerateStats = ref<{ generated: number; skipped: number; failed: number; total: number } | null>(null)
 
-const jobCanEdit = computed(() => job.value?.canEdit === true)
+const jobCanEdit = computed(() => {
+  if (fullPermission.value) return true
+  if (job.value?.canEdit === true) return true
+  if (job.value?.canEdit === false) return false
+  return canEdit.value
+})
 const isEnrichDraft = computed(() => activeDraft.value?.action === 'enrich')
 
 const draftTabOptions = computed(() => {
@@ -662,7 +816,7 @@ watch(jobId, (id) => {
   if (id) void loadJob()
   else {
     void loadJobs()
-    void loadRawTree()
+    void reloadRawSources()
     void loadTemplates()
   }
 })
@@ -671,6 +825,7 @@ watch(selectedSpaceQueryId, () => {
   if (!jobId.value) {
     void loadJobs()
     void loadTemplates()
+    void loadRawCoverage(true)
   }
 })
 
@@ -684,7 +839,7 @@ onMounted(async () => {
   if (jobId.value) await loadJob()
   else {
     await loadJobs()
-    await loadRawTree()
+    await reloadRawSources()
     await loadTemplates()
   }
 })
@@ -697,7 +852,7 @@ onMounted(async () => {
       <div class="card p-5">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('knowledge.ingest.pageTitle') }}</h2>
-          <KbSpaceSelector editable-only />
+          <KbSpaceDropdown v-model="ingestSpaceId" hide-all-option />
         </div>
         <p class="mt-1 text-xs text-gray-400">{{ t('knowledge.ingest.subtitle') }}</p>
         <p v-if="!editableSpaces.length" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
@@ -733,6 +888,15 @@ onMounted(async () => {
             <div class="flex flex-wrap items-center gap-2">
               <span class="text-xs text-gray-400">{{ t('knowledge.ingest.selected', { count: selectedRaw.size }) }}</span>
               <button
+                type="button"
+                class="btn-ghost px-2 py-0.5 text-xs"
+                :disabled="rawLoading || rawCoverageLoading"
+                @click="reloadRawSources"
+              >
+                <RefreshCw class="inline h-3 w-3" :class="(rawLoading || rawCoverageLoading) && 'animate-spin'" />
+                {{ t('knowledge.ingest.rawCoverageRefresh') }}
+              </button>
+              <button
                 v-if="rawFlatTree.length"
                 type="button"
                 class="btn-ghost px-2 py-0.5 text-xs"
@@ -750,12 +914,25 @@ onMounted(async () => {
               </button>
             </div>
           </div>
+          <div class="mt-2 flex flex-wrap items-center gap-2">
+            <SegmentControl v-model="rawCoverageFilter" :options="rawCoverageFilterOptions" />
+            <p v-if="rawCoverageSummary" class="text-xs text-gray-400">
+              {{
+                t('knowledge.ingest.rawCoverageSummary', {
+                  open: rawCoverageSummary.open,
+                  covered: rawCoverageSummary.covered,
+                  cluster: rawCoverageSummary.cluster,
+                  total: rawCoverageSummary.totalFiles,
+                })
+              }}
+            </p>
+          </div>
           <div class="mt-2 max-h-72 flex-1 overflow-auto rounded-lg border border-gray-100 p-2 dark:border-white/5">
-            <p v-if="rawLoading" class="p-3 text-xs text-gray-400">{{ t('common.loading') }}</p>
-            <p v-else-if="!rawFlatTree.length" class="p-3 text-xs text-gray-400">{{ t('knowledge.ingest.rawTreeEmpty') }}</p>
+            <p v-if="rawLoading || rawCoverageLoading" class="p-3 text-xs text-gray-400">{{ t('common.loading') }}</p>
+            <p v-else-if="!filteredRawFlatTree.length" class="p-3 text-xs text-gray-400">{{ t('knowledge.ingest.rawTreeEmpty') }}</p>
             <template v-else>
               <div
-                v-for="item in rawFlatTree"
+                v-for="item in filteredRawFlatTree"
                 :key="item.node.path"
                 class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs hover:bg-gray-50 dark:hover:bg-white/5"
                 :class="item.node.type === 'file' ? 'no-tilt-drag cursor-pointer' : item.hasChildren ? 'no-tilt-drag cursor-pointer' : ''"
@@ -783,6 +960,14 @@ onMounted(async () => {
                     :checked="selectedRaw.has(item.node.path)"
                     tabindex="-1"
                   />
+                  <span
+                    v-if="coverageForPath(item.node.path)"
+                    class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium"
+                    :class="rawCoverageBadgeClass(item.node.path)"
+                    :title="rawCoverageTitle(item.node.path)"
+                  >
+                    {{ rawCoverageBadgeLabel(item.node.path) }}
+                  </span>
                   <span class="truncate text-gray-700 dark:text-gray-200">{{ item.node.name }}</span>
                 </template>
               </div>
@@ -792,14 +977,14 @@ onMounted(async () => {
           <button
             type="button"
             class="btn-primary mt-4 self-start text-sm"
-            :disabled="creating || !canEdit || !formTopic.trim() || selectedRaw.size === 0"
+            :disabled="Boolean(createDisabledReason)"
+            :title="createDisabledReason || undefined"
             @click="createJob"
           >
             <Loader2 v-if="creating" class="h-4 w-4 animate-spin" />
             {{ creating ? t('knowledge.ingest.creating') : t('knowledge.ingest.create') }}
           </button>
-          <p v-if="canEdit && !formTopic.trim()" class="mt-2 text-xs text-gray-400">{{ t('knowledge.ingest.createNeedTopic') }}</p>
-          <p v-else-if="canEdit && selectedRaw.size === 0" class="mt-2 text-xs text-gray-400">{{ t('knowledge.ingest.createNeedRaw') }}</p>
+          <p v-if="createDisabledReason" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ createDisabledReason }}</p>
         </div>
 
         <!-- 历史批次 -->

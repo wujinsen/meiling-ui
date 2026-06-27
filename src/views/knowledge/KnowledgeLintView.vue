@@ -15,6 +15,7 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import { showToast } from '@/composables/useToast'
 import type { KbLintIssue, KbLintIssueStatus, KbLintReport } from '@/types/knowledge'
 import { PERM } from '@/constants/permissions'
+import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -43,7 +44,7 @@ const issuesLoading = ref(false)
 const issues = ref<KbLintIssue[]>([])
 const statusFilter = ref<'' | KbLintIssueStatus>('')
 const issuePageNum = ref(1)
-const issuePageSize = ref(10)
+const issuePageSize = ref(DEFAULT_PAGE_SIZE)
 
 const pagedIssues = computed(() => {
   const start = (issuePageNum.value - 1) * issuePageSize.value
@@ -129,13 +130,20 @@ async function fixIssue(issue: KbLintIssue) {
   fixingIssueId.value = issue.id
   try {
     let slug = ''
-    let spaceId = issue.spaceId
+    let spaceId = issue.spaceId ?? kbQuerySpaceId()
     if (issue.documentId != null) {
       const res = await getKbDocumentApi(issue.documentId)
       if (res.code === API_SUCCESS_CODE && res.data?.slug) {
         slug = res.data.slug
         spaceId = res.data.spaceId ?? spaceId
       }
+    }
+    if (!slug && report.value && issue.detail) {
+      const candidates = [...report.value.orphans, ...report.value.noSummary]
+      const matched = candidates.find(
+        (item) => issue.detail!.includes(item.slug) || issue.detail!.includes(item.title),
+      )
+      if (matched) slug = matched.slug
     }
     if (!slug) {
       showToast('error', t('knowledge.lint.fixNoSlug'))

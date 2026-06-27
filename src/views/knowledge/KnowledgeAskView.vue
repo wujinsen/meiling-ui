@@ -3,7 +3,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { History, Loader2, Send, Sparkles, ThumbsDown, ThumbsUp, User } from 'lucide-vue-next'
-import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
+import KbAskSpacePicker from '@/components/knowledge/KbAskSpacePicker.vue'
 import KbDocPreviewModal from '@/components/knowledge/KbDocPreviewModal.vue'
 import KbLlmToggle from '@/components/knowledge/KbLlmToggle.vue'
 import AppSwitch from '@/components/ui/AppSwitch.vue'
@@ -12,6 +12,11 @@ import {
   feedbackKbAskApi,
   getKbAskHistoryApi,
 } from '@/api/knowledge'
+import {
+  buildKbAskHistoryScope,
+  buildKbAskScopePayload,
+  type KbAskScopeMode,
+} from '@/composables/useKbAskScope'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { confirm } from '@/composables/useConfirm'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -30,7 +35,10 @@ type ChatTurn = {
 
 const { t } = useI18n()
 const router = useRouter()
-const { selectedSpaceId, ensureSpacesLoaded, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
+const { ensureSpacesLoaded, resolvePageSpaceId } = useKbSpace()
+
+const scopeMode = ref<KbAskScopeMode>('all')
+const scopeSpaceIds = ref<string[]>([])
 
 const question = ref('')
 const asking = ref(false)
@@ -77,7 +85,11 @@ async function scrollToBottom() {
 async function loadHistory() {
   historyLoading.value = true
   try {
-    const res = await getKbAskHistoryApi({ spaceId: kbQuerySpaceId(), pageNum: 1, pageSize: 20 })
+    const res = await getKbAskHistoryApi({
+      ...buildKbAskHistoryScope(scopeMode.value, scopeSpaceIds.value),
+      pageNum: 1,
+      pageSize: 20,
+    })
     if (res.code === API_SUCCESS_CODE && res.data) historyItems.value = res.data.records ?? []
   } finally {
     historyLoading.value = false
@@ -87,6 +99,10 @@ async function loadHistory() {
 async function ask(text?: string) {
   const q = (text ?? question.value).trim()
   if (!q || asking.value) return
+  if (scopeMode.value === 'custom' && !scopeSpaceIds.value.length) {
+    showToast('error', t('knowledge.ask.crossSpaceEmpty'))
+    return
+  }
 
   const turn: ChatTurn = { id: ++turnId, question: q, loading: true }
   turns.value.push(turn)
@@ -99,9 +115,8 @@ async function ask(text?: string) {
       question: q,
       topK: 8,
       useLlm: useLlm.value,
+      ...buildKbAskScopePayload(scopeMode.value, scopeSpaceIds.value),
     }
-    const sid = kbQuerySpaceId()
-    if (sid != null) payload.spaceId = sid
     const res = await askKbApi(payload)
     if (res.code === API_SUCCESS_CODE && res.data) {
       turn.result = res.data
@@ -197,7 +212,7 @@ onMounted(async () => {
   await loadHistory()
 })
 
-watch(selectedSpaceId, () => loadHistory())
+watch([scopeMode, scopeSpaceIds], () => loadHistory(), { deep: true })
 watch(showHistory, (open) => {
   if (open) void loadHistory()
 })
@@ -210,7 +225,7 @@ watch(showHistory, (open) => {
         <button type="button" class="btn-ghost shrink-0 text-sm" @click="showHistory = !showHistory">
           <History class="h-4 w-4" /> {{ t('knowledge.ask.history') }}
         </button>
-        <KbSpaceSelector />
+        <KbAskSpacePicker v-model:mode="scopeMode" v-model:selected-ids="scopeSpaceIds" />
         <div
           class="flex items-center gap-2"
           :class="llmAvailable ? '' : 'opacity-50'"
@@ -375,7 +390,12 @@ watch(showHistory, (open) => {
               :placeholder="t('knowledge.ask.inputPlaceholder')"
               @keydown="onKeydown"
             />
-            <button type="button" class="btn-primary h-[44px] shrink-0" :disabled="asking || !question.trim()" @click="ask()">
+            <button
+              type="button"
+              class="btn-primary h-[44px] shrink-0"
+              :disabled="asking || !question.trim() || (scopeMode === 'custom' && !scopeSpaceIds.length)"
+              @click="ask()"
+            >
               <Loader2 v-if="asking" class="h-4 w-4 animate-spin" />
               <Send v-else class="h-4 w-4" />
               {{ t('knowledge.ask.send') }}
