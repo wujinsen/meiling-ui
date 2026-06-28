@@ -145,15 +145,26 @@ export interface IngestCommitResultVo {
 
 ---
 
-## 6. raw 覆盖门禁（commit 错误处理）
+## 6. raw 覆盖门禁（commit 错误处理 · I3 / B4）
 
-commit / publish 时若 raw 已被**其它** wiki 页 `sources` 引用 → HTTP 业务错误。
+> **后端契约**：[KNOWLEDGE_API.md §9 commit 门禁](KNOWLEDGE_API.md#ingest-commit-门禁) · 运维说明 [ops §2.6](KNOWLEDGE_API.md#26-ingest-commit-门禁) · 总览 [§8.3](knowledge-workbench-frontend.md#83-raw-簇引用--commit-门禁--模板降级b3--b4--i3)
 
-前端处理：
+`commit` / `publish` 落盘前，后端校验所选 raw 是否已被**其它** wiki 页 `sources` 引用（簇引用 / raw coverage）。冲突时返回业务错误，**接口不改**。
 
-- Toast 展示后端 `message`（含冲突 slug / raw 路径）  
-- 引导用户改 Plan 为 `enrich` 同一 slug，或跳过该 raw  
-- raw 列表：`GET /kb/ingest/raw-coverage?filter=uncovered` 预筛未 ingest 项（**仍可选已 covered**，仅 commit 时拦截）
+| 字段 | 说明 |
+|------|------|
+| `msg` / `message` | **必返**；纯文本，含冲突 **wiki slug** 与 **raw 路径**（例：`raw fe/xxx.md already referenced by wiki slug foo/bar`） |
+| 结构化扩展 | **无** `conflictSlug` / `rawPath` 等独立字段（I4 ⏸） |
+| 业务码（可选） | `ingest.rawCoverage.blocked` — 前端优先按码判定，否则回退 `message` 关键词 |
+
+**前端处理（meiling-ui）**：
+
+1. **Toast**：展示后端 `message` 全文  
+2. **详情 `commitError` 区**：标题 `commitErrorTitle`；簇引用时副标题 `rawCoverageBlocked`，否则 `commitErrorHint`；`<pre>` 展示 `message`  
+3. **引导**：改 Plan 为 `enrich` 同一 slug，或换未引用的 raw  
+4. **预筛（非硬门禁）**：raw 列表 `GET /kb/ingest/raw-coverage` + 筛选 `open` / `cluster` / `covered`（**仍可选已 covered**，仅 commit 时拦截）
+
+**实现**：`src/utils/ingestCommitError.ts` · `KnowledgeIngestWorkbenchView` `commit` / `publishExpress` catch 路径。
 
 ---
 
@@ -280,11 +291,11 @@ export function publishIngestJobApi(
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| Express：勾选 raw → 预览 → 详情 diff → 确认入库 | 🟡 | 详情页 `?express=1` + `publish` ✅；**列表「一键入库」当前 express+publish 直落盘，跳过 diff**（见 §13 I1） |
+| Express：勾选 raw → 预览 → 详情 diff → 确认入库 | ✅ | 列表「一键预览」→ `?id=&express=1` → 详情「确认入库」（见总览 [§8.1](knowledge-workbench-frontend.md#81-express-列表一键预览--详情确认入库b1--i1)） |
 | ☑ 模板入库 → `useLlmGenerate=false`，响应 `templateMode=true` | 🟡 | 列表/Express API 已传参 ✅；**Expert generate/regenerate 未联动 checkbox**；响应 `templateMode` 未在 UI badge 展示 |
 | LLM 不可用时模板模式仍可用 | 🟡 | 用户可手动勾模板入库 ✅；**自动降级 + Toast 未做**（见 §13 I3） |
-| publish/commit 后展示 `nextSteps` | ❌ | API 类型已有；`KbWorkflowNextSteps.vue` 已建；**Ingest 页未接入** |
-| 重复 ingest 已 covered raw → commit 报错可读 | 🟡 | toast 展示 `message` ✅；**专用错误区（`commitErrorTitle`）未接**；需确认后端错误体（§13 I4） |
+| publish/commit 后展示 `nextSteps` | ✅ | `KbWorkflowNextSteps` 已接入 commit / publish 成功路径 |
+| 重复 ingest 已 covered raw → commit 报错可读 | ✅ | `commitError` 区 + `rawCoverageBlocked` 簇引用文案 |
 | Expert：`generate?resume=true` 断点续跑 | ✅ | 已实现 |
 | enrich 草稿 diff：`baseline` + `patch` | ✅ | diff / patch 标签页已有 |
 
@@ -298,14 +309,13 @@ export function publishIngestJobApi(
 | API | `src/api/knowledge.ts`（`expressStartKbIngestApi` / `publishKbIngestApi` / `generateKbIngestDraftsApi` 等） |
 | Express 选项 | 列表页：`expressSkeletonPlan` → `useLlmPlan`；`templateMode` → `useLlmGenerate` |
 | Express 进度 | `src/components/knowledge/IngestExpressProgressPanel.vue`（6 步，仅请求进行中展示） |
-| nextSteps 组件 | `src/components/knowledge/KbWorkflowNextSteps.vue`（**未 import**） |
+| nextSteps 组件 | `src/components/knowledge/KbWorkflowNextSteps.vue`（commit / publish 成功路径已接入） |
 | raw 虚拟树 | `src/components/knowledge/IngestRawTreeList.vue`（**未接入**，仍用页内 flat 树） |
 
 ### 12.1 与本文档的差异（实现侧说明）
 
-1. **Express 两阶段**：文档 §1 写「预览 → diff → 确认」；列表 `expressIngest()` 在 `expressStartKbIngestApi` 成功后**立即** `publishKbIngestApi`，不导航 `?id=&express=1`。若产品要 diff 门禁，需改前端（或后端拆「仅预览不写盘」接口）。
-2. **Expert 模板模式**：`generateDrafts` / `regenerateDraft` 调用未带 `{ useLlmGenerate: !templateMode }`（模板 checkbox 仅列表 Express 生效）。
-3. **T19 nextSteps**：`commitKbIngestApi` / `publishKbIngestApi` 成功后未读 `res.data.nextSteps` / `res.data.commit?.nextSteps`。
+1. **Express 两阶段**：列表「一键预览」仅 `expressStartKbIngestApi`，成功后导航 `?id=&express=1`；详情页 `publishKbIngestApi` 确认入库（**总览 §8.1**）。
+2. **Expert 模板模式**：详情页 `generateDrafts` / `regenerateDraft` 未传 `{ useLlmGenerate: !templateMode }`（列表 Express 已传参）。
 
 ---
 
@@ -313,11 +323,11 @@ export function publishIngestJobApi(
 
 | # | 问题 | 前端依赖 |
 |---|------|----------|
-| I1 | 列表 Express 应 **预览+人工确认** 还是 **一键直落盘**？ | 是否改 `expressIngest` 流程 |
-| I2 | `IngestCommitResultVo` / `IngestPublishResultVo.nextSteps` 是否**必返**？`routeQuery.spaceId` 是 string 还是 number？ | `KbWorkflowNextSteps` 路由 |
-| I3 | LLM 失败时后端是否自动 `templateMode=true` 重试，还是 4xx/5xx？ | 自动降级 UX |
-| I4 | commit/publish 因 raw coverage 冲突失败时，除 `message` 外是否有 **结构化字段**（如 `conflictSlug`、`rawPath`）？ | 专用错误面板 |
-| I5 | `express` 响应 `prepare.generate.templateMode` 与 `generate` 接口的 `templateMode` 字段是否语义一致？ | 入库后 badge 文案 |
+| I1 | 列表 Express 应 **预览+人工确认** 还是 **一键直落盘**？ | **已结论：预览+确认**，见 [总览 §8.1](knowledge-workbench-frontend.md#81-express-列表一键预览--详情确认入库b1--i1) |
+| I2 | `IngestCommitResultVo` / `IngestPublishResultVo.nextSteps` | **已结论**：后端返回，前端已渲染（总览 §8.2） |
+| I3 | raw 簇引用失败文案 | **已结论**：`message` + 固定引导，无结构化字段（总览 §8.3） |
+| I4 | commit 冲突结构化字段 | ⏸ 不需要；沿用 `message` |
+| I5 | `templateMode` 字段语义 | Swagger 验 B3 |
 
 ---
 
@@ -325,6 +335,7 @@ export function publishIngestJobApi(
 
 | 日期 | 说明 |
 |------|------|
+| 2026-06-28 | §6 对齐 KNOWLEDGE_API commit 门禁 + ops §2.6；I3/B4 已结论 |
 | 2026-06-28 | 代码审计：§11 验收改状态表；新增 §12 落点、§13 后端确认 |
 | 2026-06-28 | 新增前端对接文档：Express 参数、模板模式、nextSteps、raw 门禁 |
 | 2026-06-25 | T15 后端交付；Expert 六步已在 KNOWLEDGE_API §9 |

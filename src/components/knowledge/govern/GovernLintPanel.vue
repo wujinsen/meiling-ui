@@ -255,7 +255,7 @@ function canMergeHint(issue: KbWikiLintIssue) {
                     class="text-[10px] text-indigo-600 underline dark:text-indigo-400"
                     @click.stop="emit('mergeHint', issue)"
                   >
-                    {{ t('knowledge.wikiGovern.copyMergeHint') }}
+                    {{ t('knowledge.wikiGovern.mergeHintView') }}
                   </button>
                 </div>
                 <p v-if="issue.detail" class="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{{ issue.detail }}</p>

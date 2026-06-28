@@ -7,6 +7,7 @@ import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import GovernLintPanel from '@/components/knowledge/govern/GovernLintPanel.vue'
 import GovernFixPanel from '@/components/knowledge/govern/GovernFixPanel.vue'
 import GovernRelintBar from '@/components/knowledge/govern/GovernRelintBar.vue'
+import GovernMergeHintPanel from '@/components/knowledge/govern/GovernMergeHintPanel.vue'
 import {
   getKbWikiGovernOptionsApi,
   lintWikiSpaceApi,
@@ -24,6 +25,7 @@ import type {
   KbWikiGovernOptions,
   KbWikiLintIssue,
   KbWikiSpaceLintResult,
+  WikiGovernMergeHintItem,
 } from '@/types/knowledge'
 import {
   buildDefaultSelectedKeys,
@@ -54,6 +56,8 @@ const optionsLoading = ref(false)
 const lastFixResult = ref<KbWikiGovernAutoFixResult | null>(null)
 const lintBaseline = ref<KbWikiSpaceLintResult | null>(null)
 const relintResult = ref<KbWikiSpaceLintResult | null>(null)
+const mergeHintOpen = ref(false)
+const mergeHintItems = ref<WikiGovernMergeHintItem[]>([])
 
 const canEdit = computed(() => {
   if (selectedSpaceId.value == null) return false
@@ -132,18 +136,20 @@ function applyRelint(data: KbWikiSpaceLintResult) {
   phase.value = 'relinted'
 }
 
-async function runRelint() {
-  if (spaceRequired.value || !canEdit.value || lintLoading.value) return
+async function runRelint(silent = false) {
+  if (spaceRequired.value || !canEdit.value || lintLoading.value) return false
   const scope = kbSpaceQuery()
-  if (!scope.spaceId) return
+  if (!scope.spaceId) return false
   lintLoading.value = true
   try {
     const res = await lintWikiSpaceApi({ ...scope, strict: strictLint.value })
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.wikiGovern.lintFailed'))
     applyRelint(res.data)
-    showToast('success', t('knowledge.wikiGovern.relintOk'))
+    if (!silent) showToast('success', t('knowledge.wikiGovern.relintOk'))
+    return true
   } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('knowledge.wikiGovern.lintFailed'))
+    if (!silent) showToast('error', e instanceof Error ? e.message : t('knowledge.wikiGovern.lintFailed'))
+    return false
   } finally {
     lintLoading.value = false
   }
@@ -174,7 +180,7 @@ async function runScriptFix() {
       scriptFix: res.data,
     }
     toastFixResult(t('knowledge.wikiGovern.fixScript'), res.data.fixedPages, res.data.skippedPages, res.data.failedPages)
-    showToast('success', t('knowledge.wikiGovern.rerunLintHint'))
+    await runRelint(true)
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.wikiGovern.fixFailed'))
   } finally {
@@ -266,7 +272,7 @@ async function runAutoFix(payload: { syncAfter: boolean; strict: boolean; model:
   }
 }
 
-async function copyMergeHint(issue: KbWikiLintIssue) {
+async function openMergeHint(issue: KbWikiLintIssue) {
   const spaceId = selectedSpaceId.value
   if (!spaceId) return
   try {
@@ -274,9 +280,8 @@ async function copyMergeHint(issue: KbWikiLintIssue) {
     if (res.code !== API_SUCCESS_CODE || !res.data?.items?.length) {
       throw new Error(res.msg || t('knowledge.wikiGovern.mergeHintFailed'))
     }
-    const text = res.data.items.map((item) => item.cursorPrompt).join('\n\n---\n\n')
-    await navigator.clipboard.writeText(text)
-    showToast('success', t('knowledge.wikiGovern.mergeHintCopied'))
+    mergeHintItems.value = res.data.items
+    mergeHintOpen.value = true
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.wikiGovern.mergeHintFailed'))
   }
@@ -360,7 +365,7 @@ onMounted(() => {
       :selected-keys="selectedKeys"
       :govern-options="llmOptions"
       @update:selected-keys="onSelectedKeysUpdate"
-      @merge-hint="copyMergeHint"
+      @merge-hint="openMergeHint"
       @open-page="openWikiEdit"
     />
 
@@ -382,7 +387,13 @@ onMounted(() => {
       :current="relintResult ?? (lastFixResult?.relint ?? null)"
       :relinting="lintLoading"
       :can-edit="canEdit"
-      @relint="runRelint"
+      @relint="runRelint()"
+    />
+
+    <GovernMergeHintPanel
+      :open="mergeHintOpen"
+      :items="mergeHintItems"
+      @close="mergeHintOpen = false"
     />
   </div>
 </template>

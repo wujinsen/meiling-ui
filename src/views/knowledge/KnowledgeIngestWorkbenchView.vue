@@ -7,6 +7,7 @@ import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import IngestExpressProgressPanel, { type IngestExpressProgressStep } from '@/components/knowledge/IngestExpressProgressPanel.vue'
+import KbWorkflowNextSteps from '@/components/knowledge/KbWorkflowNextSteps.vue'
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 import IngestPlanCreateTable from '@/components/knowledge/IngestPlanCreateTable.vue'
 import {
@@ -43,6 +44,7 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
 import { flattenKbCategoryTree } from '@/utils/kbCategoryTree'
+import { collectWorkflowNextSteps, isIngestRawClusterConflict } from '@/utils/ingestCommitError'
 import {
   applyCategoryInference,
   buildCategoryIndex,
@@ -64,6 +66,7 @@ import type {
   KbIngestTemplate,
   KbRawTreeNode,
   KbAccessibleSpace,
+  KbWorkflowHintVo,
 } from '@/types/knowledge'
 
 const { t } = useI18n()
@@ -636,9 +639,9 @@ async function expressIngest() {
   }
   const rawCount = selectedRaw.value.size
   const ok = await confirm({
-    title: t('knowledge.ingest.expressIngest'),
-    message: t('knowledge.ingest.expressConfirmIntro', { count: rawCount, topic: formTopic.value.trim() }),
-    confirmText: t('knowledge.ingest.expressIngest'),
+    title: t('knowledge.ingest.expressPreview'),
+    message: t('knowledge.ingest.expressPreviewConfirmIntro', { count: rawCount, topic: formTopic.value.trim() }),
+    confirmText: t('knowledge.ingest.expressPreview'),
     cancelText: t('confirm.cancel'),
   })
   if (!ok) return
@@ -669,31 +672,11 @@ async function expressIngest() {
       throw new Error(t('knowledge.ingest.expressPreparePartial', { failed: gen.failed }))
     }
 
-    setExpressProgressStage('lint')
-    setExpressProgressStage('commit')
-    const pub = await publishKbIngestApi(jobIdStr, true, true)
-    setExpressProgressStage('sync')
-    if (pub.code !== API_SUCCESS_CODE || !pub.data) throw new Error(pub.msg || t('knowledge.ingest.opFailed'))
-    if (!pub.data.committed) {
-      const blocking = pub.data.lint?.blockingCount ?? 0
-      const msg = blocking > 0
-        ? t('knowledge.ingest.lintBlocked', { count: blocking })
-        : t('knowledge.ingest.expressPublishBlocked')
-      throw new Error(msg)
-    }
-    showToast(
-      'success',
-      t('knowledge.ingest.expressSuccess', {
-        created: pub.data.commit?.created ?? pub.data.approvedCount,
-        updated: pub.data.commit?.updated ?? 0,
-      }),
-    )
-    if (pub.data.commit?.syncTriggered && pub.data.commit.syncResult?.success) {
-      showToast('success', t('knowledge.ingest.syncTriggered'))
-    }
+    finishExpressProgress()
     selectedRaw.value = new Set()
     await loadJobs()
-    finishExpressProgress()
+    showToast('success', t('knowledge.ingest.expressPreviewSuccess', { count: draftList.length }))
+    void router.push({ path: '/knowledge/ingest', query: { id: jobIdStr, express: '1' } })
   } catch (e) {
     resetExpressProgress()
     showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
@@ -756,6 +739,15 @@ const draftRegenerating = ref(false)
 const lint = ref<KbIngestLint | null>(null)
 const linting = ref(false)
 const committing = ref(false)
+const workflowNextSteps = ref<KbWorkflowHintVo[]>([])
+const commitErrorMessage = ref('')
+const commitErrorCode = ref<number | undefined>()
+const commitErrorIsCluster = computed(() => isIngestRawClusterConflict(commitErrorMessage.value, commitErrorCode.value))
+
+function clearCommitError() {
+  commitErrorMessage.value = ''
+  commitErrorCode.value = undefined
+}
 
 const lastGenerateStats = ref<{ generated: number; skipped: number; failed: number; total: number } | null>(null)
 
@@ -1213,6 +1205,7 @@ async function publishExpress() {
     showToast('error', t('knowledge.ingest.noDrafts'))
     return
   }
+  clearCommitError()
   const ok = await confirm({
     title: t('knowledge.ingest.expressPublish'),
     message: `${t('knowledge.ingest.expressPublishConfirm')}\n\n${buildCommitConfirmMessage(true)}`,
@@ -1226,7 +1219,10 @@ async function publishExpress() {
     setExpressProgressStage('commit')
     const res = await publishKbIngestApi(jobId.value, true, true)
     setExpressProgressStage('sync')
-    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    if (res.code !== API_SUCCESS_CODE || !res.data) {
+      commitErrorCode.value = res.code
+      throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    }
     lint.value = res.data.lint
     if (!res.data.committed) {
       const blocking = res.data.lint?.blockingCount ?? 0
@@ -1248,11 +1244,14 @@ async function publishExpress() {
     if (res.data.commit?.syncTriggered && res.data.commit.syncResult?.success) {
       showToast('success', t('knowledge.ingest.syncTriggered'))
     }
+    workflowNextSteps.value = collectWorkflowNextSteps(res.data, res.data.commit)
     await loadJob()
     finishExpressProgress()
   } catch (e) {
+    const msg = e instanceof Error ? e.message : t('knowledge.ingest.opFailed')
+    commitErrorMessage.value = msg
     resetExpressProgress()
-    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
+    showToast('error', msg)
   } finally {
     publishingExpress.value = false
   }
@@ -1273,17 +1272,24 @@ async function commit(sync: boolean) {
   })
   if (!ok) return
   committing.value = true
+  clearCommitError()
   try {
     const res = await commitKbIngestApi(jobId.value, sync)
-    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    if (res.code !== API_SUCCESS_CODE || !res.data) {
+      commitErrorCode.value = res.code
+      throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    }
     showToast('success', t('knowledge.ingest.commitSuccess', { created: res.data.created, updated: res.data.updated }))
     if (res.data.syncTriggered) {
       if (res.data.syncResult?.success) showToast('success', t('knowledge.ingest.syncTriggered'))
       else showToast('error', res.data.syncResult?.outputTail || 'Sync')
     }
+    workflowNextSteps.value = collectWorkflowNextSteps(res.data)
     await loadJob()
   } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
+    const msg = e instanceof Error ? e.message : t('knowledge.ingest.opFailed')
+    commitErrorMessage.value = msg
+    showToast('error', msg)
   } finally {
     committing.value = false
   }
@@ -1323,6 +1329,8 @@ watch(jobId, (id) => {
   drafts.value = []
   activeSlug.value = ''
   lint.value = null
+  workflowNextSteps.value = []
+  clearCommitError()
   planText.value = ''
   planCreateRows.value = []
   planJsonAdvanced.value = false
@@ -1498,12 +1506,12 @@ onUnmounted(() => {
                 type="button"
                 class="btn-primary text-sm"
                 :disabled="Boolean(createDisabledReason) || expressStarting || creating"
-                :title="createDisabledReason || t('knowledge.ingest.expressIngestHint')"
+                :title="createDisabledReason || t('knowledge.ingest.expressPreviewHint')"
                 @click="expressIngest"
               >
                 <Loader2 v-if="expressStarting" class="h-4 w-4 animate-spin" />
                 <Zap v-else class="h-4 w-4" />
-                {{ expressStarting ? t('knowledge.ingest.expressStarting') : t('knowledge.ingest.expressIngest') }}
+                {{ expressStarting ? t('knowledge.ingest.expressPreviewStarting') : t('knowledge.ingest.expressPreview') }}
               </button>
               <button
                 type="button"
@@ -2039,6 +2047,19 @@ onUnmounted(() => {
         <p v-if="commitHint && !canCommit" class="mt-2 rounded-md bg-amber-50/90 px-2.5 py-1.5 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
           {{ commitHint }}
         </p>
+
+        <div
+          v-if="commitErrorMessage"
+          class="mt-3 rounded-lg border border-rose-200 bg-rose-50/90 px-3 py-3 dark:border-rose-500/30 dark:bg-rose-500/10"
+        >
+          <p class="text-sm font-semibold text-rose-800 dark:text-rose-200">{{ t('knowledge.ingest.commitErrorTitle') }}</p>
+          <p class="mt-1 text-xs text-rose-700 dark:text-rose-300">
+            {{ commitErrorIsCluster ? t('knowledge.ingest.rawCoverageBlocked') : t('knowledge.ingest.commitErrorHint') }}
+          </p>
+          <pre class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-rose-900 dark:text-rose-100">{{ commitErrorMessage }}</pre>
+        </div>
+
+        <KbWorkflowNextSteps v-if="workflowNextSteps.length" class="mt-3" :steps="workflowNextSteps" />
 
         <div
           v-if="approvedCommitPaths.length"

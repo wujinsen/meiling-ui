@@ -6,6 +6,7 @@ import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import type {
   KbWikiGovernAutoFixResult,
   KbWikiGovernOptions,
+  KbWikiGovernPageResult,
   KbWikiLintIssue,
 } from '@/types/knowledge'
 import {
@@ -97,13 +98,30 @@ const scriptSummary = computed(() => summarizeFixPages(props.lastResult?.scriptF
 
 const aiSummary = computed(() => summarizeFixPages(props.lastResult?.aiFix?.pages))
 
-const failedPages = computed(() => {
+const failedPages = computed(() => allFixPages.value.filter((p) => p.status === 'failed'))
+
+const allFixPages = computed((): KbWikiGovernPageResult[] => {
   const pages = [
     ...(props.lastResult?.scriptFix?.pages ?? []),
     ...(props.lastResult?.aiFix?.pages ?? []),
   ]
-  return pages.filter((p) => p.status === 'failed')
+  const seen = new Set<string>()
+  return pages.filter((p) => {
+    const key = `${p.slug}::${p.status}::${p.message ?? ''}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 })
+
+const syncSummary = computed(() => {
+  const s = props.lastResult?.sync
+  if (!s) return null
+  return s
+})
+
+const scriptKindsLabel = computed(() => scriptKinds.value.join(', '))
+const aiKindsLabel = computed(() => aiKinds.value.join(', '))
 
 function applyModelDefault() {
   const o = props.llmOptions
@@ -143,6 +161,12 @@ onMounted(applyModelDefault)
       </div>
 
       <template v-else>
+        <p v-if="llmOptions && !optionsLoading" class="text-[11px] leading-relaxed text-gray-400">
+          {{ t('knowledge.wikiGovern.kindLegendScript', { kinds: scriptKindsLabel }) }}
+          <span class="mx-1">·</span>
+          {{ t('knowledge.wikiGovern.kindLegendAi', { kinds: aiKindsLabel }) }}
+        </p>
+
         <div class="flex flex-wrap gap-2 text-xs">
           <span class="badge bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
             {{ t('knowledge.wikiGovern.fixScriptTargets', { count: scriptIssues.length }) }}
@@ -228,9 +252,40 @@ onMounted(applyModelDefault)
             <span v-if="lastResult.aiFix.model" class="text-gray-400">({{ lastResult.aiFix.model }})</span>
           </p>
           <p v-if="lastResult.sync" class="text-emerald-700 dark:text-emerald-300">
-            Sync：{{ lastResult.sync.success ? t('knowledge.wikiGovern.syncDone') : lastResult.sync.outputTail ?? `exit ${lastResult.sync.exitCode}` }}
+            Sync：
+            {{
+              syncSummary?.success
+                ? t('knowledge.wikiGovern.syncDone')
+                : syncSummary?.outputTail ?? t('knowledge.wikiGovern.syncFailed', { code: syncSummary?.exitCode ?? '?' })
+            }}
+            <span v-if="syncSummary?.spaceCode" class="text-gray-400">({{ syncSummary.spaceCode }})</span>
           </p>
-          <ul v-if="failedPages.length" class="max-h-28 space-y-1 overflow-y-auto text-rose-600 dark:text-rose-400">
+          <div v-if="allFixPages.length" class="overflow-x-auto rounded border border-gray-200 dark:border-white/10">
+            <table class="w-full min-w-[28rem] text-left text-[11px]">
+              <thead class="bg-gray-100/80 text-gray-500 dark:bg-white/5 dark:text-gray-400">
+                <tr>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.wikiGovern.fixPageSlug') }}</th>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.wikiGovern.fixPageStatus') }}</th>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.wikiGovern.fixPageKinds') }}</th>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.wikiGovern.fixPageMessage') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="p in allFixPages"
+                  :key="`${p.slug}-${p.status}-${p.message}`"
+                  class="border-t border-gray-100 dark:border-white/5"
+                  :class="p.status === 'failed' ? 'text-rose-600 dark:text-rose-400' : 'text-gray-600 dark:text-gray-400'"
+                >
+                  <td class="px-2 py-1 font-mono">{{ p.slug }}</td>
+                  <td class="px-2 py-1">{{ p.status }}</td>
+                  <td class="px-2 py-1">{{ p.kinds?.join(', ') ?? '—' }}</td>
+                  <td class="px-2 py-1">{{ p.message ?? '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <ul v-if="failedPages.length && !allFixPages.length" class="max-h-28 space-y-1 overflow-y-auto text-rose-600 dark:text-rose-400">
             <li v-for="p in failedPages" :key="`${p.slug}-${p.message}`">
               <span class="font-mono">{{ p.slug }}</span>
               <span v-if="p.message"> — {{ p.message }}</span>

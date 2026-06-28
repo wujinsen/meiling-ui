@@ -380,8 +380,9 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 | `dup_slug` 仅手动，不进批量 API | ✅ | manual badge + 编辑页跳转 |
 | `slug_mismatch` 走 script 非 manual | ✅ | `kbWikiGovern.ts` + options 兜底 |
 | merge-hint 复制指令 | ✅ | 复制 `cursorPrompt` |
-| merge-hint 展示 manualSteps / 冲突 slug | ❌ | 待前端 polish |
-| Fix 结果 `pages[]` 明细表 | ❌ | 仅有失败 slug 列表 + 计数摘要 |
+| merge-hint 展示 manualSteps / 冲突 slug | ✅ | `GovernMergeHintPanel` |
+| Fix 结果 `pages[]` 明细表 | ✅ | Fix 面板表格 |
+| script-fix 后自动复检 | ✅ | `runScriptFix` → `runRelint(true)` |
 | 旁路跳转 Ingest / 健康体检 | ❌ | 待前端加链接 |
 
 ---
@@ -407,16 +408,18 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 
 ## 15. 需后端确认（Wiki 治理）
 
-| # | 问题 | 前端依赖 |
-|---|------|----------|
-| W1 | `GET /kb/wiki/govern/options` 三组 kind 是否与运行时 `lint.py` / `WikiGovernKindUtil` **一致**？尤其 `slug_mismatch` ∈ script、`dup_slug` ∈ manual | 勾选默认值与 badge |
-| W2 | `merge-hint` 对三类重复 kind 是否稳定返回 `cursorPrompt`、`manualSteps[]`、`relatedSlugs`、`canonicalSlug`？ | merge 详情 UI |
-| W3 | `auto-fix` 成功时 `issuesAfter` 是否 **等于** `relint.stats.issues` 或 `relint.issues.length`？ | 摘要数字 |
-| W4 | `auto-fix.syncAfter=true` 时 `sync` 对象：`success` / `outputTail` / `exitCode` / `batchNo` 字段约定？ | Fix 面板 Sync 行 |
-| W5 | 单独 `script-fix` / `ai-batch-fix` 是否 **故意不** relint？前端是否应在成功后自动 `lint-space`？ | ③ 复检体验 |
-| W6 | `script-fix` 的 `dryRun=true` 是否需要在治理 UI 暴露？ | 可选预览按钮 |
-| W7 | **T16f** 范围：是否新增 API 或改 §8 契约？ | 排期 |
-| W8 | Lint `exitCode≠0` 但 HTTP 200 时，`issues` 是否仍完整返回？ | 空结果 vs 有阻断项 |
+> 下列 **P1–P3 已实现**（见总览 [§7.4](knowledge-workbench-frontend.md#74-前端实现优先级后端排期--2026-06-28)）。Swagger 联调：B3/B5/B6。
+
+| # | 问题 | 状态 |
+|---|------|------|
+| W1 | `govern/options` kind 与 lint.py 一致 | ✅ 前端以 options 为准 + 图例 |
+| W2 | merge-hint 字段完整 | ✅ 弹层展示；Swagger 验 B5 |
+| W3 | auto-fix `issuesAfter` = relint | ✅ 摘要展示；Swagger 验 B6 |
+| W4 | Sync 对象字段 | ✅ `KbSyncTrigger` |
+| W5 | 单独 script/ai 后是否 relint | ✅ script 后自动 relint |
+| W6 | dryRun UI | ⏸ 不做 |
+| W7 | T16f | 待后端排期 |
+| W8 | exitCode≠0 仍返回 issues | 🔵 联调 |
 
 ---
 
