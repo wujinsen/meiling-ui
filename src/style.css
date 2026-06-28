@@ -356,6 +356,19 @@
     @apply cursor-pointer font-medium text-brand-600 underline decoration-dotted underline-offset-2 hover:text-brand-700 dark:text-brand-400;
   }
 
+  .kb-markdown .kb-html-block {
+    @apply my-3 max-w-full overflow-x-auto;
+  }
+
+  .kb-markdown .kb-html-block table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .kb-markdown .kb-html-block td,
+  .kb-markdown .kb-html-block th {
+    @apply align-top;
+  }
+
   .kb-linkrow {
     @apply flex w-full items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-100 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10;
   }

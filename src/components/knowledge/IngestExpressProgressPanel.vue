@@ -13,11 +13,13 @@ const props = defineProps<{
   stage: IngestExpressProgressStep | null
   percent: number
   templateMode?: boolean
+  completed?: boolean
 }>()
 
 const { t } = useI18n()
 
 const hint = computed(() => {
+  if (props.completed) return t('knowledge.ingest.expressProgress.done')
   if (!props.stage) return ''
   if (props.stage === 'generate' && props.templateMode) {
     return t('knowledge.ingest.expressProgress.generateTemplate')
@@ -30,6 +32,7 @@ function stepIndex(step: IngestExpressProgressStep) {
 }
 
 function stepState(step: IngestExpressProgressStep): 'done' | 'active' | 'pending' {
+  if (props.completed) return 'done'
   if (!props.stage) return 'pending'
   const cur = stepIndex(props.stage)
   const idx = stepIndex(step)
@@ -45,8 +48,9 @@ function stepLabel(step: IngestExpressProgressStep) {
 
 <template>
   <div
-    v-if="active && stage"
+    v-if="(active && stage) || completed"
     class="kb-ingest-express-progress rounded-xl border border-brand-200/80 bg-brand-50/50 p-4 dark:border-brand-500/30 dark:bg-brand-500/10"
+    :class="completed && 'border-emerald-200/80 bg-emerald-50/40 dark:border-emerald-500/30 dark:bg-emerald-500/10'"
   >
     <div class="mb-2 flex items-center justify-between gap-3">
       <p class="text-sm font-medium text-brand-900 dark:text-brand-100">{{ hint }}</p>

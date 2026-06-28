@@ -19,7 +19,7 @@ import { useKbSpace } from '@/composables/useKbSpace'
 import { confirm } from '@/composables/useConfirm'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { renderMarkdown } from '@/utils/markdown'
+import { renderWikiPreviewMarkdown } from '@/utils/markdown'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
 import { popWikiDraft } from '@/utils/kbWikiDraft'
@@ -154,14 +154,15 @@ const canEditSpace = computed(() => {
 
 const fromLintIssue = computed(() => Boolean(issueId.value))
 
-watch(
-  () => mainTab.value === 'preview' && content.value,
-  (active) => {
-    if (active) contentHtml.value = renderMarkdown(content.value)
-  },
-)
+function syncPreviewHtml() {
+  contentHtml.value = renderWikiPreviewMarkdown(content.value)
+}
+
+watch(mainTab, (tab) => {
+  if (tab === 'preview') syncPreviewHtml()
+})
 watch(content, () => {
-  if (mainTab.value === 'preview') contentHtml.value = renderMarkdown(content.value)
+  if (mainTab.value === 'preview') syncPreviewHtml()
 })
 
 watch(issueDetail, (detail) => {
@@ -227,7 +228,7 @@ async function load() {
         baselineHash.value = ''
       }
     }
-    if (mainTab.value === 'preview') contentHtml.value = renderMarkdown(content.value)
+    if (mainTab.value === 'preview') syncPreviewHtml()
     if (fromLintIssue.value) aiPanelOpen.value = true
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : t('knowledge.wikiEdit.loadFailed')

@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Check, ChevronDown, ChevronRight, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Trash2, Upload, X, Zap } from 'lucide-vue-next'
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Trash2, Upload, X, Zap } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppCheckbox from '@/components/ui/AppCheckbox.vue'
@@ -148,6 +148,7 @@ function setExpressProgressStage(step: IngestExpressProgressStep) {
 function finishExpressProgress() {
   stopExpressProgressCreep()
   expressProgressPercent.value = 100
+  if (expressPublishCompleted.value) return
   setTimeout(() => {
     expressProgressStage.value = null
     expressProgressPercent.value = 0
@@ -740,6 +741,8 @@ const lint = ref<KbIngestLint | null>(null)
 const linting = ref(false)
 const committing = ref(false)
 const workflowNextSteps = ref<KbWorkflowHintVo[]>([])
+const expressPublishSummary = ref<{ created: number; updated: number; syncOk?: boolean } | null>(null)
+const expressPublishCompleted = ref(false)
 const commitErrorMessage = ref('')
 const commitErrorCode = ref<number | undefined>()
 const commitErrorIsCluster = computed(() => isIngestRawClusterConflict(commitErrorMessage.value, commitErrorCode.value))
@@ -920,6 +923,11 @@ async function loadJob() {
     planText.value = res.data.planJson ? prettyJson(res.data.planJson) : ''
     syncRowsFromPlanText()
     await Promise.all([loadDrafts(), loadCategories()])
+    if (expressMode.value && res.data.status === 'committed') {
+      expressPublishCompleted.value = true
+      expressProgressStage.value = 'sync'
+      expressProgressPercent.value = 100
+    }
     if (expressMode.value) await ensureExpressPipeline()
   } catch (e) {
     job.value = null
@@ -1245,6 +1253,14 @@ async function publishExpress() {
       showToast('success', t('knowledge.ingest.syncTriggered'))
     }
     workflowNextSteps.value = collectWorkflowNextSteps(res.data, res.data.commit)
+    expressPublishSummary.value = {
+      created: res.data.commit?.created ?? res.data.approvedCount ?? 0,
+      updated: res.data.commit?.updated ?? 0,
+      syncOk: res.data.commit?.syncTriggered ? res.data.commit.syncResult?.success : undefined,
+    }
+    expressPublishCompleted.value = true
+    expressProgressStage.value = 'sync'
+    expressProgressPercent.value = 100
     await loadJob()
     finishExpressProgress()
   } catch (e) {
@@ -1299,6 +1315,14 @@ function backToList() {
   void router.push({ path: '/knowledge/ingest' })
 }
 
+function goWikiGovernFromJob() {
+  if (!job.value?.spaceId) return
+  void router.push({
+    path: '/knowledge/wiki-govern/index',
+    query: { spaceId: String(job.value.spaceId) },
+  })
+}
+
 function approvalBadgeClass(approval: string) {
   if (approval === 'approved') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
   if (approval === 'rejected') return 'bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300'
@@ -1330,6 +1354,9 @@ watch(jobId, (id) => {
   activeSlug.value = ''
   lint.value = null
   workflowNextSteps.value = []
+  expressPublishSummary.value = null
+  expressPublishCompleted.value = false
+  resetExpressProgress()
   clearCommitError()
   planText.value = ''
   planCreateRows.value = []
@@ -1453,7 +1480,7 @@ onUnmounted(() => {
               }}
             </p>
           </div>
-          <div class="mt-2 max-h-72 flex-1 overflow-auto rounded-lg border border-gray-100 p-2 dark:border-white/5">
+          <div class="mt-2 h-[min(45vh,22rem)] overflow-y-auto rounded-lg border border-gray-100 p-2 dark:border-white/5">
             <p v-if="rawLoading || rawCoverageLoading" class="p-3 text-xs text-gray-400">{{ t('common.loading') }}</p>
             <p v-else-if="!filteredRawFlatTree.length" class="p-3 text-xs text-gray-400">{{ t('knowledge.ingest.rawTreeEmpty') }}</p>
             <template v-else>
@@ -1550,7 +1577,7 @@ onUnmounted(() => {
           <h3 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('knowledge.ingest.history') }}</h3>
           <p v-if="jobsLoading" class="text-xs text-gray-400">{{ t('common.loading') }}</p>
           <p v-else-if="!jobs.length" class="text-xs text-gray-400">{{ t('knowledge.ingest.noJobs') }}</p>
-          <ul v-else class="flex flex-col gap-2">
+          <ul v-else class="flex max-h-[min(45vh,22rem)] flex-col gap-2 overflow-y-auto">
             <li
               v-for="j in jobs"
               :key="String(j.id)"
@@ -1714,16 +1741,68 @@ onUnmounted(() => {
               {{ t('knowledge.ingest.expressExpertLink') }}
             </button>
           </div>
+          <div v-else-if="job?.status === 'committed'" class="flex shrink-0 flex-col gap-2 sm:min-w-[9rem]">
+            <button type="button" class="btn-primary pointer-events-none text-sm opacity-90" disabled>
+              <CheckCircle2 class="h-4 w-4" />
+              {{ t('knowledge.ingest.expressPublishedBadge') }}
+            </button>
+            <button type="button" class="btn-ghost text-sm" @click="backToList">
+              {{ t('knowledge.ingest.backToList') }}
+            </button>
+            <button type="button" class="btn-ghost text-xs" @click="openExpertReview">
+              {{ t('knowledge.ingest.expressViewCommitted') }}
+            </button>
+          </div>
         </div>
         <IngestExpressProgressPanel
           class="mt-3"
-          :active="expressProgressActive"
-          :stage="expressProgressStage"
-          :percent="expressProgressPercent"
+          :active="expressProgressActive || expressPublishCompleted"
+          :completed="expressPublishCompleted || job?.status === 'committed'"
+          :stage="expressProgressStage ?? (expressPublishCompleted || job?.status === 'committed' ? 'sync' : null)"
+          :percent="expressPublishCompleted || job?.status === 'committed' ? 100 : expressProgressPercent"
           :template-mode="templateMode"
         />
+        <div
+          v-if="job?.status === 'committed'"
+          class="mt-4 space-y-3 border-t border-brand-200/70 pt-4 dark:border-brand-500/20"
+        >
+          <p class="text-sm font-medium text-emerald-800 dark:text-emerald-300">
+            {{
+              expressPublishSummary
+                ? t('knowledge.ingest.expressDoneDetail', expressPublishSummary)
+                : t('knowledge.ingest.expressDoneHint')
+            }}
+          </p>
+          <p v-if="expressPublishSummary?.syncOk" class="text-xs text-emerald-700 dark:text-emerald-400">
+            {{ t('knowledge.ingest.syncTriggered') }}
+          </p>
+          <KbWorkflowNextSteps v-if="workflowNextSteps.length" :steps="workflowNextSteps" />
+          <div v-else class="flex flex-wrap gap-2">
+            <button
+              v-if="job?.spaceId"
+              type="button"
+              class="btn-ghost border border-brand-200 text-sm dark:border-brand-500/30"
+              @click="goWikiGovernFromJob"
+            >
+              {{ t('knowledge.ingest.expressFallbackGovern') }}
+            </button>
+            <button type="button" class="btn-ghost border border-gray-200 text-sm dark:border-white/10" @click="backToList">
+              {{ t('knowledge.ingest.expressFallbackNewBatch') }}
+            </button>
+          </div>
+        </div>
+        <div
+          v-if="commitErrorMessage && job?.status !== 'committed'"
+          class="mt-3 rounded-lg border border-rose-200 bg-rose-50/90 px-3 py-3 dark:border-rose-500/30 dark:bg-rose-500/10"
+        >
+          <p class="text-sm font-semibold text-rose-800 dark:text-rose-200">{{ t('knowledge.ingest.commitErrorTitle') }}</p>
+          <p class="mt-1 text-xs text-rose-700 dark:text-rose-300">
+            {{ commitErrorIsCluster ? t('knowledge.ingest.rawCoverageBlocked') : t('knowledge.ingest.commitErrorHint') }}
+          </p>
+          <pre class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-rose-900 dark:text-rose-100">{{ commitErrorMessage }}</pre>
+        </div>
         <p
-          v-if="expressPipelineBusy && !expressProgressActive"
+          v-if="expressPipelineBusy && !expressProgressActive && job?.status !== 'committed'"
           class="mt-3 flex items-center gap-2 text-xs text-brand-700 dark:text-brand-300"
         >
           <Loader2 class="h-3.5 w-3.5 animate-spin" /> {{ t('knowledge.ingest.expressProcessing') }}

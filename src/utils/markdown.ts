@@ -48,7 +48,65 @@ function renderTable(header: string[], rows: string[][]) {
 
 const markdownCache = new Map<string, string>()
 const MARKDOWN_CACHE_MAX = 48
-const MARKDOWN_CACHE_VERSION = 'v2'
+const MARKDOWN_CACHE_VERSION = 'v4'
+
+/** Ingest / raw 来源 wiki 常含内嵌 HTML 表格，预览需原样渲染（仅去掉明显 XSS） */
+const HTML_BLOCK_TAGS = ['table', 'div', 'figure', 'section', 'article', 'details'] as const
+
+function sanitizeWikiHtml(html: string): string {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, '')
+    .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript:/gi, '')
+}
+
+function tagDepthDelta(line: string, tag: string): number {
+  const open = (line.match(new RegExp(`<${tag}(\\s|>|/)`, 'gi')) ?? []).length
+  const close = (line.match(new RegExp(`</${tag}>`, 'gi')) ?? []).length
+  return open - close
+}
+
+function tryConsumeHtmlBlock(lines: string[], start: number): { html: string; next: number } | null {
+  const line = lines[start] ?? ''
+  const open = line.match(new RegExp(`^\\s*<(${HTML_BLOCK_TAGS.join('|')})\\b`, 'i'))
+  if (!open) return null
+  const tag = open[1]!.toLowerCase()
+  let depth = 0
+  const buf: string[] = []
+  for (let i = start; i < lines.length; i += 1) {
+    const cur = lines[i]!
+    buf.push(cur)
+    depth += tagDepthDelta(cur, tag)
+    if (depth <= 0 && i > start) {
+      return { html: buf.join('\n'), next: i + 1 }
+    }
+  }
+  if (buf.length) return { html: buf.join('\n'), next: lines.length }
+  return null
+}
+
+function wrapHtmlBlock(html: string): string {
+  return `<div class="kb-html-block">${sanitizeWikiHtml(html.trim())}</div>`
+}
+
+/** 去掉 wiki 文件 leading YAML frontmatter（编辑区存全文，预览只渲染正文） */
+export function stripYamlFrontmatter(content: string): string {
+  const text = content.replace(/^\uFEFF/, '')
+  if (!text.startsWith('---')) return content
+  const lines = text.split(/\r?\n/)
+  if (lines[0]?.trim() !== '---') return content
+  for (let i = 1; i < lines.length; i += 1) {
+    if (lines[i]?.trim() === '---') {
+      return lines.slice(i + 1).join('\n')
+    }
+  }
+  return content
+}
+
+/** Wiki 编辑「预览」：与浏览页一致，不展示 frontmatter 块 */
+export function renderWikiPreviewMarkdown(content?: string): string {
+  return renderMarkdown(stripYamlFrontmatter(content ?? ''))
+}
 
 function markdownCacheKey(content: string) {
   return `${MARKDOWN_CACHE_VERSION}::${content}`
@@ -69,6 +127,21 @@ function renderMarkdownBody(content: string): string {
 
   while (i < lines.length) {
     const line = lines[i]
+
+    const htmlBlock = tryConsumeHtmlBlock(lines, i)
+    if (htmlBlock) {
+      closeList()
+      out.push(wrapHtmlBlock(htmlBlock.html))
+      i = htmlBlock.next
+      continue
+    }
+
+    if (/^\s*<(img|br|hr)\b[^>]*\/?>/i.test(line)) {
+      closeList()
+      out.push(wrapHtmlBlock(line.trim()))
+      i += 1
+      continue
+    }
 
     if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
       closeList()
