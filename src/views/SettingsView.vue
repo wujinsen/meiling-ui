@@ -8,6 +8,7 @@ import { usePerspective } from '@/composables/usePerspective'
 import { useAppSettings, type FontSizePreset } from '@/composables/useAppSettings'
 import { useLocale } from '@/i18n'
 import { showToast } from '@/composables/useToast'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 
 const router = useRouter()
@@ -40,6 +41,23 @@ function onFontSizeChange(value: number | string) {
 
 function goProfile() {
   router.push('/profile')
+}
+
+type NotificationKey = 'emailNotifications' | 'browserNotifications' | 'weeklyDigest' | 'dealAlerts'
+
+const notificationItems: { key: NotificationKey; label: string; sub: string }[] = [
+  { key: 'emailNotifications', label: 'settings.notifications.email', sub: 'settings.notifications.emailSub' },
+  { key: 'browserNotifications', label: 'settings.notifications.browser', sub: 'settings.notifications.browserSub' },
+  { key: 'weeklyDigest', label: 'settings.notifications.weekly', sub: 'settings.notifications.weeklySub' },
+  { key: 'dealAlerts', label: 'settings.notifications.deals', sub: 'settings.notifications.dealsSub' },
+]
+
+function toggleNotification(key: NotificationKey) {
+  settings.value[key] = !settings.value[key]
+}
+
+function setNotification(key: NotificationKey, value: boolean) {
+  settings.value[key] = value
 }
 </script>
 
@@ -86,7 +104,7 @@ function goProfile() {
         <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{{ t('settings.appearance.fontSizeSub') }}</p>
       </div>
 
-      <label class="mt-4 flex cursor-pointer items-center justify-between rounded-lg border border-gray-100 px-4 py-3 dark:border-white/5">
+      <div class="mt-4 flex cursor-pointer items-center justify-between rounded-lg border border-gray-100 px-4 py-3 dark:border-white/5" @click="togglePerspective()">
         <div class="flex items-center gap-3">
           <Monitor class="h-4 w-4 text-gray-400" />
           <div>
@@ -94,13 +112,13 @@ function goProfile() {
             <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.appearance.perspectiveSub') }}</p>
           </div>
         </div>
-        <input
-          type="checkbox"
-          class="h-4 w-4 rounded border-gray-300 accent-brand-500"
-          :checked="isPerspective"
-          @change="togglePerspective()"
+        <AppCheckbox
+          standalone
+          :model-value="isPerspective"
+          @update:model-value="togglePerspective()"
+          @click.stop
         />
-      </label>
+      </div>
     </section>
 
     <section class="card p-5">
@@ -111,26 +129,23 @@ function goProfile() {
       <p class="page-subtitle mb-4">{{ t('settings.notifications.sub') }}</p>
 
       <div class="space-y-3">
-        <label
-          v-for="item in [
-            { key: 'emailNotifications', label: 'settings.notifications.email', sub: 'settings.notifications.emailSub' },
-            { key: 'browserNotifications', label: 'settings.notifications.browser', sub: 'settings.notifications.browserSub' },
-            { key: 'weeklyDigest', label: 'settings.notifications.weekly', sub: 'settings.notifications.weeklySub' },
-            { key: 'dealAlerts', label: 'settings.notifications.deals', sub: 'settings.notifications.dealsSub' },
-          ]"
+        <div
+          v-for="item in notificationItems"
           :key="item.key"
           class="flex cursor-pointer items-center justify-between rounded-lg border border-gray-100 px-4 py-3 dark:border-white/5"
+          @click="toggleNotification(item.key)"
         >
           <div>
             <p class="text-sm font-medium text-gray-900 dark:text-white">{{ t(item.label) }}</p>
             <p class="text-xs text-gray-500 dark:text-gray-400">{{ t(item.sub) }}</p>
           </div>
-          <input
-            v-model="settings[item.key as keyof typeof settings]"
-            type="checkbox"
-            class="h-4 w-4 rounded border-gray-300 accent-brand-500"
+          <AppCheckbox
+            standalone
+            :model-value="settings[item.key]"
+            @update:model-value="(v) => setNotification(item.key, v)"
+            @click.stop
           />
-        </label>
+        </div>
       </div>
     </section>
 

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppPagination from '@/components/ui/AppPagination.vue'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import type { UserVo } from '@/types/user'
 import { Search, ShieldCheck } from 'lucide-vue-next'
 
@@ -124,19 +125,17 @@ function togglePageSelect() {
     </div>
 
     <div class="assign-user-toolbar">
-      <label
+      <AppCheckbox
         class="assign-user-toolbar-check"
+        size="sm"
         :class="!selectableUsers.length && 'cursor-not-allowed opacity-50'"
+        :disabled="!selectableUsers.length"
+        :model-value="pageAllSelected"
+        :indeterminate="pagePartialSelected"
+        @update:model-value="togglePageSelect"
       >
-        <input
-          type="checkbox"
-          :disabled="!selectableUsers.length"
-          :checked="pageAllSelected"
-          :indeterminate="pagePartialSelected"
-          @change="togglePageSelect"
-        />
         <span>{{ t('system.userAssign.selectAllPage') }}</span>
-      </label>
+      </AppCheckbox>
       <span v-if="selectedCount" class="assign-user-toolbar-selected">
         {{ t('system.userAssign.selectedCount', { count: selectedCount }) }}
         <button type="button" class="assign-user-toolbar-clear" @click="emit('clear-selection')">
@@ -163,13 +162,14 @@ function togglePageSelect() {
         class="assign-user-item"
         :style="!useCompactList ? { '--assign-i': index } : undefined"
       >
-        <label class="flex cursor-pointer items-center gap-2.5 py-0.5">
-          <input
-            type="checkbox"
-            class="shrink-0"
+        <div class="flex cursor-pointer items-center gap-2.5 py-0.5" @click="!isSuperAdminUser(user) && emit('toggle', user.id!)">
+          <AppCheckbox
+            standalone
+            size="sm"
             :disabled="isSuperAdminUser(user)"
-            :checked="selectedIds.has(String(user.id))"
-            @change="emit('toggle', user.id!)"
+            :model-value="selectedIds.has(String(user.id))"
+            @update:model-value="emit('toggle', user.id!)"
+            @click.stop
           />
           <div
             class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
@@ -190,7 +190,7 @@ function togglePageSelect() {
             </div>
             <p class="truncate text-xs text-gray-500 dark:text-gray-400">{{ user.nickName || user.deptName || '—' }}</p>
           </div>
-        </label>
+        </div>
       </li>
     </ul>
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import { MoreHorizontal } from 'lucide-vue-next'
 import { useI18n } from 'vue-i18n'
 
@@ -32,7 +33,7 @@ function probabilityClass(value: number) {
       <thead>
         <tr class="border-b border-gray-100 text-xs font-medium uppercase tracking-wide text-gray-400 dark:border-white/5">
           <th class="pb-3 pl-1 pr-3">
-            <input type="checkbox" class="rounded border-gray-300 dark:border-white/20" />
+            <AppCheckbox standalone size="sm" />
           </th>
           <th class="pb-3 pr-4">{{ t('analytics.topDeals.company') }}</th>
           <th class="pb-3 pr-4">{{ t('analytics.topDeals.dealValue') }}</th>
@@ -51,7 +52,7 @@ function probabilityClass(value: number) {
           class="border-b border-gray-50 transition hover:bg-gray-50/80 dark:border-white/5 dark:hover:bg-white/5"
         >
           <td class="py-3.5 pl-1 pr-3">
-            <input type="checkbox" class="rounded border-gray-300 dark:border-white/20" />
+            <AppCheckbox standalone size="sm" />
           </td>
           <td class="py-3.5 pr-4">
             <div class="flex items-center gap-2.5">

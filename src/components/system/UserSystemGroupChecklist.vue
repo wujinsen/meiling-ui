@@ -7,6 +7,7 @@ import {
   type SystemGroup,
 } from '@/constants/systemGroup'
 import type { SysSystem } from '@/types/system'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import { ChevronDown, ExternalLink, LayoutGrid } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -66,15 +67,14 @@ function toggleBatchSelect() {
         {{ t('system.userAssign.userSystemsSelected', { count: checkedCount, total: systems.length }) }}
       </p>
       <div v-if="!readonly" class="flex flex-wrap gap-2">
-        <label class="inline-flex cursor-pointer items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-          <input
-            type="checkbox"
-            :checked="allSelected"
-            :indeterminate="partialSelected"
-            @change="toggleBatchSelect"
-          />
+        <AppCheckbox
+          size="sm"
+          :model-value="allSelected"
+          :indeterminate="partialSelected"
+          @update:model-value="toggleBatchSelect"
+        >
           <span>{{ t('system.userAssign.selectAllSystems') }}</span>
-        </label>
+        </AppCheckbox>
         <button
           v-if="checkedCount"
           type="button"
@@ -113,19 +113,21 @@ function toggleBatchSelect() {
         </div>
       </div>
       <div v-show="!isCollapsed(group.key)" class="user-system-checklist-grid">
-        <label
+        <div
           v-for="(system, index) in group.items"
           :key="String(system.id)"
           class="user-system-checklist-item"
           :class="checkedIds.has(String(system.id)) && 'user-system-checklist-item-checked'"
           :style="{ '--check-i': index }"
+          @click="!readonly && emit('toggle', system.id!, !checkedIds.has(String(system.id)))"
         >
-          <input
-            type="checkbox"
-            class="shrink-0"
-            :checked="checkedIds.has(String(system.id))"
+          <AppCheckbox
+            standalone
+            size="sm"
+            :model-value="checkedIds.has(String(system.id))"
             :disabled="readonly"
-            @change="emit('toggle', system.id!, ($event.target as HTMLInputElement).checked)"
+            @update:model-value="(v) => emit('toggle', system.id!, v)"
+            @click.stop
           />
           <div
             class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg shadow-sm"
@@ -143,7 +145,7 @@ function toggleBatchSelect() {
             </div>
             <p class="truncate text-xs text-gray-500 dark:text-gray-400">{{ system.systemCode }}</p>
           </div>
-        </label>
+        </div>
       </div>
     </section>
   </div>

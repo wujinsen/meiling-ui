@@ -462,6 +462,86 @@
     @apply cursor-not-allowed opacity-60;
   }
 
+  .app-checkbox {
+    @apply inline-flex cursor-pointer select-none items-center gap-2.5;
+  }
+
+  .app-checkbox--disabled {
+    @apply cursor-not-allowed opacity-55;
+  }
+
+  .app-checkbox__input {
+    @apply sr-only;
+  }
+
+  .app-checkbox__control {
+    @apply relative flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center rounded-[0.3rem] border border-gray-300 bg-white shadow-sm transition-all duration-150;
+    @apply dark:border-white/20 dark:bg-gray-900/60;
+  }
+
+  .app-checkbox__input:focus-visible + .app-checkbox__control {
+    @apply ring-2 ring-brand-400/45 ring-offset-2 dark:ring-offset-gray-900;
+  }
+
+  .app-checkbox__input:checked + .app-checkbox__control {
+    @apply border-brand-600 bg-brand-600 shadow-sm dark:border-brand-500 dark:bg-brand-500;
+  }
+
+  .app-checkbox__icon {
+    @apply h-3 w-3 scale-75 text-white opacity-0 transition-all duration-150;
+  }
+
+  .app-checkbox__input:checked + .app-checkbox__control .app-checkbox__icon {
+    @apply scale-100 opacity-100;
+  }
+
+  .app-checkbox__label {
+    @apply text-sm leading-snug text-gray-700 dark:text-gray-200;
+  }
+
+  .app-checkbox--option {
+    @apply gap-2 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 transition-colors duration-150;
+    @apply hover:border-brand-200 hover:bg-brand-50/40;
+    @apply dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/30 dark:hover:bg-brand-500/10;
+  }
+
+  .app-checkbox--option.app-checkbox--checked {
+    @apply border-brand-200 bg-brand-50/70 dark:border-brand-500/35 dark:bg-brand-500/10;
+  }
+
+  .app-checkbox--option .app-checkbox__label {
+    @apply text-xs text-gray-600 dark:text-gray-300;
+  }
+
+  .app-checkbox--option.app-checkbox--checked .app-checkbox__label {
+    @apply text-gray-800 dark:text-gray-100;
+  }
+
+  .app-checkbox--sm .app-checkbox__control {
+    @apply h-4 w-4 rounded-[0.25rem];
+  }
+
+  .app-checkbox--sm .app-checkbox__icon {
+    @apply h-2.5 w-2.5;
+  }
+
+  .app-checkbox--standalone {
+    @apply inline-flex gap-0;
+  }
+
+  .app-checkbox--indeterminate .app-checkbox__control {
+    @apply border-brand-600 bg-brand-600 dark:border-brand-500 dark:bg-brand-500;
+  }
+
+  .app-checkbox--indeterminate .app-checkbox__icon {
+    @apply scale-75 opacity-0;
+  }
+
+  .app-checkbox--indeterminate .app-checkbox__control::after {
+    content: '';
+    @apply absolute h-0.5 w-2 rounded-sm bg-white;
+  }
+
   .dot-grid {
     background-image: radial-gradient(circle, #d1d5db 1px, transparent 1px);
     background-size: 20px 20px;
@@ -595,6 +675,14 @@
 
   .field-input-inline {
     @apply w-auto min-w-[7.5rem];
+  }
+
+  .field-input-sm {
+    @apply py-1.5 text-xs;
+  }
+
+  .field-input-search {
+    @apply pl-9;
   }
 
   .page-header-card {
@@ -1074,6 +1162,36 @@
 
   textarea.field-input.kb-ingest-plan-editor:read-only {
     @apply cursor-default;
+  }
+
+  .kb-ingest-express-progress-step {
+    @apply flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400;
+  }
+
+  .kb-ingest-express-progress-step--active {
+    @apply font-medium text-brand-800 dark:text-brand-200;
+  }
+
+  .kb-ingest-express-progress-step--done {
+    @apply text-emerald-700 dark:text-emerald-300;
+  }
+
+  .kb-ingest-raw-tree {
+    @apply min-h-0;
+  }
+
+  .kb-ingest-raw-tree-panel {
+    @apply flex min-h-0 flex-col;
+  }
+
+  .kb-ingest-raw-tree-resize {
+    @apply flex w-full cursor-row-resize items-center justify-center rounded-b-lg border border-t-0 border-gray-100 bg-gray-50/90 py-1 text-gray-400 transition;
+    @apply hover:bg-gray-100 hover:text-brand-600;
+    @apply dark:border-white/5 dark:bg-white/[0.03] dark:hover:bg-white/5 dark:hover:text-brand-300;
+  }
+
+  .kb-ingest-raw-tree-resize:active {
+    @apply bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300;
   }
 
   .date-picker {
@@ -1958,7 +2076,7 @@ html.perspective-active .perspective-window .no-tilt-drag {
 }
 
 .app-toast {
-  @apply relative flex max-w-[min(90vw,28rem)] items-center gap-2.5 overflow-hidden rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg;
+  @apply relative flex max-w-[min(92vw,36rem)] items-start gap-2.5 overflow-hidden rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg;
   transform: scale(1);
   opacity: 1;
   filter: blur(0);
@@ -2184,4 +2302,9 @@ html.perspective-active .perspective-window .no-tilt-drag {
     opacity: 1;
     transform: none;
   }
+}
+
+body.kb-ingest-raw-tree-resizing {
+  cursor: row-resize !important;
+  user-select: none;
 }

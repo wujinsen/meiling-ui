@@ -18,6 +18,7 @@ import {
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import UserAssignPanel from '@/components/system/UserAssignPanel.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { hasFullPermission } from '@/utils/privilege'
@@ -81,6 +82,22 @@ const memberRemoving = ref(false)
 const hasUserSelection = computed(() => selectedUserIds.value.size > 0)
 const hasMemberSelection = computed(() => selectedMemberIds.value.size > 0)
 const hasBatchSelection = computed(() => hasUserSelection.value || hasMemberSelection.value)
+
+const membersPageAllSelected = computed(
+  () =>
+    members.value.length > 0 &&
+    members.value.every((m) => m.id != null && selectedMemberIds.value.has(String(m.id))),
+)
+const membersPagePartialSelected = computed(
+  () =>
+    !membersPageAllSelected.value &&
+    members.value.some((m) => m.id != null && selectedMemberIds.value.has(String(m.id))),
+)
+
+function toggleMembersPageSelect() {
+  if (membersPageAllSelected.value) clearMemberSelection()
+  else if (members.value.length) selectAllMembersOnPage()
+}
 
 const activePickerSpaceId = computed(() => {
   if (memberModalOpen.value && memberSpace.value?.id != null) return memberSpace.value.id
@@ -933,15 +950,17 @@ onMounted(() => loadSpaces())
               </h3>
             </div>
             <div class="assign-user-toolbar">
-              <label class="assign-user-toolbar-check" :class="!members.length && 'cursor-not-allowed opacity-50'">
-                <input
-                  type="checkbox"
-                  :disabled="!members.length"
-                  :checked="members.length > 0 && members.every((m) => m.id != null && selectedMemberIds.has(String(m.id)))"
-                  @change="members.length && ($event.target as HTMLInputElement).checked ? selectAllMembersOnPage() : clearMemberSelection()"
-                />
+              <AppCheckbox
+                class="assign-user-toolbar-check"
+                size="sm"
+                :class="!members.length && 'cursor-not-allowed opacity-50'"
+                :disabled="!members.length"
+                :model-value="membersPageAllSelected"
+                :indeterminate="membersPagePartialSelected"
+                @update:model-value="toggleMembersPageSelect"
+              >
                 <span>{{ t('system.userAssign.selectAllPage') }}</span>
-              </label>
+              </AppCheckbox>
               <span v-if="selectedMemberIds.size" class="assign-user-toolbar-selected">
                 {{ t('system.userAssign.selectedCount', { count: selectedMemberIds.size }) }}
                 <button type="button" class="assign-user-toolbar-clear" @click="clearMemberSelection">
@@ -952,12 +971,16 @@ onMounted(() => loadSpaces())
             <p v-if="membersLoading" class="py-12 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
             <ul v-else-if="members.length" class="assign-user-list">
               <li v-for="m in members" :key="m.id" class="assign-member-item">
-                <label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5">
-                  <input
-                    type="checkbox"
-                    class="shrink-0"
-                    :checked="m.id != null && selectedMemberIds.has(String(m.id))"
-                    @change="m.id != null && toggleMemberSelect(m.id)"
+                <div
+                  class="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5"
+                  @click="m.id != null && toggleMemberSelect(m.id)"
+                >
+                  <AppCheckbox
+                    standalone
+                    size="sm"
+                    :model-value="m.id != null && selectedMemberIds.has(String(m.id))"
+                    @update:model-value="m.id != null && toggleMemberSelect(m.id)"
+                    @click.stop
                   />
                   <div
                     class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
@@ -974,7 +997,7 @@ onMounted(() => loadSpaces())
                       {{ t('knowledge.spaceManage.invalidMember') }}
                     </span>
                   </div>
-                </label>
+                </div>
                 <div class="flex shrink-0 items-center gap-1.5">
                   <select
                     :value="m.role"

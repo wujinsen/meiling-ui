@@ -1,6 +1,21 @@
-import type { KbWikiLintIssue, KbWikiSpaceLintResult } from '@/types/knowledge'
+import type { KbWikiGovernOptions, KbWikiLintIssue, KbWikiSpaceLintResult } from '@/types/knowledge'
 
-/** enrich 批量修复适用的 issue kind */
+export const WIKI_GOVERN_SCRIPT_KINDS_FALLBACK = ['missing_dates', 'slug_mismatch', 'missing_source'] as const
+export const WIKI_GOVERN_AI_KINDS_FALLBACK = [
+  'broken_link',
+  'bad_type',
+  'missing_title',
+  'orphan',
+  'missing_concept',
+  'outdated',
+  'asym_related',
+  'near_dup',
+  'dup_content',
+] as const
+export const WIKI_GOVERN_MANUAL_KINDS_FALLBACK = ['dup_slug'] as const
+export const WIKI_GOVERN_MERGE_HINT_KINDS = new Set(['dup_slug', 'dup_content', 'near_dup'])
+
+/** @deprecated enrich 批量；治理页改用 script-fix / ai-batch-fix */
 export const WIKI_GOVERN_ENRICH_KINDS = new Set([
   'missing_source',
   'missing_concept',
@@ -8,12 +23,6 @@ export const WIKI_GOVERN_ENRICH_KINDS = new Set([
   'outdated',
   'no_summary',
 ])
-
-/** ai-revise 默认适用（断链 / 孤儿） */
-export const WIKI_GOVERN_REVISE_KINDS = new Set(['broken_link', 'orphan'])
-
-/** 需跳转手改的结构性问题（批量 AI 跳过） */
-export const WIKI_GOVERN_MANUAL_KINDS = new Set(['dup_slug', 'slug_mismatch'])
 
 export type WikiGovernIssueGroup = {
   kind: string
@@ -23,6 +32,75 @@ export type WikiGovernIssueGroup = {
 
 export function wikiGovernIssueKey(issue: KbWikiLintIssue): string {
   return `${issue.page}::${issue.kind}::${issue.detail ?? ''}`
+}
+
+export function resolveScriptKinds(options: KbWikiGovernOptions | null): string[] {
+  return options?.scriptFixableKinds?.length
+    ? options.scriptFixableKinds
+    : [...WIKI_GOVERN_SCRIPT_KINDS_FALLBACK]
+}
+
+export function resolveAiKinds(options: KbWikiGovernOptions | null): string[] {
+  return options?.aiFixableKinds?.length ? options.aiFixableKinds : [...WIKI_GOVERN_AI_KINDS_FALLBACK]
+}
+
+export function resolveManualKinds(options: KbWikiGovernOptions | null): string[] {
+  return options?.manualOnlyKinds?.length ? options.manualOnlyKinds : [...WIKI_GOVERN_MANUAL_KINDS_FALLBACK]
+}
+
+export function isScriptFixable(kind: string, scriptKinds: string[]) {
+  return scriptKinds.includes(kind)
+}
+
+export function isAiFixable(kind: string, aiKinds: string[]) {
+  return aiKinds.includes(kind)
+}
+
+export function isManualOnlyKind(kind: string, manualKinds: string[]) {
+  return manualKinds.includes(kind)
+}
+
+export function isSelectableForBatch(
+  issue: KbWikiLintIssue,
+  options: KbWikiGovernOptions | null,
+): boolean {
+  if (issue.level === 'info') return false
+  const scriptKinds = resolveScriptKinds(options)
+  const aiKinds = resolveAiKinds(options)
+  const manualKinds = resolveManualKinds(options)
+  if (isManualOnlyKind(issue.kind, manualKinds)) return false
+  return isScriptFixable(issue.kind, scriptKinds) || isAiFixable(issue.kind, aiKinds)
+}
+
+export function buildDefaultSelectedKeys(
+  issues: KbWikiLintIssue[],
+  options: KbWikiGovernOptions | null,
+): Set<string> {
+  const keys = new Set<string>()
+  for (const issue of issues) {
+    if (isSelectableForBatch(issue, options)) {
+      keys.add(wikiGovernIssueKey(issue))
+    }
+  }
+  return keys
+}
+
+export function buildSelectedIssues(all: KbWikiLintIssue[], selectedKeys: Set<string>) {
+  return all.filter((i) => selectedKeys.has(wikiGovernIssueKey(i)))
+}
+
+export function fixHintKind(
+  issue: KbWikiLintIssue,
+  options: KbWikiGovernOptions | null,
+): 'script' | 'ai' | 'manual' | 'merge' | 'other' {
+  const scriptKinds = resolveScriptKinds(options)
+  const aiKinds = resolveAiKinds(options)
+  const manualKinds = resolveManualKinds(options)
+  if (isManualOnlyKind(issue.kind, manualKinds)) return 'manual'
+  if (isScriptFixable(issue.kind, scriptKinds)) return 'script'
+  if (WIKI_GOVERN_MERGE_HINT_KINDS.has(issue.kind)) return 'merge'
+  if (isAiFixable(issue.kind, aiKinds)) return 'ai'
+  return 'other'
 }
 
 export function groupWikiLintIssues(issues: KbWikiLintIssue[]): WikiGovernIssueGroup[] {
@@ -37,81 +115,22 @@ export function groupWikiLintIssues(issues: KbWikiLintIssue[]): WikiGovernIssueG
     .map(([kind, groupIssues]) => ({
       kind,
       issues: groupIssues,
-      open: true,
+      open: groupIssues.some((i) => i.level !== 'info'),
     }))
 }
 
-export function isWikiGovernManualOnly(issue: KbWikiLintIssue): boolean {
-  return WIKI_GOVERN_MANUAL_KINDS.has(issue.kind)
+/** dup_slug 等仅人工项 */
+export function isWikiGovernManualOnly(issue: KbWikiLintIssue, options?: KbWikiGovernOptions | null): boolean {
+  return isManualOnlyKind(issue.kind, resolveManualKinds(options ?? null))
 }
 
-export function isWikiGovernEnrichable(issue: KbWikiLintIssue): boolean {
-  return WIKI_GOVERN_ENRICH_KINDS.has(issue.kind)
-}
-
-export function isWikiGovernReviseKind(issue: KbWikiLintIssue): boolean {
-  return WIKI_GOVERN_REVISE_KINDS.has(issue.kind)
-}
-
-/** 除结构性问题外，均可走 AI 改稿 */
-export function isWikiGovernAiFixable(issue: KbWikiLintIssue): boolean {
-  return !isWikiGovernManualOnly(issue)
-}
-
-export type WikiGovernReviseTarget = {
-  slug: string
-  issues: KbWikiLintIssue[]
-  instruction: string
-}
-
-/** 按 kind 自动生成 ai-revise 指令 */
-export function buildReviseInstruction(issues: KbWikiLintIssue[]): string {
-  const lines = issues.map((issue) => {
-    const detail = issue.detail?.trim() ?? ''
-    const suggest = issue.suggest?.trim() ?? ''
-    switch (issue.kind) {
-      case 'broken_link':
-        return `修复断链 ${detail}。${suggest || '修正 [[slug]] 链接或创建目标页，保持 frontmatter 与 sources 规范。'}`
-      case 'orphan':
-        return `该页为孤儿页（${detail}）。${suggest || '在相关主题页添加指向本页的 [[slug]] 互链。'}`
-      case 'missing_source':
-        return `补全 frontmatter sources：${detail}。${suggest || '添加可追溯的 raw/prd 引用路径。'}`
-      case 'missing_dates':
-        return `补全 frontmatter 日期：${detail}。${suggest || '添加或刷新 created/updated 字段（YYYY-MM-DD）。'}`
-      case 'missing_concept':
-        return `补概念页或互链：${detail}。${suggest || '创建对应 concept 页或在正文添加 [[slug]]。'}`
-      case 'no_summary':
-        return `补全摘要或 summary：${detail}。${suggest || ''}`
-      case 'outdated':
-        return `更新过时内容：${detail}。${suggest || '对照 sources 刷新正文与 updated。'}`
-      case 'dup_content':
-      case 'near_dup':
-        return `处理重复/近似正文：${detail}。${suggest || '合并到权威页、删冗余段落或加互链说明，避免多份相同正文。'}`
-      default:
-        return `修复 ${issue.kind}：${detail}。${suggest}`
-    }
-  })
-  return [
-    '请按企业知识库规范（frontmatter、[[slug]] 互链、sources）修复以下问题，输出完整 markdown 全文：',
-    '',
-    ...lines,
-  ].join('\n')
-}
-
-/** 按 slug 合并 ai-revise 目标 */
-export function buildReviseTargets(issues: KbWikiLintIssue[]): WikiGovernReviseTarget[] {
-  const map = new Map<string, KbWikiLintIssue[]>()
-  for (const issue of issues) {
-    if (!isWikiGovernAiFixable(issue)) continue
-    const list = map.get(issue.page) ?? []
-    list.push(issue)
-    map.set(issue.page, list)
+export function summarizeFixPages(pages: Array<{ status: string }> | undefined) {
+  const list = pages ?? []
+  return {
+    fixed: list.filter((p) => p.status === 'ok').length,
+    skipped: list.filter((p) => p.status === 'skipped').length,
+    failed: list.filter((p) => p.status === 'failed').length,
   }
-  return [...map.entries()].map(([slug, group]) => ({
-    slug,
-    issues: group,
-    instruction: buildReviseInstruction(group),
-  }))
 }
 
 export function countLintIssues(result: KbWikiSpaceLintResult | null): number {

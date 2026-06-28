@@ -36,6 +36,12 @@ import type {
   KbWikiSpaceLintRequest,
   KbWikiSpaceLintResult,
   KbWikiGovernOptions,
+  KbWikiGovernFixRequest,
+  KbWikiGovernScriptFixResult,
+  KbWikiGovernAiBatchFixResult,
+  KbWikiGovernAutoFixRequest,
+  KbWikiGovernAutoFixResult,
+  WikiGovernMergeHintItem,
   KbWikiEnrichRequest,
   KbWikiEnrichResult,
   KbRawTreeNode,
@@ -55,6 +61,10 @@ import type {
   KbIngestTemplateCreateRequest,
   KbIngestJobFromTemplateRequest,
   KbIngestSaveAsTemplateRequest,
+  KbPlatformLlmConfig,
+  KbPlatformLlmConfigSaveRequest,
+  KbPlatformLlmConfigTestRequest,
+  KbPlatformLlmConfigTestResult,
   MoliPage,
 } from '@/types/knowledge'
 import { getToken } from '@/utils/authSession'
@@ -1262,9 +1272,98 @@ export async function getKbWikiGovernOptionsApi() {
         { id: 'glm-4-flash', displayName: 'glm-4-flash' },
         { id: 'deepseek-chat', displayName: 'deepseek-chat' },
       ],
+      scriptFixableKinds: ['missing_dates', 'slug_mismatch', 'missing_source'],
+      aiFixableKinds: ['broken_link', 'orphan', 'missing_concept', 'outdated', 'no_summary'],
+      manualOnlyKinds: ['dup_slug'],
     })
   }
   return request<KbWikiGovernOptions>(`${KB_BASE}/wiki/govern/options`)
+}
+
+/** POST /kb/wiki/govern/script-fix —— 脚本修复 metadata */
+export async function wikiGovernScriptFixApi(payload: KbWikiGovernFixRequest) {
+  if (USE_MOCK) {
+    await delay(400)
+    return ok<KbWikiGovernScriptFixResult>({
+      fixedPages: payload.issues.length,
+      skippedPages: 0,
+      failedPages: 0,
+      pages: payload.issues.map((i) => ({ slug: i.page, status: 'ok', kinds: [i.kind] })),
+    })
+  }
+  return request<KbWikiGovernScriptFixResult>(`${KB_BASE}/wiki/govern/script-fix`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+    timeoutMs: 180_000,
+  })
+}
+
+/** POST /kb/wiki/govern/ai-batch-fix —— AI 批量修复 */
+export async function wikiGovernAiBatchFixApi(payload: KbWikiGovernFixRequest & { model?: string }) {
+  if (USE_MOCK) {
+    await delay(800)
+    return ok<KbWikiGovernAiBatchFixResult>({
+      fixedPages: payload.issues.length,
+      skippedPages: 0,
+      failedPages: 0,
+      model: payload.model,
+      pages: payload.issues.map((i) => ({ slug: i.page, status: 'ok', kinds: [i.kind] })),
+    })
+  }
+  return request<KbWikiGovernAiBatchFixResult>(`${KB_BASE}/wiki/govern/ai-batch-fix`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+    timeoutMs: 300_000,
+  })
+}
+
+/** POST /kb/wiki/govern/auto-fix —— 一键修复（脚本 + AI + 复检 + 可选 Sync） */
+export async function wikiGovernAutoFixApi(payload: KbWikiGovernAutoFixRequest) {
+  if (USE_MOCK) {
+    await delay(1000)
+    const before = payload.issues.length
+    return ok<KbWikiGovernAutoFixResult>({
+      issuesBefore: before,
+      issuesAfter: 0,
+      scriptFix: {
+        fixedPages: 1,
+        skippedPages: 0,
+        failedPages: 0,
+        pages: [],
+      },
+      aiFix: {
+        fixedPages: Math.max(0, before - 1),
+        skippedPages: 0,
+        failedPages: 0,
+        pages: [],
+      },
+    })
+  }
+  return request<KbWikiGovernAutoFixResult>(`${KB_BASE}/wiki/govern/auto-fix`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+    timeoutMs: 300_000,
+  })
+}
+
+/** POST /kb/wiki/govern/merge-hint —— 重复页合并 Cursor 指令 */
+export async function wikiGovernMergeHintApi(payload: { spaceId: number | string; issues: import('@/types/knowledge').KbWikiLintIssue[] }) {
+  if (USE_MOCK) {
+    await delay(200)
+    return ok<{ items: WikiGovernMergeHintItem[] }>({
+      items: payload.issues.map((i) => ({
+        kind: i.kind,
+        page: i.page,
+        detail: i.detail,
+        cursorPrompt: `Merge duplicate wiki page: ${i.page}`,
+        manualSteps: ['Review both pages', 'Keep canonical slug', 'Remove duplicate file'],
+      })),
+    })
+  }
+  return request<{ items: WikiGovernMergeHintItem[] }>(`${KB_BASE}/wiki/govern/merge-hint`, {
+    method: 'POST',
+    body: jsonEntityBody(payload as Record<string, unknown>),
+  })
 }
 
 /** POST /kb/wiki/enrich —— 已有页 enrich + 治理 log/index/edges */
@@ -1455,9 +1554,16 @@ export async function exportKbIngestAgentPromptApi(id: number | string) {
 /* ---- T15b 生成 / 审阅 ---- */
 
 /** POST /kb/ingest/jobs/{id}/generate —— 按 plan 生成多页草稿；resume 断点续跑 */
-export async function generateKbIngestDraftsApi(id: number | string, resume = false) {
+export async function generateKbIngestDraftsApi(
+  id: number | string,
+  opts?: { resume?: boolean; useLlmGenerate?: boolean },
+) {
+  const { resume = false, useLlmGenerate = true } = opts ?? {}
   return request<KbIngestGenerateResult>(
-    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/generate${buildQuery({ resume: String(resume) })}`,
+    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/generate${buildQuery({
+      resume: String(resume),
+      useLlmGenerate: String(useLlmGenerate),
+    })}`,
     { method: 'POST', timeoutMs: 300_000 },
   )
 }
@@ -1485,11 +1591,18 @@ export async function updateKbIngestDraftApi(
 }
 
 /** POST /kb/ingest/jobs/{id}/draft/regenerate?slug= —— 单页重生成 */
-export async function regenerateKbIngestDraftApi(id: number | string, slug: string) {
-  return request<KbIngestDraft>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/draft/regenerate${buildQuery({ slug })}`, {
-    method: 'POST',
-    timeoutMs: 120_000,
-  })
+export async function regenerateKbIngestDraftApi(
+  id: number | string,
+  slug: string,
+  useLlmGenerate = true,
+) {
+  return request<KbIngestDraft>(
+    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/draft/regenerate${buildQuery({
+      slug,
+      useLlmGenerate: String(useLlmGenerate),
+    })}`,
+    { method: 'POST', timeoutMs: 120_000 },
+  )
 }
 
 /** PUT /kb/ingest/jobs/{id}/draft/approval?slug=&approval= —— 设置审批 */
@@ -1520,9 +1633,16 @@ export async function commitKbIngestApi(id: number | string, sync = false) {
 }
 
 /** T18 · POST /kb/ingest/jobs/express —— 创建批次 + Express Plan + 生成草稿 */
-export async function expressStartKbIngestApi(payload: KbIngestJobCreateRequest, useLlmPlan = false) {
+export async function expressStartKbIngestApi(
+  payload: KbIngestJobCreateRequest,
+  opts?: { useLlmPlan?: boolean; useLlmGenerate?: boolean },
+) {
+  const { useLlmPlan = false, useLlmGenerate = true } = opts ?? {}
   return request<KbIngestExpressStartResult>(
-    `${KB_BASE}/ingest/jobs/express${buildQuery({ useLlmPlan: String(useLlmPlan) })}`,
+    `${KB_BASE}/ingest/jobs/express${buildQuery({
+      useLlmPlan: String(useLlmPlan),
+      useLlmGenerate: String(useLlmGenerate),
+    })}`,
     {
       method: 'POST',
       body: jsonEntityBody(payload as Record<string, unknown>),
@@ -1532,9 +1652,16 @@ export async function expressStartKbIngestApi(payload: KbIngestJobCreateRequest,
 }
 
 /** T18 · POST /kb/ingest/jobs/{id}/prepare */
-export async function prepareKbIngestApi(id: number | string, useLlmPlan = false) {
+export async function prepareKbIngestApi(
+  id: number | string,
+  opts?: { useLlmPlan?: boolean; useLlmGenerate?: boolean },
+) {
+  const { useLlmPlan = false, useLlmGenerate = true } = opts ?? {}
   return request<KbIngestPrepareResult>(
-    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/prepare${buildQuery({ useLlmPlan: String(useLlmPlan) })}`,
+    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/prepare${buildQuery({
+      useLlmPlan: String(useLlmPlan),
+      useLlmGenerate: String(useLlmGenerate),
+    })}`,
     { method: 'POST', timeoutMs: 300_000 },
   )
 }
@@ -1582,5 +1709,89 @@ export async function saveKbIngestJobAsTemplateApi(id: number | string, payload:
   return request<KbIngestTemplate>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/save-as-template`, {
     method: 'POST',
     body: jsonEntityBody(payload as Record<string, unknown>),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// 平台 LLM 配置（系统管理 → 知识库 LLM）
+// ---------------------------------------------------------------------------
+
+let mockPlatformLlmConfig: KbPlatformLlmConfig = {
+  enabled: false,
+  provider: 'glm',
+  baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+  apiKeyConfigured: false,
+  model: 'glm-4-flash',
+  temperature: 0.3,
+  timeoutSeconds: 90,
+  extraModels: ['glm-4-flash', 'glm-4-air'],
+  available: false,
+  source: 'yaml_fallback',
+  persistedInDatabase: false,
+}
+
+export async function getKbPlatformLlmConfigApi() {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok({ ...mockPlatformLlmConfig })
+  }
+  return request<KbPlatformLlmConfig>(`${KB_BASE}/platform/llm-config`, { method: 'GET' })
+}
+
+export async function saveKbPlatformLlmConfigApi(body: KbPlatformLlmConfigSaveRequest) {
+  if (USE_MOCK) {
+    await delay(200)
+    const mask = body.apiKey?.trim()
+      ? `****${body.apiKey.trim().slice(-4)}`
+      : body.clearApiKey
+        ? undefined
+        : mockPlatformLlmConfig.apiKeyMask
+    mockPlatformLlmConfig = {
+      ...mockPlatformLlmConfig,
+      enabled: body.enabled,
+      provider: body.provider,
+      baseUrl: body.baseUrl,
+      model: body.model,
+      temperature: body.temperature ?? mockPlatformLlmConfig.temperature,
+      timeoutSeconds: body.timeoutSeconds ?? mockPlatformLlmConfig.timeoutSeconds,
+      extraModels: body.extraModels ?? mockPlatformLlmConfig.extraModels,
+      apiKeyConfigured: body.clearApiKey ? false : Boolean(mask || mockPlatformLlmConfig.apiKeyConfigured),
+      apiKeyMask: mask,
+      available: body.enabled && (body.clearApiKey ? false : Boolean(mask || mockPlatformLlmConfig.apiKeyConfigured)),
+      source: body.clearApiKey ? 'yaml_fallback' : 'database',
+      persistedInDatabase: body.clearApiKey ? false : Boolean(mask || mockPlatformLlmConfig.persistedInDatabase),
+      updateTime: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    }
+    return ok({ ...mockPlatformLlmConfig })
+  }
+  return request<KbPlatformLlmConfig>(`${KB_BASE}/platform/llm-config`, {
+    method: 'PUT',
+    body: jsonEntityBody(body as Record<string, unknown>),
+  })
+}
+
+export async function testKbPlatformLlmConfigApi(body?: KbPlatformLlmConfigTestRequest) {
+  if (USE_MOCK) {
+    await delay(400)
+    const enabled = body?.enabled ?? mockPlatformLlmConfig.enabled
+    const hasKey = Boolean(body?.apiKey?.trim()) || mockPlatformLlmConfig.apiKeyConfigured
+    if (!enabled || !hasKey) {
+      return ok<KbPlatformLlmConfigTestResult>({
+        success: false,
+        latencyMs: 120,
+        model: body?.model ?? mockPlatformLlmConfig.model,
+        error: 'LLM 未启用或未配置 api-key',
+      })
+    }
+    return ok<KbPlatformLlmConfigTestResult>({
+      success: true,
+      latencyMs: 842,
+      model: body?.model ?? mockPlatformLlmConfig.model,
+      replyPreview: 'pong',
+    })
+  }
+  return request<KbPlatformLlmConfigTestResult>(`${KB_BASE}/platform/llm-config/test`, {
+    method: 'POST',
+    body: jsonEntityBody((body ?? {}) as Record<string, unknown>),
   })
 }

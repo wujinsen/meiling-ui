@@ -116,6 +116,60 @@ export type KbLlmConfig = {
   model?: string
 }
 
+/** GET /kb/platform/llm-config — 平台 LLM 管理视图 */
+export type KbPlatformLlmConfig = {
+  enabled: boolean
+  provider: string
+  baseUrl: string
+  apiKeyConfigured: boolean
+  apiKeyMask?: string
+  model: string
+  temperature?: number
+  timeoutSeconds?: number
+  extraModels?: string[]
+  available: boolean
+  /** database | yaml_fallback */
+  source: string
+  persistedInDatabase?: boolean
+  updateTime?: string
+}
+
+/** PUT /kb/platform/llm-config */
+export type KbPlatformLlmConfigSaveRequest = {
+  enabled: boolean
+  provider: string
+  baseUrl: string
+  /** 空字符串 = 不修改已有 key */
+  apiKey?: string
+  /** true = 清除 DB 中 key，运行时回退 yaml */
+  clearApiKey?: boolean
+  model: string
+  temperature?: number
+  timeoutSeconds?: number
+  extraModels?: string[]
+}
+
+/** POST /kb/platform/llm-config/test */
+export type KbPlatformLlmConfigTestRequest = {
+  message?: string
+  enabled?: boolean
+  provider?: string
+  baseUrl?: string
+  apiKey?: string
+  model?: string
+  temperature?: number
+  timeoutSeconds?: number
+  extraModels?: string[]
+}
+
+export type KbPlatformLlmConfigTestResult = {
+  success: boolean
+  latencyMs?: number
+  model?: string
+  replyPreview?: string
+  error?: string
+}
+
 export type KbQaHistory = {
   id: number | string
   spaceId?: number | string
@@ -282,8 +336,74 @@ export type KbWikiGovernModel = {
 export type KbWikiGovernOptions = {
   llmAvailable: boolean
   provider?: string
-  defaultModel: string
+  defaultModel?: string
   models: KbWikiGovernModel[]
+  scriptFixableKinds?: string[]
+  aiFixableKinds?: string[]
+  manualOnlyKinds?: string[]
+}
+
+export type KbWikiGovernFixRequest = {
+  spaceId: number | string
+  issues: KbWikiLintIssue[]
+  dryRun?: boolean
+}
+
+export type KbWikiGovernPageResult = {
+  slug: string
+  status: 'ok' | 'skipped' | 'failed'
+  kinds?: string[]
+  message?: string
+  previewContent?: string
+}
+
+export type KbWikiGovernScriptFixResult = {
+  fixedPages: number
+  skippedPages: number
+  failedPages: number
+  pages: KbWikiGovernPageResult[]
+}
+
+export type KbWikiGovernAiBatchFixResult = KbWikiGovernScriptFixResult & {
+  model?: string
+}
+
+export type KbWikiGovernAutoFixRequest = {
+  spaceId: number | string
+  issues: KbWikiLintIssue[]
+  model?: string
+  scriptFix?: boolean
+  aiFix?: boolean
+  relintAfter?: boolean
+  strict?: boolean
+  syncAfter?: boolean
+}
+
+export type KbWikiGovernAutoFixResult = {
+  issuesBefore: number
+  issuesAfter?: number
+  scriptFix?: KbWikiGovernScriptFixResult
+  aiFix?: KbWikiGovernAiBatchFixResult
+  relint?: KbWikiSpaceLintResult
+  sync?: KbSyncTrigger
+}
+
+export type WikiGovernMergeHintItem = {
+  kind: string
+  page: string
+  detail?: string
+  relatedSlugs?: string[]
+  canonicalSlug?: string
+  cursorPrompt: string
+  manualSteps?: string[]
+}
+
+export type KbWorkflowHintVo = {
+  key: string
+  label: string
+  description?: string
+  routePath: string
+  routeQuery?: Record<string, string>
 }
 
 // ---------------------------------------------------------------------------
@@ -789,11 +909,13 @@ export type KbIngestDraft = {
 
 /** POST /kb/ingest/jobs/{id}/generate 结果（T15e 断点续跑） */
 export type KbIngestGenerateResult = {
+  jobId?: number | string
   total: number
   generated: number
   skipped: number
   failed?: number
-  resume: boolean
+  resume?: boolean
+  templateMode?: boolean
   drafts: KbIngestDraft[]
 }
 
@@ -855,6 +977,7 @@ export type KbIngestCommitResult = {
   indexUpdated: boolean
   syncTriggered: boolean
   syncResult?: KbSyncTrigger
+  nextSteps?: KbWorkflowHintVo[]
 }
 
 /** T18 · prepare 一步结果 */
@@ -870,6 +993,7 @@ export type KbIngestPublishResult = {
   committed: boolean
   commit?: KbIngestCommitResult
   approvedCount: number
+  nextSteps?: KbWorkflowHintVo[]
 }
 
 /** T18 · 创建 + prepare */

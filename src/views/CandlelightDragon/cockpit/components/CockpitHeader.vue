@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { CockpitGranularity, CockpitQuery, CockpitRange, CockpitTab } from '@/types/cockpit'
 import { ENVIRONMENT_OPTIONS, environmentI18nKey } from '@/utils/operationEnv'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import { Maximize2, Minimize2, RefreshCw } from 'lucide-vue-next'
 
@@ -52,15 +53,14 @@ const granularities: CockpitGranularity[] = ['day', 'week', 'month']
         <span v-if="refreshedLabel" class="text-xs text-gray-400 dark:text-gray-500">
           {{ t('cockpit.refreshedAt', { time: refreshedLabel }) }}
         </span>
-        <label class="cockpit-action-chip">
-          <input
-            type="checkbox"
-            :checked="autoRefresh"
-            class="rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-white/20 dark:bg-white/5"
-            @change="emit('update:autoRefresh', ($event.target as HTMLInputElement).checked)"
-          />
+        <AppCheckbox
+          class="cockpit-action-chip"
+          size="sm"
+          :model-value="autoRefresh"
+          @update:model-value="emit('update:autoRefresh', $event)"
+        >
           {{ t('cockpit.autoRefresh') }}
-        </label>
+        </AppCheckbox>
         <button type="button" class="btn-ghost" :disabled="loading" @click="emit('refresh')">
           <RefreshCw :class="['h-4 w-4', loading && 'animate-spin']" />
           {{ t('cockpit.refresh') }}

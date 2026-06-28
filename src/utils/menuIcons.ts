@@ -10,6 +10,7 @@ import {
   FileBarChart,
   MessageSquare,
   Server,
+  Cpu,
   Circle,
   BookOpen,
   Briefcase,
@@ -56,6 +57,7 @@ const ICON_MAP: Record<string, Component> = {
   build: Hammer,
   example: Lightbulb,
   component: Puzzle,
+  cpu: Cpu,
 }
 
 export type MenuIconKey = keyof typeof ICON_MAP

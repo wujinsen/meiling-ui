@@ -17,6 +17,7 @@ import {
 } from '@/api/user'
 import { getRoleAllApi } from '@/api/role'
 import AppModal from '@/components/ui/AppModal.vue'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import AppTooltip from '@/components/ui/AppTooltip.vue'
 import AppDatePicker from '@/components/ui/AppDatePicker.vue'
 import AppStatusPill from '@/components/ui/AppStatusPill.vue'
@@ -664,11 +665,12 @@ onMounted(async () => {
           <thead>
             <tr>
               <th class="w-10">
-                <input
-                  type="checkbox"
-                  :checked="allSelected"
+                <AppCheckbox
+                  standalone
+                  size="sm"
+                  :model-value="allSelected"
                   :disabled="!selectableUsers.length"
-                  @change="toggleSelectAll"
+                  @update:model-value="toggleSelectAll"
                 />
               </th>
               <th>{{ t('system.user.id') }}</th>
@@ -700,11 +702,12 @@ onMounted(async () => {
               :key="String(row.id)"
             >
               <td>
-                <input
-                  type="checkbox"
-                  :checked="selectedIds.has(String(row.id))"
+                <AppCheckbox
+                  standalone
+                  size="sm"
+                  :model-value="selectedIds.has(String(row.id))"
                   :disabled="isProtectedUser(row)"
-                  @change="toggleSelect(row.id!)"
+                  @update:model-value="toggleSelect(row.id!)"
                 />
               </td>
               <td class="tabular-nums text-gray-600 dark:text-gray-300">{{ row.id }}</td>
@@ -1008,19 +1011,16 @@ onMounted(async () => {
         {{ t('system.user.rolesEmpty') }}
       </div>
       <div v-else class="max-h-[360px] overflow-y-auto rounded-lg border border-gray-100 dark:border-white/5">
-        <label
+        <AppCheckbox
           v-for="role in roleOptions"
           :key="String(role.id)"
-          class="flex cursor-pointer items-center gap-3 border-t border-gray-50 px-4 py-3 first:border-t-0 dark:border-white/5"
+          class="flex w-full cursor-pointer items-center gap-3 border-t border-gray-50 px-4 py-3 first:border-t-0 dark:border-white/5"
+          :model-value="checkedRoleIds.has(String(role.id))"
+          @update:model-value="(v) => toggleRoleCheck(role.id!, v)"
         >
-          <input
-            type="checkbox"
-            :checked="checkedRoleIds.has(String(role.id))"
-            @change="toggleRoleCheck(role.id!, ($event.target as HTMLInputElement).checked)"
-          />
           <span class="font-medium text-gray-900 dark:text-white">{{ role.roleName }}</span>
           <span v-if="role.remark" class="truncate text-sm text-gray-500 dark:text-gray-400">{{ role.remark }}</span>
-        </label>
+        </AppCheckbox>
       </div>
       <template #footer>
         <button type="button" class="btn-ghost" @click="closeAssignRoles">{{ t('system.user.cancel') }}</button>

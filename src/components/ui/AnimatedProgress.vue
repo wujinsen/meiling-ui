@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, watch } from 'vue'
 
 import { useReducedMotion } from '@vueuse/motion'
 
@@ -31,30 +31,25 @@ const reduced = useReducedMotion()
 
 
 onMounted(() => {
-
   if (reduced.value) {
-
     width.value = props.percent
-
     return
-
   }
-
   nextTick(() => {
-
     requestAnimationFrame(() => {
-
       requestAnimationFrame(() => {
-
         width.value = props.percent
-
       })
-
     })
-
   })
-
 })
+
+watch(
+  () => props.percent,
+  (value) => {
+    width.value = value
+  },
+)
 
 </script>
 

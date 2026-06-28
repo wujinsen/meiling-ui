@@ -5,26 +5,39 @@ import { useI18n } from 'vue-i18n'
 import { Loader2, ScanLine } from 'lucide-vue-next'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import GovernLintPanel from '@/components/knowledge/govern/GovernLintPanel.vue'
-import GovernFixPanel, { type GovernFixProgress } from '@/components/knowledge/govern/GovernFixPanel.vue'
+import GovernFixPanel from '@/components/knowledge/govern/GovernFixPanel.vue'
+import GovernRelintBar from '@/components/knowledge/govern/GovernRelintBar.vue'
 import {
-  aiReviseKbWikiApi,
   getKbWikiGovernOptionsApi,
-  getKbWikiPageApi,
   lintWikiSpaceApi,
-  saveKbWikiPageApi,
+  wikiGovernAiBatchFixApi,
+  wikiGovernAutoFixApi,
+  wikiGovernMergeHintApi,
+  wikiGovernScriptFixApi,
 } from '@/api/knowledge'
 import { kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import type { KbWikiGovernOptions, KbWikiLintIssue, KbWikiSpaceLintResult } from '@/types/knowledge'
+import type {
+  KbWikiGovernAutoFixResult,
+  KbWikiGovernOptions,
+  KbWikiLintIssue,
+  KbWikiSpaceLintResult,
+} from '@/types/knowledge'
 import {
-  buildReviseTargets,
-  isWikiGovernAiFixable,
-  wikiGovernIssueKey,
+  buildDefaultSelectedKeys,
+  buildSelectedIssues,
+  isAiFixable,
+  isManualOnlyKind,
+  isScriptFixable,
+  isSelectableForBatch,
+  resolveAiKinds,
+  resolveManualKinds,
+  resolveScriptKinds,
 } from '@/utils/kbWikiGovern'
 
-type GovernPhase = 'idle' | 'linted' | 'fixing'
+type GovernPhase = 'idle' | 'linted' | 'fixing' | 'relinted' | 'synced'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -36,10 +49,11 @@ const lintLoading = ref(false)
 const lintResult = ref<KbWikiSpaceLintResult | null>(null)
 const selectedKeys = ref(new Set<string>())
 const fixing = ref(false)
-const fixCancelled = ref(false)
-const fixProgress = ref<GovernFixProgress | null>(null)
 const llmOptions = ref<KbWikiGovernOptions | null>(null)
 const optionsLoading = ref(false)
+const lastFixResult = ref<KbWikiGovernAutoFixResult | null>(null)
+const lintBaseline = ref<KbWikiSpaceLintResult | null>(null)
+const relintResult = ref<KbWikiSpaceLintResult | null>(null)
 
 const canEdit = computed(() => {
   if (selectedSpaceId.value == null) return false
@@ -48,7 +62,13 @@ const canEdit = computed(() => {
 
 const spaceRequired = computed(() => selectedSpaceId.value == null)
 
-async function loadLlmOptions() {
+const llmReady = computed(() => llmOptions.value?.llmAvailable === true)
+
+function selectedIssues(): KbWikiLintIssue[] {
+  return buildSelectedIssues(lintResult.value?.issues ?? [], selectedKeys.value)
+}
+
+async function loadGovernOptions() {
   optionsLoading.value = true
   try {
     const res = await getKbWikiGovernOptionsApi()
@@ -92,8 +112,10 @@ async function runLint() {
       return
     }
     lintResult.value = data
-    selectedKeys.value = new Set()
-    fixProgress.value = null
+    lintBaseline.value = data
+    relintResult.value = null
+    selectedKeys.value = buildDefaultSelectedKeys(data.issues, llmOptions.value)
+    lastFixResult.value = null
     phase.value = 'linted'
     showToast('success', t('knowledge.wikiGovern.lintOk', { count: data.issues.length }))
   } catch (e) {
@@ -103,141 +125,188 @@ async function runLint() {
   }
 }
 
+function applyRelint(data: KbWikiSpaceLintResult) {
+  relintResult.value = data
+  lintResult.value = data
+  selectedKeys.value = buildDefaultSelectedKeys(data.issues, llmOptions.value)
+  phase.value = 'relinted'
+}
+
+async function runRelint() {
+  if (spaceRequired.value || !canEdit.value || lintLoading.value) return
+  const scope = kbSpaceQuery()
+  if (!scope.spaceId) return
+  lintLoading.value = true
+  try {
+    const res = await lintWikiSpaceApi({ ...scope, strict: strictLint.value })
+    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.wikiGovern.lintFailed'))
+    applyRelint(res.data)
+    showToast('success', t('knowledge.wikiGovern.relintOk'))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.wikiGovern.lintFailed'))
+  } finally {
+    lintLoading.value = false
+  }
+}
+
+function toastFixResult(label: string, fixed: number, skipped: number, failed: number) {
+  showToast(failed > 0 ? 'error' : 'success', `${label}：${t('knowledge.wikiGovern.fixResult', { fixed, skipped, failed })}`)
+}
+
+async function runScriptFix() {
+  const spaceId = selectedSpaceId.value
+  if (!spaceId || fixing.value || !canEdit.value) return
+
+  const scriptKinds = resolveScriptKinds(llmOptions.value)
+  const issues = selectedIssues().filter((i) => isScriptFixable(i.kind, scriptKinds))
+  if (!issues.length) {
+    showToast('error', t('knowledge.wikiGovern.fixNoSelection'))
+    return
+  }
+
+  fixing.value = true
+  phase.value = 'fixing'
+  try {
+    const res = await wikiGovernScriptFixApi({ spaceId, issues })
+    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.wikiGovern.fixFailed'))
+    lastFixResult.value = {
+      issuesBefore: lintResult.value?.issues.length ?? issues.length,
+      scriptFix: res.data,
+    }
+    toastFixResult(t('knowledge.wikiGovern.fixScript'), res.data.fixedPages, res.data.skippedPages, res.data.failedPages)
+    showToast('success', t('knowledge.wikiGovern.rerunLintHint'))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.wikiGovern.fixFailed'))
+  } finally {
+    fixing.value = false
+    phase.value = 'linted'
+  }
+}
+
+async function runAiFix(payload: { model: string }) {
+  const spaceId = selectedSpaceId.value
+  if (!spaceId || fixing.value || !canEdit.value || !llmReady.value) return
+
+  const aiKinds = resolveAiKinds(llmOptions.value)
+  const manualKinds = resolveManualKinds(llmOptions.value)
+  const issues = selectedIssues().filter(
+    (i) => !isManualOnlyKind(i.kind, manualKinds) && isAiFixable(i.kind, aiKinds),
+  )
+  if (!issues.length) {
+    showToast('error', t('knowledge.wikiGovern.fixNoSelection'))
+    return
+  }
+
+  fixing.value = true
+  phase.value = 'fixing'
+  try {
+    const res = await wikiGovernAiBatchFixApi({ spaceId, issues, model: payload.model })
+    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.wikiGovern.fixFailed'))
+    lastFixResult.value = {
+      issuesBefore: lintResult.value?.issues.length ?? issues.length,
+      aiFix: res.data,
+    }
+    toastFixResult(t('knowledge.wikiGovern.fixAi'), res.data.fixedPages, res.data.skippedPages, res.data.failedPages)
+    showToast('success', t('knowledge.wikiGovern.rerunLintHint'))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.wikiGovern.fixFailed'))
+  } finally {
+    fixing.value = false
+    phase.value = 'linted'
+  }
+}
+
+async function runAutoFix(payload: { syncAfter: boolean; strict: boolean; model: string }) {
+  const spaceId = selectedSpaceId.value
+  if (!spaceId || fixing.value || !canEdit.value) return
+
+  const issues = selectedIssues().filter((i) => isSelectableForBatch(i, llmOptions.value))
+  if (!issues.length) {
+    showToast('error', t('knowledge.wikiGovern.fixNoSelection'))
+    return
+  }
+
+  const aiKinds = resolveAiKinds(llmOptions.value)
+  const manualKinds = resolveManualKinds(llmOptions.value)
+  const hasAi = llmReady.value && issues.some((i) => !isManualOnlyKind(i.kind, manualKinds) && isAiFixable(i.kind, aiKinds))
+
+  fixing.value = true
+  phase.value = 'fixing'
+  try {
+    const res = await wikiGovernAutoFixApi({
+      spaceId,
+      issues,
+      model: hasAi ? payload.model : undefined,
+      scriptFix: true,
+      aiFix: hasAi,
+      relintAfter: true,
+      strict: payload.strict,
+      syncAfter: payload.syncAfter,
+    })
+    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.wikiGovern.fixFailed'))
+
+    lastFixResult.value = res.data
+    if (res.data.relint) applyRelint(res.data.relint)
+    if (payload.syncAfter && res.data.sync?.success) phase.value = 'synced'
+
+    if (res.data.issuesAfter != null) {
+      showToast(
+        res.data.scriptFix?.failedPages || res.data.aiFix?.failedPages ? 'error' : 'success',
+        t('knowledge.wikiGovern.fixRelint', {
+          before: res.data.issuesBefore,
+          after: res.data.issuesAfter,
+        }),
+      )
+    }
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.wikiGovern.fixFailed'))
+  } finally {
+    fixing.value = false
+    if (phase.value === 'fixing') phase.value = lintResult.value ? 'linted' : 'idle'
+  }
+}
+
+async function copyMergeHint(issue: KbWikiLintIssue) {
+  const spaceId = selectedSpaceId.value
+  if (!spaceId) return
+  try {
+    const res = await wikiGovernMergeHintApi({ spaceId, issues: [issue] })
+    if (res.code !== API_SUCCESS_CODE || !res.data?.items?.length) {
+      throw new Error(res.msg || t('knowledge.wikiGovern.mergeHintFailed'))
+    }
+    const text = res.data.items.map((item) => item.cursorPrompt).join('\n\n---\n\n')
+    await navigator.clipboard.writeText(text)
+    showToast('success', t('knowledge.wikiGovern.mergeHintCopied'))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.wikiGovern.mergeHintFailed'))
+  }
+}
+
 function onSelectedKeysUpdate(keys: Set<string>) {
   selectedKeys.value = keys
 }
 
-function parseAiSuggested(data: unknown): string {
-  if (!data || typeof data !== 'object') return ''
-  const d = data as Record<string, unknown>
-  const raw = d.suggestedContent ?? d.suggested_content ?? d.content
-  return typeof raw === 'string' ? raw.trim() : ''
-}
-
-async function runBatchAiFix(payload: {
-  batchNo: string
-  topic: string
-  model: string
-}) {
-  if (!lintResult.value || fixing.value || !canEdit.value) return
-
-  const issues = lintResult.value.issues.filter((issue) =>
-    selectedKeys.value.has(wikiGovernIssueKey(issue)),
-  )
-  const targets = buildReviseTargets(issues)
-  const skipped = issues.filter((i) => !isWikiGovernAiFixable(i)).length
-
-  if (!targets.length) {
-    showToast('error', t('knowledge.wikiGovern.fixNoReviseable'))
-    return
-  }
-
-  const spaceId = selectedSpaceId.value ?? undefined
-
-  fixing.value = true
-  fixCancelled.value = false
-  phase.value = 'fixing'
-  fixProgress.value = {
-    total: targets.length,
-    done: 0,
-    ok: 0,
-    failed: 0,
-    skipped,
-    errors: [],
-  }
-
-  for (let i = 0; i < targets.length; i++) {
-    if (fixCancelled.value) break
-    const target = targets[i]!
-    fixProgress.value = { ...fixProgress.value!, currentSlug: target.slug }
-    try {
-      const pageRes = await getKbWikiPageApi(target.slug, spaceId)
-      if (pageRes.code !== API_SUCCESS_CODE || !pageRes.data) {
-        throw new Error(pageRes.msg || t('knowledge.wikiGovern.reviseLoadFailed'))
-      }
-      const baseline = pageRes.data.content ?? ''
-      if (!pageRes.data.exists && !baseline.trim()) {
-        throw new Error(t('knowledge.wikiGovern.revisePageMissing'))
-      }
-
-      const primaryIssue = target.issues[0]
-      const reviseRes = await aiReviseKbWikiApi({
-        slug: target.slug,
-        spaceId,
-        instruction: target.instruction,
-        baselineContent: baseline,
-        model: payload.model,
-        issueContext: primaryIssue
-          ? { issueType: primaryIssue.kind, detail: primaryIssue.detail }
-          : undefined,
-      })
-      if (reviseRes.code !== API_SUCCESS_CODE) {
-        throw new Error(reviseRes.msg || t('knowledge.wikiGovern.reviseFailed'))
-      }
-      const suggested = parseAiSuggested(reviseRes.data)
-      if (!suggested) throw new Error(t('knowledge.wikiGovern.reviseEmpty'))
-
-      const saveRes = await saveKbWikiPageApi({
-        slug: target.slug,
-        spaceId,
-        content: suggested,
-        changeLog: `[${payload.batchNo}] ${payload.topic} · ${target.issues.map((i) => i.kind).join(', ')}`,
-        baselineHash: pageRes.data.contentHash,
-      })
-      if (saveRes.code !== API_SUCCESS_CODE) {
-        throw new Error(saveRes.msg || t('knowledge.wikiGovern.reviseSaveFailed'))
-      }
-
-      fixProgress.value = {
-        ...fixProgress.value!,
-        done: fixProgress.value!.done + 1,
-        ok: fixProgress.value!.ok + 1,
-      }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : t('knowledge.wikiGovern.fixFailed')
-      fixProgress.value = {
-        ...fixProgress.value!,
-        done: fixProgress.value!.done + 1,
-        failed: fixProgress.value!.failed + 1,
-        errors: [...fixProgress.value!.errors, { slug: target.slug, message }],
-      }
-    }
-  }
-
-  fixProgress.value = { ...fixProgress.value!, currentSlug: undefined }
-  fixing.value = false
-  phase.value = 'linted'
-
-  const prog = fixProgress.value
-  if (prog) {
-    showToast(
-      prog.failed ? 'error' : 'success',
-      t('knowledge.wikiGovern.fixSummary', { ok: prog.ok, failed: prog.failed, skipped: prog.skipped }),
-    )
-    if (prog.ok > 0) {
-      showToast('success', t('knowledge.wikiGovern.rerunLintHint'))
-    }
-  }
-}
-
-function cancelFix() {
-  fixCancelled.value = true
-}
-
 function openWikiEdit(issue: KbWikiLintIssue) {
-  void router.push(kbWikiEditPath(issue.page, selectedSpaceId.value ?? undefined))
+  void router.push(
+    kbWikiEditPath(issue.page, selectedSpaceId.value ?? undefined, {
+      issueType: issue.kind,
+      issueDetail: issue.detail,
+    }),
+  )
 }
 
 watch(selectedSpaceId, () => {
   phase.value = 'idle'
   lintResult.value = null
+  lintBaseline.value = null
+  relintResult.value = null
   selectedKeys.value = new Set()
-  fixProgress.value = null
+  lastFixResult.value = null
 })
 
 onMounted(() => {
   void ensureSpacesLoaded()
-  void loadLlmOptions()
+  void loadGovernOptions()
 })
 </script>
 
@@ -249,7 +318,7 @@ onMounted(() => {
           {{ t('knowledge.wikiGovern.title') }}
         </h1>
         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {{ t('knowledge.wikiGovern.subtitleAiOnly') }}
+          {{ t('knowledge.wikiGovern.subtitle') }}
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -289,32 +358,31 @@ onMounted(() => {
       :result="lintResult"
       :loading="lintLoading"
       :selected-keys="selectedKeys"
+      :govern-options="llmOptions"
       @update:selected-keys="onSelectedKeysUpdate"
+      @merge-hint="copyMergeHint"
+      @open-page="openWikiEdit"
     />
 
     <GovernFixPanel
-      v-if="lintResult"
-      :issues="lintResult.issues"
+      :issues="lintResult?.issues ?? []"
       :selected-keys="selectedKeys"
       :fixing="fixing"
-      :progress="fixProgress"
       :can-edit="canEdit"
       :llm-options="llmOptions"
       :options-loading="optionsLoading"
-      @start="runBatchAiFix"
-      @cancel="cancelFix"
+      :last-result="lastFixResult"
+      @script-fix="runScriptFix"
+      @ai-fix="runAiFix"
+      @auto-fix="runAutoFix"
     />
 
-    <section v-if="lintResult?.issues.length" class="text-xs text-gray-400">
-      <button
-        v-for="issue in lintResult.issues.slice(0, 5)"
-        :key="wikiGovernIssueKey(issue)"
-        type="button"
-        class="mr-3 underline hover:text-indigo-600"
-        @click="openWikiEdit(issue)"
-      >
-        {{ t('knowledge.wikiGovern.editPage', { slug: issue.page }) }}
-      </button>
-    </section>
+    <GovernRelintBar
+      :baseline="lintBaseline"
+      :current="relintResult ?? (lastFixResult?.relint ?? null)"
+      :relinting="lintLoading"
+      :can-edit="canEdit"
+      @relint="runRelint"
+    />
   </div>
 </template>

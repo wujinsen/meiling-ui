@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Check, ChevronDown, ChevronRight, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Trash2, Upload, X, Zap } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppModal from '@/components/ui/AppModal.vue'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
+import IngestExpressProgressPanel, { type IngestExpressProgressStep } from '@/components/knowledge/IngestExpressProgressPanel.vue'
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 import IngestPlanCreateTable from '@/components/knowledge/IngestPlanCreateTable.vue'
 import {
@@ -101,6 +103,60 @@ const creating = ref(false)
 const expressStarting = ref(false)
 const expressProcessing = ref(false)
 const publishingExpress = ref(false)
+const expressSkeletonPlan = ref(true)
+const templateMode = ref(false)
+
+const EXPRESS_PROGRESS_STEPS = ['create', 'plan', 'generate', 'lint', 'commit', 'sync'] as const satisfies readonly IngestExpressProgressStep[]
+const expressProgressStage = ref<IngestExpressProgressStep | null>(null)
+const expressProgressPercent = ref(0)
+let expressProgressTimer: ReturnType<typeof setInterval> | null = null
+
+const expressProgressActive = computed(() => expressStarting.value || publishingExpress.value)
+
+function expressProgressBase(step: IngestExpressProgressStep) {
+  const idx = EXPRESS_PROGRESS_STEPS.indexOf(step)
+  return (idx / EXPRESS_PROGRESS_STEPS.length) * 100
+}
+
+function stopExpressProgressCreep() {
+  if (expressProgressTimer) {
+    clearInterval(expressProgressTimer)
+    expressProgressTimer = null
+  }
+}
+
+function startExpressProgressCreep(step: IngestExpressProgressStep) {
+  stopExpressProgressCreep()
+  const base = expressProgressBase(step)
+  const cap = base + 100 / EXPRESS_PROGRESS_STEPS.length - 1
+  expressProgressTimer = setInterval(() => {
+    if (expressProgressPercent.value < cap) {
+      expressProgressPercent.value = Math.min(cap, expressProgressPercent.value + 0.35)
+    }
+  }, 350)
+}
+
+function setExpressProgressStage(step: IngestExpressProgressStep) {
+  expressProgressStage.value = step
+  expressProgressPercent.value = expressProgressBase(step)
+  startExpressProgressCreep(step)
+}
+
+function finishExpressProgress() {
+  stopExpressProgressCreep()
+  expressProgressPercent.value = 100
+  setTimeout(() => {
+    expressProgressStage.value = null
+    expressProgressPercent.value = 0
+  }, 1200)
+}
+
+function resetExpressProgress() {
+  stopExpressProgressCreep()
+  expressProgressStage.value = null
+  expressProgressPercent.value = 0
+}
+
 const templates = ref<KbIngestTemplate[]>([])
 const templatesLoading = ref(false)
 const creatingFromTemplate = ref(false)
@@ -156,6 +212,13 @@ const createDisabledReason = computed(() => {
   }
   return ''
 })
+
+function expressApiOpts() {
+  return {
+    useLlmPlan: !expressSkeletonPlan.value,
+    useLlmGenerate: !templateMode.value,
+  }
+}
 
 const rawFileCount = computed(() => {
   let n = 0
@@ -538,7 +601,7 @@ async function ensureExpressPipeline() {
   expressProcessing.value = true
   try {
     if (needPlan) {
-      const res = await prepareKbIngestApi(jobId.value, false)
+      const res = await prepareKbIngestApi(jobId.value, expressApiOpts())
       if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
       if (res.data.job) {
         job.value = res.data.job
@@ -548,7 +611,7 @@ async function ensureExpressPipeline() {
       if (res.data.drafts?.length) drafts.value = res.data.drafts
     }
     if (!drafts.value.length && hasSavedPlan.value) {
-      const res = await generateKbIngestDraftsApi(jobId.value, true)
+      const res = await generateKbIngestDraftsApi(jobId.value, { resume: true })
       if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
       drafts.value = res.data.drafts ?? []
       if (!drafts.value.length) throw new Error(t('knowledge.ingest.expressNoDrafts'))
@@ -581,14 +644,20 @@ async function expressIngest() {
   if (!ok) return
 
   expressStarting.value = true
+  setExpressProgressStage('create')
   try {
-    const res = await expressStartKbIngestApi({
-      spaceId: selectedSpaceQueryId.value,
-      topic: formTopic.value.trim(),
-      batchNo: formBatchNo.value.trim() || undefined,
-      expectTypes: formExpectTypes.value.trim() || undefined,
-      rawPaths: Array.from(selectedRaw.value),
-    })
+    setExpressProgressStage('plan')
+    const res = await expressStartKbIngestApi(
+      {
+        spaceId: selectedSpaceQueryId.value,
+        topic: formTopic.value.trim(),
+        batchNo: formBatchNo.value.trim() || undefined,
+        expectTypes: formExpectTypes.value.trim() || undefined,
+        rawPaths: Array.from(selectedRaw.value),
+      },
+      expressApiOpts(),
+    )
+    setExpressProgressStage('generate')
     if (res.code !== API_SUCCESS_CODE || !res.data?.job?.id) {
       throw new Error(res.msg || t('knowledge.ingest.opFailed'))
     }
@@ -600,7 +669,10 @@ async function expressIngest() {
       throw new Error(t('knowledge.ingest.expressPreparePartial', { failed: gen.failed }))
     }
 
+    setExpressProgressStage('lint')
+    setExpressProgressStage('commit')
     const pub = await publishKbIngestApi(jobIdStr, true, true)
+    setExpressProgressStage('sync')
     if (pub.code !== API_SUCCESS_CODE || !pub.data) throw new Error(pub.msg || t('knowledge.ingest.opFailed'))
     if (!pub.data.committed) {
       const blocking = pub.data.lint?.blockingCount ?? 0
@@ -621,7 +693,9 @@ async function expressIngest() {
     }
     selectedRaw.value = new Set()
     await loadJobs()
+    finishExpressProgress()
   } catch (e) {
+    resetExpressProgress()
     showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
   } finally {
     expressStarting.value = false
@@ -1017,7 +1091,7 @@ async function generateDrafts(resume = false) {
   }
   draftsGenerating.value = true
   try {
-    const res = await generateKbIngestDraftsApi(jobId.value, resume)
+    const res = await generateKbIngestDraftsApi(jobId.value, { resume })
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
     drafts.value = res.data.drafts ?? []
     lastGenerateStats.value = {
@@ -1147,8 +1221,11 @@ async function publishExpress() {
   })
   if (!ok) return
   publishingExpress.value = true
+  setExpressProgressStage('lint')
   try {
+    setExpressProgressStage('commit')
     const res = await publishKbIngestApi(jobId.value, true, true)
+    setExpressProgressStage('sync')
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
     lint.value = res.data.lint
     if (!res.data.committed) {
@@ -1172,7 +1249,9 @@ async function publishExpress() {
       showToast('success', t('knowledge.ingest.syncTriggered'))
     }
     await loadJob()
+    finishExpressProgress()
   } catch (e) {
+    resetExpressProgress()
     showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
   } finally {
     publishingExpress.value = false
@@ -1277,6 +1356,10 @@ onMounted(async () => {
     await reloadRawSources()
     await loadTemplates()
   }
+})
+
+onUnmounted(() => {
+  stopExpressProgressCreep()
 })
 </script>
 
@@ -1409,30 +1492,49 @@ onMounted(async () => {
             </template>
           </div>
 
-          <div class="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="btn-primary text-sm"
-              :disabled="Boolean(createDisabledReason) || expressStarting || creating"
-              :title="createDisabledReason || t('knowledge.ingest.expressIngestHint')"
-              @click="expressIngest"
-            >
-              <Loader2 v-if="expressStarting" class="h-4 w-4 animate-spin" />
-              <Zap v-else class="h-4 w-4" />
-              {{ expressStarting ? t('knowledge.ingest.expressStarting') : t('knowledge.ingest.expressIngest') }}
-            </button>
-            <button
-              type="button"
-              class="btn-ghost text-sm"
-              :disabled="Boolean(createDisabledReason) || expressStarting || creating"
-              :title="createDisabledReason || undefined"
-              @click="createJob"
-            >
-              <Loader2 v-if="creating" class="h-4 w-4 animate-spin" />
-              {{ creating ? t('knowledge.ingest.creating') : t('knowledge.ingest.create') }}
-            </button>
+          <div class="mt-4 space-y-3 border-t border-gray-100 pt-4 dark:border-white/5">
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="btn-primary text-sm"
+                :disabled="Boolean(createDisabledReason) || expressStarting || creating"
+                :title="createDisabledReason || t('knowledge.ingest.expressIngestHint')"
+                @click="expressIngest"
+              >
+                <Loader2 v-if="expressStarting" class="h-4 w-4 animate-spin" />
+                <Zap v-else class="h-4 w-4" />
+                {{ expressStarting ? t('knowledge.ingest.expressStarting') : t('knowledge.ingest.expressIngest') }}
+              </button>
+              <button
+                type="button"
+                class="btn-ghost border border-gray-200 text-sm dark:border-white/10"
+                :disabled="Boolean(createDisabledReason) || expressStarting || creating"
+                :title="createDisabledReason || undefined"
+                @click="createJob"
+              >
+                <Loader2 v-if="creating" class="h-4 w-4 animate-spin" />
+                {{ creating ? t('knowledge.ingest.creating') : t('knowledge.ingest.create') }}
+              </button>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <AppCheckbox v-model="expressSkeletonPlan" variant="option">
+                {{ t('knowledge.ingest.expressSkeletonPlan') }}
+              </AppCheckbox>
+              <AppCheckbox v-model="templateMode" variant="option">
+                {{ t('knowledge.ingest.expressTemplateMode') }}
+              </AppCheckbox>
+            </div>
+
+            <IngestExpressProgressPanel
+              :active="expressProgressActive"
+              :stage="expressProgressStage"
+              :percent="expressProgressPercent"
+              :template-mode="templateMode"
+            />
+
+            <p v-if="createDisabledReason" class="text-xs text-amber-700 dark:text-amber-300">{{ createDisabledReason }}</p>
           </div>
-          <p v-if="createDisabledReason" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ createDisabledReason }}</p>
         </div>
 
         <!-- 历史批次 -->
@@ -1605,7 +1707,17 @@ onMounted(async () => {
             </button>
           </div>
         </div>
-        <p v-if="expressPipelineBusy" class="mt-3 flex items-center gap-2 text-xs text-brand-700 dark:text-brand-300">
+        <IngestExpressProgressPanel
+          class="mt-3"
+          :active="expressProgressActive"
+          :stage="expressProgressStage"
+          :percent="expressProgressPercent"
+          :template-mode="templateMode"
+        />
+        <p
+          v-if="expressPipelineBusy && !expressProgressActive"
+          class="mt-3 flex items-center gap-2 text-xs text-brand-700 dark:text-brand-300"
+        >
           <Loader2 class="h-3.5 w-3.5 animate-spin" /> {{ t('knowledge.ingest.expressProcessing') }}
         </p>
       </div>

@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { cleanOperLogApi, deleteOperLogApi, listOperLogApi } from '@/api/operlog'
 import AppModal from '@/components/ui/AppModal.vue'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
 import { guardAction } from '@/composables/useActionPermissions'
@@ -229,7 +230,7 @@ onMounted(loadLogs)
           <thead class="bg-gray-50 text-xs uppercase tracking-wide text-gray-400 dark:bg-white/5">
             <tr>
               <th class="w-10 px-4 py-3">
-                <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
+                <AppCheckbox standalone size="sm" :model-value="allSelected" @update:model-value="toggleSelectAll" />
               </th>
               <th class="px-4 py-3">{{ t('system.operlog.id') }}</th>
               <th class="px-4 py-3">{{ t('system.operlog.title') }}</th>
@@ -256,10 +257,11 @@ onMounted(loadLogs)
               class="border-t border-gray-50 transition hover:bg-gray-50/80 dark:border-white/5 dark:hover:bg-white/5"
             >
               <td class="px-4 py-3">
-                <input
-                  type="checkbox"
-                  :checked="selectedIds.has(String(row.id))"
-                  @change="toggleSelect(row.id!)"
+                <AppCheckbox
+                  standalone
+                  size="sm"
+                  :model-value="selectedIds.has(String(row.id))"
+                  @update:model-value="toggleSelect(row.id!)"
                 />
               </td>
               <td class="px-4 py-3 tabular-nums text-gray-600 dark:text-gray-300">{{ row.id }}</td>

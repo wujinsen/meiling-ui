@@ -2,13 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown, ChevronRight, FileWarning, Loader2 } from 'lucide-vue-next'
-import type { KbWikiLintIssue, KbWikiSpaceLintResult } from '@/types/knowledge'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
+import type { KbWikiGovernOptions, KbWikiLintIssue, KbWikiSpaceLintResult } from '@/types/knowledge'
 import {
+  fixHintKind,
   groupWikiLintIssues,
-  isWikiGovernEnrichable,
-  isWikiGovernManualOnly,
-  isWikiGovernReviseKind,
   wikiGovernIssueKey,
+  WIKI_GOVERN_MERGE_HINT_KINDS,
   type WikiGovernIssueGroup,
 } from '@/utils/kbWikiGovern'
 
@@ -16,10 +16,13 @@ const props = defineProps<{
   result: KbWikiSpaceLintResult | null
   loading: boolean
   selectedKeys: Set<string>
+  governOptions: KbWikiGovernOptions | null
 }>()
 
 const emit = defineEmits<{
   'update:selectedKeys': [value: Set<string>]
+  mergeHint: [issue: KbWikiLintIssue]
+  openPage: [issue: KbWikiLintIssue]
 }>()
 
 const { t } = useI18n()
@@ -110,11 +113,12 @@ function levelClass(level: KbWikiLintIssue['level']) {
   return 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300'
 }
 
-function fixHintKind(issue: KbWikiLintIssue) {
-  if (isWikiGovernEnrichable(issue)) return 'enrich'
-  if (isWikiGovernManualOnly(issue)) return 'manual'
-  if (isWikiGovernReviseKind(issue)) return 'revise'
-  return 'other'
+function hintKind(issue: KbWikiLintIssue) {
+  return fixHintKind(issue, props.governOptions)
+}
+
+function canMergeHint(issue: KbWikiLintIssue) {
+  return WIKI_GOVERN_MERGE_HINT_KINDS.has(issue.kind) || issue.kind === 'dup_slug'
 }
 </script>
 
@@ -159,10 +163,11 @@ function fixHintKind(issue: KbWikiLintIssue) {
 
     <template v-else>
       <div class="flex flex-wrap items-center gap-3 border-b border-gray-100 px-4 py-2 dark:border-white/5">
-        <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
-          <input type="checkbox" class="h-4 w-4 rounded" :checked="allSelected" @change="toggleSelectAll" />
-          {{ t('knowledge.wikiGovern.selectAll') }}
-        </label>
+        <AppCheckbox
+          :model-value="allSelected"
+          :label="t('knowledge.wikiGovern.selectAll')"
+          @update:model-value="toggleSelectAll"
+        />
         <span class="text-xs text-gray-400">{{ t('knowledge.wikiGovern.selectedCount', { count: selectedCount }) }}</span>
         <div class="ml-auto flex flex-wrap gap-1">
           <button
@@ -188,18 +193,15 @@ function fixHintKind(issue: KbWikiLintIssue) {
             <component :is="group.open ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0 text-gray-400" />
             <span class="font-mono text-xs font-medium text-gray-800 dark:text-gray-100">{{ group.kind }}</span>
             <span class="badge bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">{{ group.issues.length }}</span>
-            <label
-              class="ml-auto flex cursor-pointer items-center gap-1.5 text-xs text-gray-500"
-              @click.stop
-            >
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5 rounded"
-                :checked="group.issues.every((i) => isSelected(i))"
-                @change="toggleGroupSelect(group)"
-              />
-              {{ t('knowledge.wikiGovern.selectGroup') }}
-            </label>
+            <div class="ml-auto flex items-center gap-1.5" @click.stop>
+              <AppCheckbox
+                size="sm"
+                :model-value="group.issues.every((i) => isSelected(i))"
+                @update:model-value="toggleGroupSelect(group)"
+              >
+                <span class="text-xs text-gray-500">{{ t('knowledge.wikiGovern.selectGroup') }}</span>
+              </AppCheckbox>
+            </div>
           </button>
 
           <ul v-show="group.open" class="pb-2">
@@ -208,34 +210,53 @@ function fixHintKind(issue: KbWikiLintIssue) {
               :key="wikiGovernIssueKey(issue)"
               class="flex items-start gap-3 px-4 py-2 pl-10 hover:bg-gray-50/80 dark:hover:bg-white/[0.02]"
             >
-              <input
-                type="checkbox"
-                class="mt-1 h-4 w-4 shrink-0 rounded"
-                :checked="isSelected(issue)"
-                @change="toggleIssue(issue)"
+              <AppCheckbox
+                standalone
+                size="sm"
+                class="mt-0.5"
+                :model-value="isSelected(issue)"
+                @update:model-value="toggleIssue(issue)"
               />
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="font-mono text-xs text-indigo-700 dark:text-indigo-300">{{ issue.page }}</span>
+                  <span class="font-mono text-xs text-indigo-700 dark:text-indigo-300">
+                    <button type="button" class="underline-offset-2 hover:underline" @click="emit('openPage', issue)">
+                      {{ issue.page }}
+                    </button>
+                  </span>
                   <span class="badge text-[10px]" :class="levelClass(issue.level)">{{ issue.level }}</span>
                   <span
-                    v-if="fixHintKind(issue) === 'enrich'"
+                    v-if="hintKind(issue) === 'script'"
+                    class="badge bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                  >
+                    script
+                  </span>
+                  <span
+                    v-else-if="hintKind(issue) === 'ai'"
+                    class="badge bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"
+                  >
+                    AI
+                  </span>
+                  <span
+                    v-else-if="hintKind(issue) === 'merge'"
                     class="badge bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"
                   >
-                    enrich
+                    merge
                   </span>
                   <span
-                    v-else-if="fixHintKind(issue) === 'revise'"
+                    v-else-if="hintKind(issue) === 'manual'"
                     class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400"
                   >
-                    ai-revise
+                    {{ t('knowledge.wikiGovern.kindManual') }}
                   </span>
-                  <span
-                    v-else-if="fixHintKind(issue) === 'manual'"
-                    class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400"
+                  <button
+                    v-if="canMergeHint(issue)"
+                    type="button"
+                    class="text-[10px] text-indigo-600 underline dark:text-indigo-400"
+                    @click.stop="emit('mergeHint', issue)"
                   >
-                    {{ t('knowledge.wikiGovern.manualOnly') }}
-                  </span>
+                    {{ t('knowledge.wikiGovern.copyMergeHint') }}
+                  </button>
                 </div>
                 <p v-if="issue.detail" class="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{{ issue.detail }}</p>
                 <p v-if="issue.suggest" class="mt-0.5 text-xs text-gray-400">{{ issue.suggest }}</p>

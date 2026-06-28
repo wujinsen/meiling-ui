@@ -25,9 +25,9 @@ const { toasts } = useToastState()
           <component
             :is="item.type === 'success' ? CircleCheck : CircleX"
             :key="`${item.id}-icon-${item.enterKey}`"
-            class="app-toast-icon h-4 w-4 shrink-0"
+            class="app-toast-icon mt-0.5 h-4 w-4 shrink-0"
           />
-          <span class="min-w-0 flex-1 truncate">{{ item.text }}</span>
+          <span class="min-w-0 flex-1 break-words text-left leading-snug">{{ item.text }}</span>
         </div>
       </TransitionGroup>
     </div>

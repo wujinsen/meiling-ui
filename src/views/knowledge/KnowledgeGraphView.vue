@@ -13,6 +13,7 @@ import { showToast } from '@/composables/useToast'
 import KbDocPreviewModal from '@/components/knowledge/KbDocPreviewModal.vue'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import { getKbGraphApi, getKbGraphEgoApi } from '@/api/knowledge'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { KbGraph, KbGraphMeta, KbGraphMode } from '@/types/knowledge'
@@ -406,10 +407,9 @@ watch(selectedSpaceId, () => loadGraph())
         @update:model-value="layout = $event as 'force' | 'circular'"
       />
 
-      <label class="inline-flex cursor-pointer select-none items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-        <input v-model="coreOnly" type="checkbox" class="h-4 w-4 rounded" />
+      <AppCheckbox v-model="coreOnly" variant="option">
         {{ t('knowledge.graph.coreOnly') }}
-      </label>
+      </AppCheckbox>
     </div>
 
     <div

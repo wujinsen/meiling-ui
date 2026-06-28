@@ -82,7 +82,7 @@ async function onSubmit() {
                   v-model="userName"
                   type="text"
                   autocomplete="username"
-                  class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20"
+                  class="field-input"
                   :placeholder="t('auth.usernamePlaceholder')"
                 />
               </div>
@@ -96,7 +96,7 @@ async function onSubmit() {
                   v-model="password"
                   type="password"
                   autocomplete="current-password"
-                  class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:border-brand-500 dark:focus:ring-brand-500/20"
+                  class="field-input"
                   :placeholder="t('auth.passwordPlaceholder')"
                 />
               </div>

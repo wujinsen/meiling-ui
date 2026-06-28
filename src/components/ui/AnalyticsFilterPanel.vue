@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import { useAnalyticsFilters } from '@/composables/useAnalyticsFilters'
 import type { BiChannelKey } from '@/types/bi'
 
@@ -25,19 +26,16 @@ const channelOptions: { key: BiChannelKey; labelKey: string }[] = [
         <div>
           <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">{{ t('filters.channels') }}</p>
           <div class="mt-2 flex flex-wrap gap-2">
-            <label
+            <AppCheckbox
               v-for="opt in channelOptions"
               :key="opt.key"
-              class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm transition hover:border-brand-300 dark:border-white/10 dark:bg-white/5 dark:hover:border-brand-500/40"
+              variant="option"
+              size="sm"
+              :model-value="channels[opt.key]"
+              @update:model-value="(v) => setChannel(opt.key, v)"
             >
-              <input
-                :checked="channels[opt.key]"
-                type="checkbox"
-                class="rounded text-brand-600"
-                @change="setChannel(opt.key, ($event.target as HTMLInputElement).checked)"
-              />
               {{ t(opt.labelKey) }}
-            </label>
+            </AppCheckbox>
           </div>
         </div>
         <div class="flex gap-2">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import { ChevronDown, X } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import type { KbTag } from '@/types/knowledge'
@@ -138,15 +139,14 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
       <ul v-else class="kb-tag-picker-list">
         <li v-if="!filteredTags.length" class="py-4 text-center text-xs text-gray-400">{{ t('system.common.empty') }}</li>
         <li v-for="tag in filteredTags" :key="tagId(tag)">
-          <label class="kb-tag-picker-item">
-            <input
-              type="checkbox"
-              class="rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-white/20"
-              :checked="isSelected(tagId(tag))"
-              @change="toggleTag(tagId(tag))"
-            />
+          <AppCheckbox
+            class="kb-tag-picker-item"
+            size="sm"
+            :model-value="isSelected(tagId(tag))"
+            @update:model-value="toggleTag(tagId(tag))"
+          >
             <span class="truncate" :style="tag.color ? { color: tag.color } : undefined">{{ tag.tagName }}</span>
-          </label>
+          </AppCheckbox>
         </li>
       </ul>
     </div>

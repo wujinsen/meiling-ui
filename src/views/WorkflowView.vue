@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePageData } from '@/composables/usePageData'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import {
   Zap,
   GitBranch,
@@ -64,7 +65,7 @@ function toggleSection(id: string) {
             <input type="radio" name="schedule" class="text-brand-600" />
             {{ t('workflow.onEvent') }}
           </label>
-          <select class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5 dark:text-gray-200">
+          <select class="field-input">
             <option>{{ t('workflow.firstOfMonth') }}</option>
             <option>{{ t('workflow.fifteenthOfMonth') }}</option>
           </select>
@@ -80,14 +81,12 @@ function toggleSection(id: string) {
           <ChevronDown :class="['h-4 w-4 transition', expandedSections.includes('target') && 'rotate-180']" />
         </button>
         <div v-show="expandedSections.includes('target')" class="space-y-2 border-t border-gray-50 px-3 pb-3 pt-2 dark:border-white/5">
-          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            <input type="checkbox" checked class="rounded text-brand-600" />
+          <AppCheckbox size="sm" :model-value="true">
             {{ t('workflow.allContacts') }}
-          </label>
-          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-            <input type="checkbox" class="rounded text-brand-600" />
+          </AppCheckbox>
+          <AppCheckbox size="sm">
             {{ t('workflow.filterSegment') }}
-          </label>
+          </AppCheckbox>
         </div>
       </div>
     </div>

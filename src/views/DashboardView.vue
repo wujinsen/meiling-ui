@@ -6,6 +6,7 @@ import { useBiDashboard } from '@/composables/useBiDashboard'
 import { useBiQuery } from '@/composables/useBiQuery'
 import type { DashboardPeriod } from '@/composables/useChartDatasets'
 import BiKpiCard from '@/components/bi/BiKpiCard.vue'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import AnimateIn from '@/components/ui/AnimateIn.vue'
 import AnimatedProgress from '@/components/ui/AnimatedProgress.vue'
 import PeriodTabs from '@/components/ui/PeriodTabs.vue'
@@ -154,8 +155,8 @@ const priorityClass = (priority: 'high' | 'medium' | 'low') => ({
               :delay="600"
               :y="12"
             >
-              <label class="list-item flex cursor-pointer items-start gap-3 p-4 transition hover:shadow-sm">
-                <input type="checkbox" class="mt-0.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-white/20 dark:bg-white/5" />
+              <div class="list-item flex cursor-pointer items-start gap-3 p-4 transition hover:shadow-sm">
+                <AppCheckbox standalone class="mt-0.5" />
                 <div class="min-w-0 flex-1">
                   <p class="font-medium leading-snug text-gray-900 dark:text-white">{{ t(task.titleKey) }}</p>
                   <div class="mt-2 flex flex-wrap items-center gap-2">
@@ -171,7 +172,7 @@ const priorityClass = (priority: 'high' | 'medium' | 'low') => ({
                     <span class="text-xs text-gray-400">{{ t(task.dateKey) }}</span>
                   </div>
                 </div>
-              </label>
+              </div>
             </AnimateIn>
           </div>
         </div>

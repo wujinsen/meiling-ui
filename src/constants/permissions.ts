@@ -125,6 +125,7 @@ export const PERM = {
   KB_INGEST_LIST: 'kb:ingest:list',
   KB_INGEST_JOB: 'kb:ingest:job',
   KB_INGEST_COMMIT: 'kb:ingest:commit',
+  KB_PLATFORM_LLM: 'kb:platform:llm',
 
 } as const
 

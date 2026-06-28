@@ -8,6 +8,7 @@ import {
   type SystemGroup,
 } from '@/constants/systemGroup'
 import type { SysSystem } from '@/types/system'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import { ChevronDown, ExternalLink, LayoutGrid, Pencil, Trash2, Users } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -98,12 +99,13 @@ function isCollapsed(key: SystemGroup) {
           :style="{ '--registry-i': index }"
         >
           <div class="registry-card-top">
-            <input
+            <AppCheckbox
               v-if="canManage"
-              type="checkbox"
+              standalone
+              size="sm"
               class="registry-card-check"
-              :checked="selectedIds.has(String(row.id))"
-              @change="emit('toggle-select', row.id!)"
+              :model-value="selectedIds.has(String(row.id))"
+              @update:model-value="emit('toggle-select', row.id!)"
             />
             <div
               class="registry-card-icon"

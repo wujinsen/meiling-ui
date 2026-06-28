@@ -20,6 +20,7 @@ import {
   unauthorizedUsersApi,
 } from '@/api/user'
 import AppModal from '@/components/ui/AppModal.vue'
+import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import FormField from '@/components/ui/FormField.vue'
 import AppStatusPill from '@/components/ui/AppStatusPill.vue'
 import UserAssignPanel from '@/components/system/UserAssignPanel.vue'
@@ -1034,14 +1035,13 @@ onMounted(loadRoles)
                 {{ treeCheckLabel }}
               </button>
             </div>
-            <label class="mt-2 flex cursor-pointer items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <input
-                v-model="autoGrantActionsOnCheck"
-                type="checkbox"
-                @change="persistAutoGrantPreference"
-              />
-              {{ t('system.role.autoGrantActionsOnCheck') }}
-            </label>
+            <AppCheckbox
+              v-model="autoGrantActionsOnCheck"
+              size="sm"
+              @change="persistAutoGrantPreference"
+            >
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('system.role.autoGrantActionsOnCheck') }}</span>
+            </AppCheckbox>
           </div>
           <div class="role-perm-tree">
             <div
@@ -1065,11 +1065,12 @@ onMounted(loadRoles)
                 <ChevronRight v-else class="h-4 w-4" />
               </button>
               <span v-else class="w-5" />
-              <label class="inline-flex flex-1 cursor-pointer items-center gap-2 text-sm" @click.stop>
-                <input
-                  type="checkbox"
-                  :checked="checkedMenuIds.has(String(row.id))"
-                  @change="toggleMenuCheck(row, ($event.target as HTMLInputElement).checked)"
+              <div class="inline-flex flex-1 items-center gap-2 text-sm" @click.stop>
+                <AppCheckbox
+                  standalone
+                  size="sm"
+                  :model-value="checkedMenuIds.has(String(row.id))"
+                  @update:model-value="(v) => toggleMenuCheck(row, v)"
                 />
                 <span class="text-gray-800 dark:text-gray-200">{{ row.menuName }}</span>
                 <span
@@ -1078,7 +1079,7 @@ onMounted(loadRoles)
                 >
                   {{ countSelectedActionsForMenu(String(row.id)) }}/{{ actionPanels.find((p) => p.menuId === String(row.id))?.actions.length ?? 0 }}
                 </span>
-              </label>
+              </div>
             </div>
           </div>
         </section>
@@ -1139,19 +1140,16 @@ onMounted(loadRoles)
                 </div>
               </div>
               <div class="role-perm-action-grid">
-                <label
+                <AppCheckbox
                   v-for="action in activeActionPanel.actions"
                   :key="action.permCode"
                   class="role-perm-action-item"
                   :title="action.permCode"
+                  :model-value="checkedActionCodes.has(action.permCode)"
+                  @update:model-value="(v) => toggleActionCheck(action.permCode, v)"
                 >
-                  <input
-                    type="checkbox"
-                    :checked="checkedActionCodes.has(action.permCode)"
-                    @change="toggleActionCheck(action.permCode, ($event.target as HTMLInputElement).checked)"
-                  />
                   <span>{{ action.name }}</span>
-                </label>
+                </AppCheckbox>
               </div>
             </div>
           </template>
