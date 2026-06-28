@@ -1063,6 +1063,19 @@
     @apply min-h-[5.5rem] leading-relaxed;
   }
 
+  /** Ingest Plan 编辑区：需高于 textarea.field-input 的 min-height，并允许纵向拖拽 */
+  textarea.field-input.kb-ingest-plan-editor {
+    @apply block w-full font-mono text-sm leading-relaxed;
+    min-height: 60vh;
+    height: 60vh;
+    resize: vertical;
+    overflow-y: auto;
+  }
+
+  textarea.field-input.kb-ingest-plan-editor:read-only {
+    @apply cursor-default;
+  }
+
   .date-picker {
     @apply relative w-full;
   }

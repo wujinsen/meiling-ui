@@ -62,8 +62,12 @@ function findSpaceByValue(value: string) {
     return displaySpaces.value.find((s) => spaceIdValue(s.id) === value)
       ?? spaces.value.find((s) => spaceIdValue(s.id) === value)
   }
-  return displaySpaces.value.find((s) => s.spaceCode === value)
+  const byCode = displaySpaces.value.find((s) => s.spaceCode === value)
     ?? spaces.value.find((s) => s.spaceCode === value)
+  if (byCode) return byCode
+  // 兼容 v-model 仍为 spaceId 的旧绑定（仅用于展示标签）
+  return displaySpaces.value.find((s) => spaceIdValue(s.id) === value)
+    ?? spaces.value.find((s) => spaceIdValue(s.id) === value)
 }
 
 function spaceNameByValue(value: string) {

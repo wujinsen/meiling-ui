@@ -98,6 +98,58 @@ export function normalizeNestedTree<T extends { children?: T[] | null }>(nodes: 
   })
 }
 
+type MenuSearchFields = {
+  menuName?: string
+  menuNameEn?: string
+  menuNameJa?: string
+  path?: string
+  component?: string
+  perms?: string
+  name?: string
+  routeName?: string
+}
+
+/** 菜单管理：名称/路径/权限等字段模糊匹配 */
+export function menuMatchesKeyword(node: MenuSearchFields, keyword: string): boolean {
+  const kw = keyword.trim().toLowerCase()
+  if (!kw) return true
+  const haystack = [
+    node.menuName,
+    node.menuNameEn,
+    node.menuNameJa,
+    node.path,
+    node.component,
+    node.perms,
+    node.name,
+    node.routeName,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase())
+  return haystack.some((value) => value.includes(kw))
+}
+
+/** 菜单树搜索：命中节点保留整棵子树；仅子节点命中时保留祖先链 */
+export function filterMenuTreeByKeyword<T extends MenuSearchFields & { children?: T[] }>(
+  nodes: T[],
+  keyword: string,
+): T[] {
+  const kw = keyword.trim()
+  if (!kw) return nodes
+
+  const result: T[] = []
+  for (const node of nodes) {
+    const selfMatch = menuMatchesKeyword(node, kw)
+    const filteredChildren = node.children?.length ? filterMenuTreeByKeyword(node.children, kw) : []
+
+    if (selfMatch) {
+      result.push({ ...node })
+    } else if (filteredChildren.length) {
+      result.push({ ...node, children: filteredChildren })
+    }
+  }
+  return result
+}
+
 export function collectTreeIds<T extends { id?: number | string; children?: T[] }>(tree: T[]): string[] {
   const ids: string[] = []
   const walk = (nodes: T[]) => {

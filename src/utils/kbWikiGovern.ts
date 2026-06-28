@@ -1,6 +1,6 @@
 import type { KbWikiLintIssue, KbWikiSpaceLintResult } from '@/types/knowledge'
 
-/** enrich 批量修复适用的 issue kind（T16b） */
+/** enrich 批量修复适用的 issue kind */
 export const WIKI_GOVERN_ENRICH_KINDS = new Set([
   'missing_source',
   'missing_concept',
@@ -9,19 +9,11 @@ export const WIKI_GOVERN_ENRICH_KINDS = new Set([
   'no_summary',
 ])
 
-/** 需跳转手改的结构性问题 */
-export const WIKI_GOVERN_MANUAL_KINDS = new Set(['dup_slug', 'slug_mismatch'])
-
 /** ai-revise 默认适用（断链 / 孤儿） */
 export const WIKI_GOVERN_REVISE_KINDS = new Set(['broken_link', 'orphan'])
 
-/** ai-revise 模式额外适用（与产品 §3.1 默认修复方式一致） */
-export const WIKI_GOVERN_AI_REVISE_KINDS = new Set([
-  ...WIKI_GOVERN_REVISE_KINDS,
-  'missing_source',
-  'missing_dates',
-  'no_summary',
-])
+/** 需跳转手改的结构性问题（批量 AI 跳过） */
+export const WIKI_GOVERN_MANUAL_KINDS = new Set(['dup_slug', 'slug_mismatch'])
 
 export type WikiGovernIssueGroup = {
   kind: string
@@ -49,52 +41,21 @@ export function groupWikiLintIssues(issues: KbWikiLintIssue[]): WikiGovernIssueG
     }))
 }
 
-export function isWikiGovernEnrichable(issue: KbWikiLintIssue): boolean {
-  return WIKI_GOVERN_ENRICH_KINDS.has(issue.kind)
-}
-
 export function isWikiGovernManualOnly(issue: KbWikiLintIssue): boolean {
   return WIKI_GOVERN_MANUAL_KINDS.has(issue.kind)
+}
+
+export function isWikiGovernEnrichable(issue: KbWikiLintIssue): boolean {
+  return WIKI_GOVERN_ENRICH_KINDS.has(issue.kind)
 }
 
 export function isWikiGovernReviseKind(issue: KbWikiLintIssue): boolean {
   return WIKI_GOVERN_REVISE_KINDS.has(issue.kind)
 }
 
-export function isWikiGovernAiReviseable(issue: KbWikiLintIssue): boolean {
-  return WIKI_GOVERN_AI_REVISE_KINDS.has(issue.kind)
-}
-
-export function buildEnrichPatchForIssues(issues: KbWikiLintIssue[]): string {
-  const lines = issues.map((issue) => {
-    const detail = issue.detail?.trim() ?? ''
-    const suggest = issue.suggest?.trim() ?? ''
-    if (suggest) return `- **${issue.kind}**：${detail} → ${suggest}`
-    return `- **${issue.kind}**：${detail || issue.page}`
-  })
-  return `## 治理修复\n\n${lines.join('\n')}\n`
-}
-
-export type WikiGovernEnrichTarget = {
-  slug: string
-  issues: KbWikiLintIssue[]
-  patch: string
-}
-
-/** 按 slug 合并多条 issue，生成 enrich 目标 */
-export function buildEnrichTargets(issues: KbWikiLintIssue[]): WikiGovernEnrichTarget[] {
-  const map = new Map<string, KbWikiLintIssue[]>()
-  for (const issue of issues) {
-    if (!isWikiGovernEnrichable(issue)) continue
-    const list = map.get(issue.page) ?? []
-    list.push(issue)
-    map.set(issue.page, list)
-  }
-  return [...map.entries()].map(([slug, group]) => ({
-    slug,
-    issues: group,
-    patch: buildEnrichPatchForIssues(group),
-  }))
+/** 除结构性问题外，均可走 AI 改稿 */
+export function isWikiGovernAiFixable(issue: KbWikiLintIssue): boolean {
+  return !isWikiGovernManualOnly(issue)
 }
 
 export type WikiGovernReviseTarget = {
@@ -116,9 +77,16 @@ export function buildReviseInstruction(issues: KbWikiLintIssue[]): string {
       case 'missing_source':
         return `补全 frontmatter sources：${detail}。${suggest || '添加可追溯的 raw/prd 引用路径。'}`
       case 'missing_dates':
-        return `补全 frontmatter 日期：${detail}。${suggest || '添加或刷新 updated 字段。'}`
+        return `补全 frontmatter 日期：${detail}。${suggest || '添加或刷新 created/updated 字段（YYYY-MM-DD）。'}`
+      case 'missing_concept':
+        return `补概念页或互链：${detail}。${suggest || '创建对应 concept 页或在正文添加 [[slug]]。'}`
       case 'no_summary':
         return `补全摘要或 summary：${detail}。${suggest || ''}`
+      case 'outdated':
+        return `更新过时内容：${detail}。${suggest || '对照 sources 刷新正文与 updated。'}`
+      case 'dup_content':
+      case 'near_dup':
+        return `处理重复/近似正文：${detail}。${suggest || '合并到权威页、删冗余段落或加互链说明，避免多份相同正文。'}`
       default:
         return `修复 ${issue.kind}：${detail}。${suggest}`
     }
@@ -134,7 +102,7 @@ export function buildReviseInstruction(issues: KbWikiLintIssue[]): string {
 export function buildReviseTargets(issues: KbWikiLintIssue[]): WikiGovernReviseTarget[] {
   const map = new Map<string, KbWikiLintIssue[]>()
   for (const issue of issues) {
-    if (!isWikiGovernAiReviseable(issue)) continue
+    if (!isWikiGovernAiFixable(issue)) continue
     const list = map.get(issue.page) ?? []
     list.push(issue)
     map.set(issue.page, list)
@@ -150,20 +118,11 @@ export function countLintIssues(result: KbWikiSpaceLintResult | null): number {
   return result?.stats?.issues ?? result?.issues.length ?? 0
 }
 
-export function isWikiGovernSyncReady(
-  relint: KbWikiSpaceLintResult | null,
-  strict: boolean,
-): boolean {
-  if (!relint) return false
-  if (strict) return countLintIssues(relint) === 0
-  return countLintErrors(relint) === 0
-}
-
 export function countLintErrors(result: KbWikiSpaceLintResult | null): number {
   return result?.stats?.errors ?? result?.issues.filter((i) => i.level === 'error').length ?? 0
 }
 
-export function defaultEnrichBatchNo(): string {
+export function defaultGovernBatchNo(): string {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')
   return `gov-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}`

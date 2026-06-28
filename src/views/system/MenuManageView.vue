@@ -21,7 +21,7 @@ import { loadDynamicRoutes } from '@/composables/usePermission'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyMenu, type MenuQuery, type SysMenu } from '@/types/menu'
 import { toParentId } from '@/utils/id'
-import { buildTree, flattenVisibleTree } from '@/utils/tree'
+import { buildTree, filterMenuTreeByKeyword, flattenVisibleTree, sortTreeByOrderNum } from '@/utils/tree'
 import { getMenuIconLabel, resolveMenuIcon } from '@/utils/menuIcons'
 import { ChevronDown, ChevronRight, FoldVertical, Pencil, Plus, RefreshCw, Search, Trash2, UnfoldVertical } from 'lucide-vue-next'
 
@@ -30,13 +30,14 @@ const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
-const menuTree = ref<SysMenu[]>([])
+const menuTreeRaw = ref<SysMenu[]>([])
 const {
   expanded,
   isFullyCollapsed,
   treeExpandLabel,
   toggleExpand,
   toggleTreeExpand,
+  expandAll,
   expandAllIfEmpty,
 } = useTreeExpand()
 const modalOpen = ref(false)
@@ -46,6 +47,12 @@ const form = ref<SysMenu>(createEmptyMenu())
 const query = reactive<MenuQuery>({
   menuName: '',
   status: '',
+})
+
+const menuTree = computed(() => {
+  const kw = (query.menuName ?? '').trim()
+  if (!kw) return menuTreeRaw.value
+  return filterMenuTreeByKeyword(menuTreeRaw.value, kw)
 })
 
 const flatRows = computed(() => flattenVisibleTree(menuTree.value, expanded.value))
@@ -61,7 +68,7 @@ const parentOptions = computed(() => {
       if (node.children?.length) walk(node.children, `${prefix}— `)
     }
   }
-  walk(menuTree.value, '')
+  walk(menuTreeRaw.value, '')
   return options
 })
 
@@ -79,14 +86,17 @@ async function loadMenus() {
   loading.value = true
   try {
     const result = await listMenuApi({
-      menuName: query.menuName,
       status: query.status === '' ? undefined : query.status,
     })
     if (result.code !== API_SUCCESS_CODE || !result.data) {
       throw new Error(result.msg || t('system.menu.loadFailed'))
     }
-    menuTree.value = buildTree(result.data) as SysMenu[]
-    expandAllIfEmpty(menuTree.value)
+    menuTreeRaw.value = sortTreeByOrderNum(buildTree(result.data) as SysMenu[])
+    if ((query.menuName ?? '').trim()) {
+      expandAll(menuTree.value)
+    } else {
+      expandAllIfEmpty(menuTreeRaw.value)
+    }
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('system.menu.loadFailed'))
   } finally {

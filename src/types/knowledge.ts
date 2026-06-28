@@ -273,6 +273,19 @@ export type KbWikiSpaceLintResult = {
   outputTail?: string
 }
 
+/** GET /kb/wiki/govern/options */
+export type KbWikiGovernModel = {
+  id: string
+  displayName?: string
+}
+
+export type KbWikiGovernOptions = {
+  llmAvailable: boolean
+  provider?: string
+  defaultModel: string
+  models: KbWikiGovernModel[]
+}
+
 // ---------------------------------------------------------------------------
 // 空间 /kb/space
 // ---------------------------------------------------------------------------
@@ -553,6 +566,8 @@ export type KbWikiAiReviseRequest = {
   spaceId?: number | string
   instruction: string
   baselineContent?: string
+  /** 见 GET /kb/wiki/govern/options，默认 kb.llm.model */
+  model?: string
   issueContext?: {
     issueType?: string
     detail?: string

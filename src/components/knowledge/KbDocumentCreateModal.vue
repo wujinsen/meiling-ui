@@ -92,7 +92,7 @@ function submit() {
     <form class="space-y-4" @submit.prevent="submit">
       <label class="flex flex-col gap-1.5 text-sm">
         <span class="text-gray-500 dark:text-gray-400">{{ t('knowledge.docManage.fieldSpace') }} *</span>
-        <KbSpaceDropdown v-model="spaceId" editable-only />
+        <KbSpaceDropdown v-model="spaceId" editable-only value-field="id" />
       </label>
       <label class="flex flex-col gap-1.5 text-sm">
         <span class="text-gray-500 dark:text-gray-400">{{ t('knowledge.docManage.fieldTitle') }} *</span>

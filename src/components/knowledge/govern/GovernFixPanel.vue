@@ -1,23 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Loader2, Sparkles, Square, Wand2, XCircle } from 'lucide-vue-next'
-import SegmentControl from '@/components/ui/SegmentControl.vue'
-import type { KbWikiLintIssue } from '@/types/knowledge'
+import { Loader2, Sparkles, Square, XCircle } from 'lucide-vue-next'
+import type { KbWikiGovernOptions, KbWikiLintIssue } from '@/types/knowledge'
 import {
-  buildEnrichTargets,
   buildReviseTargets,
-  defaultEnrichBatchNo,
-  isWikiGovernAiReviseable,
-  isWikiGovernEnrichable,
+  defaultGovernBatchNo,
+  isWikiGovernAiFixable,
   isWikiGovernManualOnly,
   wikiGovernIssueKey,
 } from '@/utils/kbWikiGovern'
 
-export type GovernFixMode = 'enrich' | 'ai-revise'
-
 export type GovernFixProgress = {
-  mode: GovernFixMode
   total: number
   done: number
   ok: number
@@ -33,47 +27,52 @@ const props = defineProps<{
   fixing: boolean
   progress: GovernFixProgress | null
   canEdit: boolean
+  llmOptions: KbWikiGovernOptions | null
+  optionsLoading: boolean
 }>()
 
 const emit = defineEmits<{
-  start: [payload: { mode: GovernFixMode; batchNo: string; topic: string; appendGovernance: boolean }]
+  start: [payload: { batchNo: string; topic: string; model: string }]
   cancel: []
 }>()
 
 const { t } = useI18n()
 
-const fixMode = ref<GovernFixMode>('ai-revise')
-const batchNo = ref(defaultEnrichBatchNo())
+const batchNo = ref(defaultGovernBatchNo())
 const topic = ref('')
-const appendGovernance = ref(true)
+const model = ref('')
 
 const selectedIssues = computed(() =>
   props.issues.filter((issue) => props.selectedKeys.has(wikiGovernIssueKey(issue))),
 )
 
-const enrichableIssues = computed(() => selectedIssues.value.filter(isWikiGovernEnrichable))
-const reviseIssues = computed(() => selectedIssues.value.filter(isWikiGovernAiReviseable))
+const fixableIssues = computed(() => selectedIssues.value.filter(isWikiGovernAiFixable))
 const manualIssues = computed(() => selectedIssues.value.filter(isWikiGovernManualOnly))
-const otherIssues = computed(() =>
-  selectedIssues.value.filter(
-    (i) => !isWikiGovernEnrichable(i) && !isWikiGovernAiReviseable(i) && !isWikiGovernManualOnly(i),
-  ),
-)
+const reviseTargets = computed(() => buildReviseTargets(fixableIssues.value))
 
-const enrichTargets = computed(() => buildEnrichTargets(enrichableIssues.value))
-const reviseTargets = computed(() => buildReviseTargets(reviseIssues.value))
+const modelOptions = computed(() => {
+  const items = props.llmOptions?.models ?? []
+  return items.map((m) => ({
+    value: m.id,
+    label: m.displayName ?? m.id,
+  }))
+})
 
-const activeTargets = computed(() =>
-  fixMode.value === 'enrich' ? enrichTargets.value : reviseTargets.value,
-)
+const llmReady = computed(() => props.llmOptions?.llmAvailable === true)
 
-const fixModeOptions = computed(() => [
-  { value: 'ai-revise' as const, label: t('knowledge.wikiGovern.fixModeRevise') },
-  { value: 'enrich' as const, label: t('knowledge.wikiGovern.fixModeEnrich') },
-])
+const providerLabel = computed(() => {
+  const p = props.llmOptions?.provider
+  return p ? t('knowledge.wikiGovern.llmProviderKb', { provider: p }) : t('knowledge.wikiGovern.llmProviderKbDefault')
+})
 
 const canStart = computed(
-  () => props.canEdit && !props.fixing && activeTargets.value.length > 0,
+  () =>
+    props.canEdit &&
+    !props.fixing &&
+    !props.optionsLoading &&
+    llmReady.value &&
+    reviseTargets.value.length > 0 &&
+    !!model.value,
 )
 
 const progressPct = computed(() => {
@@ -81,23 +80,28 @@ const progressPct = computed(() => {
   return Math.round((props.progress.done / props.progress.total) * 100)
 })
 
-watch(selectedIssues, (list) => {
-  if (!list.length) return
-  const reviseCount = list.filter(isWikiGovernAiReviseable).length
-  const enrichCount = list.filter(isWikiGovernEnrichable).length
-  if (reviseCount >= enrichCount) fixMode.value = 'ai-revise'
-  else fixMode.value = 'enrich'
-})
+function applyOptionsDefaults() {
+  const o = props.llmOptions
+  if (!o) return
+  model.value = o.defaultModel ?? modelOptions.value[0]?.value ?? ''
+}
 
 function startFix() {
   if (!canStart.value) return
   emit('start', {
-    mode: fixMode.value,
-    batchNo: batchNo.value.trim() || defaultEnrichBatchNo(),
+    batchNo: batchNo.value.trim() || defaultGovernBatchNo(),
     topic: topic.value.trim() || t('knowledge.wikiGovern.defaultTopic'),
-    appendGovernance: appendGovernance.value,
+    model: model.value,
   })
 }
+
+watch(
+  () => props.llmOptions,
+  () => applyOptionsDefaults(),
+  { immediate: true },
+)
+
+onMounted(() => applyOptionsDefaults())
 </script>
 
 <template>
@@ -107,7 +111,7 @@ function startFix() {
         {{ t('knowledge.wikiGovern.fixPanelTitle') }}
       </h2>
       <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-        {{ t('knowledge.wikiGovern.fixPanelHint') }}
+        {{ t('knowledge.wikiGovern.fixPanelHintAiOnly') }}
       </p>
     </header>
 
@@ -116,33 +120,24 @@ function startFix() {
         {{ t('knowledge.wikiGovern.readOnlyHint') }}
       </p>
 
+      <p
+        v-else-if="!optionsLoading && !llmReady"
+        class="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-500/10 dark:text-rose-300"
+      >
+        {{ t('knowledge.wikiGovern.llmNotConfigured') }}
+      </p>
+
       <div v-if="!selectedIssues.length" class="py-6 text-center text-sm text-gray-400">
         {{ t('knowledge.wikiGovern.fixNoSelection') }}
       </div>
 
       <template v-else>
-        <div class="flex flex-wrap items-center gap-3">
-          <SegmentControl v-model="fixMode" :options="fixModeOptions" />
-        </div>
-
         <div class="flex flex-wrap gap-2 text-xs">
-          <span
-            v-if="fixMode === 'ai-revise'"
-            class="badge bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"
-          >
-            {{ t('knowledge.wikiGovern.fixReviseable', { count: reviseTargets.length }) }}
-          </span>
-          <span
-            v-else
-            class="badge bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"
-          >
-            {{ t('knowledge.wikiGovern.fixEnrichable', { count: enrichTargets.length }) }}
+          <span class="badge bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+            {{ t('knowledge.wikiGovern.fixAiTargets', { count: reviseTargets.length }) }}
           </span>
           <span v-if="manualIssues.length" class="badge bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">
             {{ t('knowledge.wikiGovern.fixManual', { count: manualIssues.length }) }}
-          </span>
-          <span v-if="otherIssues.length" class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400">
-            {{ t('knowledge.wikiGovern.fixOther', { count: otherIssues.length }) }}
           </span>
         </div>
 
@@ -150,7 +145,19 @@ function startFix() {
           {{ t('knowledge.wikiGovern.fixManualHint') }}
         </div>
 
+        <p v-if="llmReady" class="text-xs text-gray-500 dark:text-gray-400">
+          {{ providerLabel }}
+        </p>
+
         <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block text-xs sm:col-span-2">
+            <span class="mb-1 block text-gray-500">{{ t('knowledge.wikiGovern.llmModel') }}</span>
+            <select v-model="model" class="input w-full text-sm" :disabled="fixing || optionsLoading || !modelOptions.length">
+              <option v-for="opt in modelOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </label>
           <label class="block text-xs">
             <span class="mb-1 block text-gray-500">{{ t('knowledge.wikiGovern.batchNo') }}</span>
             <input v-model="batchNo" type="text" class="input w-full text-sm" :disabled="fixing" />
@@ -167,17 +174,9 @@ function startFix() {
           </label>
         </div>
 
-        <label
-          v-if="fixMode === 'enrich'"
-          class="flex cursor-pointer items-center gap-2 text-xs text-gray-600 dark:text-gray-400"
-        >
-          <input v-model="appendGovernance" type="checkbox" class="h-4 w-4 rounded" :disabled="fixing" />
-          {{ t('knowledge.wikiGovern.appendGovernance') }}
-        </label>
-
-        <ul v-if="activeTargets.length" class="max-h-40 overflow-y-auto rounded-lg border border-gray-100 dark:border-white/5">
+        <ul v-if="reviseTargets.length" class="max-h-40 overflow-y-auto rounded-lg border border-gray-100 dark:border-white/5">
           <li
-            v-for="target in activeTargets"
+            v-for="target in reviseTargets"
             :key="target.slug"
             class="border-b border-gray-50 px-3 py-2 text-xs last:border-0 dark:border-white/5"
           >
@@ -188,14 +187,12 @@ function startFix() {
 
         <div class="flex flex-wrap items-center gap-2">
           <button type="button" class="btn-primary text-sm" :disabled="!canStart" @click="startFix">
-            <Wand2 v-if="fixMode === 'ai-revise'" class="h-4 w-4" />
+            <Loader2 v-if="fixing" class="h-4 w-4 animate-spin" />
             <Sparkles v-else class="h-4 w-4" />
             {{
               fixing
                 ? t('knowledge.wikiGovern.fixRunning')
-                : fixMode === 'ai-revise'
-                  ? t('knowledge.wikiGovern.startRevise')
-                  : t('knowledge.wikiGovern.startEnrich')
+                : t('knowledge.wikiGovern.startAiFix')
             }}
           </button>
           <button v-if="fixing" type="button" class="btn-ghost text-sm" @click="emit('cancel')">
@@ -207,11 +204,7 @@ function startFix() {
           <div class="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
             <span>
               <Loader2 v-if="fixing" class="mr-1 inline h-3.5 w-3.5 animate-spin" />
-              {{
-                progress.mode === 'ai-revise'
-                  ? t('knowledge.wikiGovern.reviseProgress', { done: progress.done, total: progress.total })
-                  : t('knowledge.wikiGovern.fixProgress', { done: progress.done, total: progress.total })
-              }}
+              {{ t('knowledge.wikiGovern.reviseProgress', { done: progress.done, total: progress.total }) }}
             </span>
             <span>{{ progressPct }}%</span>
           </div>

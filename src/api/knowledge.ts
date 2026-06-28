@@ -35,6 +35,7 @@ import type {
   KbWikiLintPreview,
   KbWikiSpaceLintRequest,
   KbWikiSpaceLintResult,
+  KbWikiGovernOptions,
   KbWikiEnrichRequest,
   KbWikiEnrichResult,
   KbRawTreeNode,
@@ -1247,6 +1248,23 @@ export async function lintWikiSpaceApi(payload: KbWikiSpaceLintRequest) {
     body: jsonEntityBody(payload as Record<string, unknown>),
     timeoutMs: 130_000,
   })
+}
+
+/** GET /kb/wiki/govern/options —— Wiki 治理 kb.llm 模型列表 */
+export async function getKbWikiGovernOptionsApi() {
+  if (USE_MOCK) {
+    await delay(80)
+    return ok<KbWikiGovernOptions>({
+      llmAvailable: true,
+      provider: 'mock',
+      defaultModel: 'glm-4-flash',
+      models: [
+        { id: 'glm-4-flash', displayName: 'glm-4-flash' },
+        { id: 'deepseek-chat', displayName: 'deepseek-chat' },
+      ],
+    })
+  }
+  return request<KbWikiGovernOptions>(`${KB_BASE}/wiki/govern/options`)
 }
 
 /** POST /kb/wiki/enrich —— 已有页 enrich + 治理 log/index/edges */

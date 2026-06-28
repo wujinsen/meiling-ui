@@ -78,7 +78,8 @@ async function loadLogs() {
     })
     if (res.code === API_SUCCESS_CODE && res.data) {
       logs.value = res.data.records ?? []
-      total.value = res.data.total ?? 0
+      const n = Number(res.data.total)
+      total.value = Number.isFinite(n) && n >= 0 ? n : 0
     }
   } finally {
     logsLoading.value = false

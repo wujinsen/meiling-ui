@@ -27,12 +27,11 @@ const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
 const activeTab = ref<'lint' | 'sync'>('lint')
 const syncPanelRef = ref<InstanceType<typeof KbSyncPanel> | null>(null)
 const tabOptions = computed(() => {
-  const options: { value: 'lint' | 'sync'; label: string }[] = [
-    { value: 'lint', label: t('knowledge.lint.tabLint') },
-  ]
+  const options: { value: 'lint' | 'sync'; label: string }[] = []
   if (canSync.value) {
     options.push({ value: 'sync', label: t('knowledge.lint.tabSync') })
   }
+  options.push({ value: 'lint', label: t('knowledge.lint.tabLint') })
   return options
 })
 
@@ -190,7 +189,11 @@ watch(canSync, (allowed) => {
 
 <template>
   <div class="page-stack">
-    <div class="flex flex-wrap items-center gap-2">
+    <nav class="kb-doc-manage-tabs" :aria-label="t('knowledge.lint.title')">
+      <SegmentControl v-model="activeTab" :options="tabOptions" />
+    </nav>
+
+    <div class="kb-doc-manage-toolbar">
       <KbSpaceSelector />
       <template v-if="activeTab === 'lint'">
         <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadReport">
@@ -224,12 +227,6 @@ watch(canSync, (allowed) => {
         </button>
       </template>
     </div>
-
-    <SegmentControl
-      :model-value="activeTab"
-      :options="tabOptions"
-      @update:model-value="activeTab = $event as 'lint' | 'sync'"
-    />
 
     <KbSyncPanel v-if="activeTab === 'sync'" ref="syncPanelRef" />
 
@@ -312,7 +309,15 @@ watch(canSync, (allowed) => {
         </div>
 
         <p v-if="issuesLoading" class="py-8 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
-        <p v-else-if="!issues.length" class="py-8 text-center text-sm text-gray-400">{{ t('knowledge.lint.none') }}</p>
+        <div v-else-if="!issues.length" class="py-8 text-center text-sm text-gray-400">
+          <p>{{ t('knowledge.lint.none') }}</p>
+          <p
+            v-if="report && ((counts?.broken ?? 0) + (counts?.orphans ?? 0) + (counts?.noSummary ?? 0) > 0)"
+            class="mt-2 text-xs text-amber-600 dark:text-amber-400"
+          >
+            {{ t('knowledge.lint.issuesEmptyHint') }}
+          </p>
+        </div>
         <template v-else>
           <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
             <table class="w-full min-w-[40rem] text-left text-sm">
