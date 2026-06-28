@@ -15,6 +15,7 @@ import {
   deleteKbIngestTemplateApi,
   exportKbIngestAgentPromptApi,
   expressStartKbIngestApi,
+  prepareKbIngestApi,
   generateKbIngestDraftsApi,
   generateKbIngestPlanApi,
   getKbCategoryTreeApi,
@@ -45,6 +46,7 @@ import {
   buildCategoryIndex,
   createRowToPlanItem,
   parseCreateRowsFromPlan,
+  previewRelPath,
   wikiCommitPath,
   wikiDirForSpace,
   type IngestPlanCreateRow,
@@ -97,6 +99,7 @@ const formBatchNo = ref('')
 const formExpectTypes = ref('')
 const creating = ref(false)
 const expressStarting = ref(false)
+const expressProcessing = ref(false)
 const publishingExpress = ref(false)
 const templates = ref<KbIngestTemplate[]>([])
 const templatesLoading = ref(false)
@@ -491,7 +494,73 @@ async function createJob() {
   }
 }
 
-async function expressStart() {
+function buildExpressPathLines(draftList: KbIngestDraft[], spaceCode?: string): string[] {
+  const root = wikiDirForSpace(spaceCode)
+  return draftList.map((d) => {
+    const slug = d.slug.replace(/\.md$/, '')
+    return `${root}/${slug}.md`
+  })
+}
+
+function buildExpressPathLinesFromPlan(spaceCode?: string): string[] {
+  const root = wikiDirForSpace(spaceCode)
+  const idx = buildCategoryIndex(categoryTree.value)
+  return planCreateRows.value
+    .map((row) => {
+      const rel = previewRelPath(row, row.categoryId ? idx.get(row.categoryId) : undefined)
+      return rel ? `${root}/${rel}.md` : ''
+    })
+    .filter(Boolean)
+}
+
+const expressTargetPaths = computed(() => {
+  if (drafts.value.length) return buildExpressPathLines(drafts.value, job.value?.spaceCode)
+  return buildExpressPathLinesFromPlan(job.value?.spaceCode)
+})
+
+const expressPipelineBusy = computed(
+  () => expressProcessing.value || draftsGenerating.value || planGenerating.value,
+)
+
+function openExpertReview() {
+  if (!jobId.value) return
+  void router.push({ path: '/knowledge/ingest', query: { id: String(jobId.value) } })
+}
+
+async function ensureExpressPipeline() {
+  if (!expressMode.value || !jobId.value || !jobCanEdit.value) return
+  if (job.value?.status === 'committed') return
+  if (expressPipelineBusy.value) return
+  const needPlan = !hasSavedPlan.value
+  const needDrafts = !drafts.value.length
+  if (!needPlan && !needDrafts) return
+
+  expressProcessing.value = true
+  try {
+    if (needPlan) {
+      const res = await prepareKbIngestApi(jobId.value, false)
+      if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+      if (res.data.job) {
+        job.value = res.data.job
+        planText.value = res.data.job.planJson ? prettyJson(res.data.job.planJson) : ''
+        syncRowsFromPlanText()
+      }
+      if (res.data.drafts?.length) drafts.value = res.data.drafts
+    }
+    if (!drafts.value.length && hasSavedPlan.value) {
+      const res = await generateKbIngestDraftsApi(jobId.value, true)
+      if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+      drafts.value = res.data.drafts ?? []
+      if (!drafts.value.length) throw new Error(t('knowledge.ingest.expressNoDrafts'))
+    }
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.expressPipelineFailed'))
+  } finally {
+    expressProcessing.value = false
+  }
+}
+
+async function expressIngest() {
   if (!guardIngestEdit()) return
   if (expressStarting.value || creating.value) return
   if (!formTopic.value.trim()) {
@@ -502,6 +571,15 @@ async function expressStart() {
     showToast('error', t('knowledge.ingest.selected', { count: 0 }))
     return
   }
+  const rawCount = selectedRaw.value.size
+  const ok = await confirm({
+    title: t('knowledge.ingest.expressIngest'),
+    message: t('knowledge.ingest.expressConfirmIntro', { count: rawCount, topic: formTopic.value.trim() }),
+    confirmText: t('knowledge.ingest.expressIngest'),
+    cancelText: t('confirm.cancel'),
+  })
+  if (!ok) return
+
   expressStarting.value = true
   try {
     const res = await expressStartKbIngestApi({
@@ -514,13 +592,35 @@ async function expressStart() {
     if (res.code !== API_SUCCESS_CODE || !res.data?.job?.id) {
       throw new Error(res.msg || t('knowledge.ingest.opFailed'))
     }
+    const jobIdStr = String(res.data.job.id)
+    const draftList = res.data.prepare?.drafts ?? []
     const gen = res.data.prepare?.generate
+    if (!draftList.length) throw new Error(t('knowledge.ingest.expressNoDrafts'))
     if (gen?.failed && gen.failed > 0) {
-      showToast('error', t('knowledge.ingest.expressPreparePartial', { failed: gen.failed }))
-    } else {
-      showToast('success', t('knowledge.ingest.expressPrepareOk', { count: gen?.generated ?? 0 }))
+      throw new Error(t('knowledge.ingest.expressPreparePartial', { failed: gen.failed }))
     }
-    void router.push({ path: '/knowledge/ingest', query: { id: String(res.data.job.id), express: '1' } })
+
+    const pub = await publishKbIngestApi(jobIdStr, true, true)
+    if (pub.code !== API_SUCCESS_CODE || !pub.data) throw new Error(pub.msg || t('knowledge.ingest.opFailed'))
+    if (!pub.data.committed) {
+      const blocking = pub.data.lint?.blockingCount ?? 0
+      const msg = blocking > 0
+        ? t('knowledge.ingest.lintBlocked', { count: blocking })
+        : t('knowledge.ingest.expressPublishBlocked')
+      throw new Error(msg)
+    }
+    showToast(
+      'success',
+      t('knowledge.ingest.expressSuccess', {
+        created: pub.data.commit?.created ?? pub.data.approvedCount,
+        updated: pub.data.commit?.updated ?? 0,
+      }),
+    )
+    if (pub.data.commit?.syncTriggered && pub.data.commit.syncResult?.success) {
+      showToast('success', t('knowledge.ingest.syncTriggered'))
+    }
+    selectedRaw.value = new Set()
+    await loadJobs()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
   } finally {
@@ -754,6 +854,7 @@ async function loadJob() {
     planText.value = res.data.planJson ? prettyJson(res.data.planJson) : ''
     syncRowsFromPlanText()
     await Promise.all([loadDrafts(), loadCategories()])
+    if (expressMode.value) await ensureExpressPipeline()
   } catch (e) {
     job.value = null
     jobLoadError.value = e instanceof Error ? e.message : t('knowledge.ingest.loadFailed')
@@ -1313,12 +1414,12 @@ onMounted(async () => {
               type="button"
               class="btn-primary text-sm"
               :disabled="Boolean(createDisabledReason) || expressStarting || creating"
-              :title="createDisabledReason || t('knowledge.ingest.expressPreviewHint')"
-              @click="expressStart"
+              :title="createDisabledReason || t('knowledge.ingest.expressIngestHint')"
+              @click="expressIngest"
             >
               <Loader2 v-if="expressStarting" class="h-4 w-4 animate-spin" />
               <Zap v-else class="h-4 w-4" />
-              {{ expressStarting ? t('knowledge.ingest.expressStarting') : t('knowledge.ingest.expressPreview') }}
+              {{ expressStarting ? t('knowledge.ingest.expressStarting') : t('knowledge.ingest.expressIngest') }}
             </button>
             <button
               type="button"
@@ -1465,29 +1566,52 @@ onMounted(async () => {
       </div>
 
       <div
-        v-if="expressMode && jobCanEdit && job?.status !== 'committed'"
+        v-if="expressMode"
         class="card border-brand-200 bg-brand-50/50 p-5 dark:border-brand-500/30 dark:bg-brand-500/10"
       >
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="min-w-0">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
             <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('knowledge.ingest.expressBannerTitle') }}</p>
-            <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ t('knowledge.ingest.expressBannerHint') }}</p>
+            <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">
+              {{ job?.status === 'committed'
+                ? t('knowledge.ingest.expressDoneHint')
+                : expressPipelineBusy
+                  ? t('knowledge.ingest.expressProcessing')
+                  : t('knowledge.ingest.expressBannerHint') }}
+            </p>
+            <ul
+              v-if="expressTargetPaths.length"
+              class="mt-3 max-h-40 space-y-1 overflow-y-auto rounded-lg border border-brand-100 bg-white/70 px-3 py-2 font-mono text-[11px] text-gray-700 dark:border-brand-500/20 dark:bg-black/20 dark:text-gray-200"
+            >
+              <li v-for="(p, i) in expressTargetPaths" :key="`${i}-${p}`">{{ p }}</li>
+            </ul>
+            <p v-else-if="!expressPipelineBusy && job?.status !== 'committed'" class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+              {{ t('knowledge.ingest.expressNoDrafts') }}
+            </p>
           </div>
-          <button
-            type="button"
-            class="btn-primary shrink-0 text-sm"
-            :disabled="!canPublishExpress || publishingExpress"
-            @click="publishExpress"
-          >
-            <Loader2 v-if="publishingExpress" class="h-4 w-4 animate-spin" />
-            <Upload v-else class="h-4 w-4" />
-            {{ publishingExpress ? t('knowledge.ingest.expressPublishing') : t('knowledge.ingest.expressPublish') }}
-          </button>
+          <div v-if="jobCanEdit && job?.status !== 'committed'" class="flex shrink-0 flex-col gap-2">
+            <button
+              type="button"
+              class="btn-primary text-sm"
+              :disabled="!canPublishExpress || publishingExpress || expressPipelineBusy"
+              @click="publishExpress"
+            >
+              <Loader2 v-if="publishingExpress" class="h-4 w-4 animate-spin" />
+              <Upload v-else class="h-4 w-4" />
+              {{ publishingExpress ? t('knowledge.ingest.expressPublishing') : t('knowledge.ingest.expressPublish') }}
+            </button>
+            <button type="button" class="btn-ghost text-xs" @click="openExpertReview">
+              {{ t('knowledge.ingest.expressExpertLink') }}
+            </button>
+          </div>
         </div>
+        <p v-if="expressPipelineBusy" class="mt-3 flex items-center gap-2 text-xs text-brand-700 dark:text-brand-300">
+          <Loader2 class="h-3.5 w-3.5 animate-spin" /> {{ t('knowledge.ingest.expressProcessing') }}
+        </p>
       </div>
 
-      <!-- ① Plan -->
-      <div class="card flex flex-col p-5">
+      <!-- ① Plan（Expert 逐步审阅） -->
+      <div v-if="!expressMode" class="card flex flex-col p-5">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('knowledge.ingest.planSection') }}</h3>
           <div class="flex flex-wrap items-center gap-2">
@@ -1569,8 +1693,8 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- ② Drafts + diff -->
-      <div class="card p-5">
+      <!-- ② Drafts + diff（Expert 逐步审阅） -->
+      <div v-if="!expressMode" class="card p-5">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('knowledge.ingest.draftsSection') }}</h3>
           <div class="flex flex-wrap items-center gap-2">
@@ -1757,8 +1881,8 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- ③ Lint + commit -->
-      <div v-if="drafts.length" class="card p-5">
+      <!-- ③ Lint + commit（Expert 逐步审阅） -->
+      <div v-if="!expressMode && drafts.length" class="card p-5">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('knowledge.ingest.lintSection') }}</h3>
           <div class="flex flex-wrap items-center gap-2">
