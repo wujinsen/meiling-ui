@@ -278,19 +278,53 @@ export function publishIngestJobApi(
 
 ## 11. 验收清单
 
-- [ ] Express：勾选 2 个 raw → 一键预览 → 详情有 diff → 确认入库成功  
-- [ ] ☑ 模板入库 → 请求带 `useLlmGenerate=false`，响应 `templateMode=true`  
-- [ ] LLM 不可用时模板模式仍可用  
-- [ ] publish/commit 后展示 `nextSteps`，点击跳转 Wiki 治理 / 健康体检  
-- [ ] 重复 ingest 已 covered raw → commit 报错，UI 展示可读 message  
-- [ ] Expert：`generate?resume=true` 断点续跑跳过已生成 slug  
-- [ ] enrich 草稿 diff 展示 `baseline` + `patch` 合并预览
+| 项 | 状态 | 说明 |
+|----|------|------|
+| Express：勾选 raw → 预览 → 详情 diff → 确认入库 | 🟡 | 详情页 `?express=1` + `publish` ✅；**列表「一键入库」当前 express+publish 直落盘，跳过 diff**（见 §13 I1） |
+| ☑ 模板入库 → `useLlmGenerate=false`，响应 `templateMode=true` | 🟡 | 列表/Express API 已传参 ✅；**Expert generate/regenerate 未联动 checkbox**；响应 `templateMode` 未在 UI badge 展示 |
+| LLM 不可用时模板模式仍可用 | 🟡 | 用户可手动勾模板入库 ✅；**自动降级 + Toast 未做**（见 §13 I3） |
+| publish/commit 后展示 `nextSteps` | ❌ | API 类型已有；`KbWorkflowNextSteps.vue` 已建；**Ingest 页未接入** |
+| 重复 ingest 已 covered raw → commit 报错可读 | 🟡 | toast 展示 `message` ✅；**专用错误区（`commitErrorTitle`）未接**；需确认后端错误体（§13 I4） |
+| Expert：`generate?resume=true` 断点续跑 | ✅ | 已实现 |
+| enrich 草稿 diff：`baseline` + `patch` | ✅ | diff / patch 标签页已有 |
 
 ---
 
-## 12. 变更记录
+## 12. 前端实现落点（meiling-ui · 2026-06-28）
+
+| 项 | 实际路径 / 行为 |
+|----|-----------------|
+| 页面组件 | `src/views/knowledge/KnowledgeIngestWorkbenchView.vue` |
+| API | `src/api/knowledge.ts`（`expressStartKbIngestApi` / `publishKbIngestApi` / `generateKbIngestDraftsApi` 等） |
+| Express 选项 | 列表页：`expressSkeletonPlan` → `useLlmPlan`；`templateMode` → `useLlmGenerate` |
+| Express 进度 | `src/components/knowledge/IngestExpressProgressPanel.vue`（6 步，仅请求进行中展示） |
+| nextSteps 组件 | `src/components/knowledge/KbWorkflowNextSteps.vue`（**未 import**） |
+| raw 虚拟树 | `src/components/knowledge/IngestRawTreeList.vue`（**未接入**，仍用页内 flat 树） |
+
+### 12.1 与本文档的差异（实现侧说明）
+
+1. **Express 两阶段**：文档 §1 写「预览 → diff → 确认」；列表 `expressIngest()` 在 `expressStartKbIngestApi` 成功后**立即** `publishKbIngestApi`，不导航 `?id=&express=1`。若产品要 diff 门禁，需改前端（或后端拆「仅预览不写盘」接口）。
+2. **Expert 模板模式**：`generateDrafts` / `regenerateDraft` 调用未带 `{ useLlmGenerate: !templateMode }`（模板 checkbox 仅列表 Express 生效）。
+3. **T19 nextSteps**：`commitKbIngestApi` / `publishKbIngestApi` 成功后未读 `res.data.nextSteps` / `res.data.commit?.nextSteps`。
+
+---
+
+## 13. 需后端确认（Ingest）
+
+| # | 问题 | 前端依赖 |
+|---|------|----------|
+| I1 | 列表 Express 应 **预览+人工确认** 还是 **一键直落盘**？ | 是否改 `expressIngest` 流程 |
+| I2 | `IngestCommitResultVo` / `IngestPublishResultVo.nextSteps` 是否**必返**？`routeQuery.spaceId` 是 string 还是 number？ | `KbWorkflowNextSteps` 路由 |
+| I3 | LLM 失败时后端是否自动 `templateMode=true` 重试，还是 4xx/5xx？ | 自动降级 UX |
+| I4 | commit/publish 因 raw coverage 冲突失败时，除 `message` 外是否有 **结构化字段**（如 `conflictSlug`、`rawPath`）？ | 专用错误面板 |
+| I5 | `express` 响应 `prepare.generate.templateMode` 与 `generate` 接口的 `templateMode` 字段是否语义一致？ | 入库后 badge 文案 |
+
+---
+
+## 14. 变更记录
 
 | 日期 | 说明 |
 |------|------|
+| 2026-06-28 | 代码审计：§11 验收改状态表；新增 §12 落点、§13 后端确认 |
 | 2026-06-28 | 新增前端对接文档：Express 参数、模板模式、nextSteps、raw 门禁 |
 | 2026-06-25 | T15 后端交付；Expert 六步已在 KNOWLEDGE_API §9 |

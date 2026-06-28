@@ -368,18 +368,59 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 
 ## 13. 验收清单（前端自测）
 
-- [ ] 选 `enterprise-kb` Lint，issues 按 kind 分组且可勾选
-- [ ] Lint 后默认勾选 script+AI 可修项，不含 `dup_slug`
-- [ ] **脚本修复**：`missing_dates` 页修复后 frontmatter 有 created/updated
-- [ ] **AI 修复**：`broken_link` 页在 kb.llm 可用时写盘成功
-- [ ] **一键修复**：响应含 `issuesBefore` > `issuesAfter`（或 0）
-- [ ] `syncAfter=true` 后健康体检 DB 体检与文件一致（需等待 Sync 完成）
-- [ ] `llmAvailable=false` 时 AI / 一键 AI 部分 disabled
-- [ ] `dup_slug` 仅展示手动入口，不进批量 API
+| 项 | 状态 | 说明 |
+|----|------|------|
+| Lint：issues 按 kind 分组可勾选 | ✅ | `GovernLintPanel` |
+| Lint 后默认勾选 script+AI，不含 `dup_slug` / info | ✅ | `buildDefaultSelectedKeys` |
+| **脚本修复** metadata | 🔵 联调 | 前端已调 `script-fix`；需后端验 `missing_dates` 等 |
+| **AI 修复** 断链等 | 🔵 联调 | 依赖 `kb.llm` + `ai-batch-fix` |
+| **一键修复** `issuesBefore` → `issuesAfter` | ✅ | `runAutoFix` + Fix 面板摘要 |
+| `syncAfter=true` 后 DB 与文件一致 | 🔵 联调 | 勾选已映射；需后端 Sync + 健康体检 |
+| `llmAvailable=false` 时 AI disabled，脚本可用 | ✅ | Fix 面板 + 一键可 `aiFix:false` 降级 |
+| `dup_slug` 仅手动，不进批量 API | ✅ | manual badge + 编辑页跳转 |
+| `slug_mismatch` 走 script 非 manual | ✅ | `kbWikiGovern.ts` + options 兜底 |
+| merge-hint 复制指令 | ✅ | 复制 `cursorPrompt` |
+| merge-hint 展示 manualSteps / 冲突 slug | ❌ | 待前端 polish |
+| Fix 结果 `pages[]` 明细表 | ❌ | 仅有失败 slug 列表 + 计数摘要 |
+| 旁路跳转 Ingest / 健康体检 | ❌ | 待前端加链接 |
 
 ---
 
-## 14. 相关文件（后端已实现，供联调对照）
+## 14. 前端实现落点（meiling-ui · 2026-06-28）
+
+| 项 | 实际路径 |
+|----|----------|
+| 页面 | `src/views/knowledge/KnowledgeWikiGovernView.vue` |
+| 子组件 | `GovernLintPanel` / `GovernFixPanel` / `GovernRelintBar` |
+| 工具 | `src/utils/kbWikiGovern.ts` |
+| API | `src/api/knowledge.ts`（`lintWikiSpaceApi`、`wikiGovern*Api`、`getKbWikiGovernOptionsApi`） |
+| 未接入 | `GovernSyncPanel.vue`（§10 已说明 Sync 用 auto-fix checkbox 即可，组件保留未挂载） |
+
+### 14.1 与本文档的差异
+
+1. **§2 结构**：除 ① Lint、② Fix 外，已实现 **③ 复检**（`GovernRelintBar`，Lint 前亦展示占位）。§10 写「移除单独 relint 向导」指不要多步向导；**手动复检按钮仍保留**。
+2. **issue 行 key**：实现为 `` `${page}::${kind}::${detail}` ``（非文档 §5 示例的 `` `${page}|${kind}` ``），与后端 issue 列表一致即可。
+3. **单独 script/AI 修复**：成功后 **不**自动 relint，toast 提示用户点 ③ 或再 Lint；仅 **一键修复** 带 `relintAfter:true`。
+4. **enrich 批量**：已从治理页移除；`enrichKbWikiApi` 仅在 Wiki 编辑页使用。
+
+---
+
+## 15. 需后端确认（Wiki 治理）
+
+| # | 问题 | 前端依赖 |
+|---|------|----------|
+| W1 | `GET /kb/wiki/govern/options` 三组 kind 是否与运行时 `lint.py` / `WikiGovernKindUtil` **一致**？尤其 `slug_mismatch` ∈ script、`dup_slug` ∈ manual | 勾选默认值与 badge |
+| W2 | `merge-hint` 对三类重复 kind 是否稳定返回 `cursorPrompt`、`manualSteps[]`、`relatedSlugs`、`canonicalSlug`？ | merge 详情 UI |
+| W3 | `auto-fix` 成功时 `issuesAfter` 是否 **等于** `relint.stats.issues` 或 `relint.issues.length`？ | 摘要数字 |
+| W4 | `auto-fix.syncAfter=true` 时 `sync` 对象：`success` / `outputTail` / `exitCode` / `batchNo` 字段约定？ | Fix 面板 Sync 行 |
+| W5 | 单独 `script-fix` / `ai-batch-fix` 是否 **故意不** relint？前端是否应在成功后自动 `lint-space`？ | ③ 复检体验 |
+| W6 | `script-fix` 的 `dryRun=true` 是否需要在治理 UI 暴露？ | 可选预览按钮 |
+| W7 | **T16f** 范围：是否新增 API 或改 §8 契约？ | 排期 |
+| W8 | Lint `exitCode≠0` 但 HTTP 200 时，`issues` 是否仍完整返回？ | 空结果 vs 有阻断项 |
+
+---
+
+## 16. 相关文件（后端已实现，供联调对照）
 
 | 路径 | 说明 |
 |------|------|
@@ -391,9 +432,10 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 
 ---
 
-## 15. 变更记录
+## 17. 变更记录
 
 | 日期 | 说明 |
 |------|------|
+| 2026-06-28 | 代码审计：§13 验收改状态表；新增 §14 落点、§15 后端确认 |
 | 2026-06-28 | 对齐总览；补 manualOnlyKinds、merge-hint 类型、代码落点 |
 | 2026-06-27 | T16e：新增 script-fix / ai-batch-fix / auto-fix；治理页不再推荐 enrich 批量 |
