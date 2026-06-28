@@ -47,6 +47,9 @@ import type {
   KbIngestGenerateResult,
   KbIngestLint,
   KbIngestCommitResult,
+  KbIngestPrepareResult,
+  KbIngestPublishResult,
+  KbIngestExpressStartResult,
   KbIngestTemplate,
   KbIngestTemplateCreateRequest,
   KbIngestJobFromTemplateRequest,
@@ -1401,6 +1404,15 @@ export async function getKbIngestJobApi(id: number | string) {
   return request<KbIngestJob>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}`, { method: 'GET' })
 }
 
+/** DELETE /kb/ingest/jobs/{id} —— 删除历史批次（软删，不回滚已 commit 的 wiki） */
+export async function deleteKbIngestJobApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok<boolean>(true)
+  }
+  return request<boolean>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}`, { method: 'DELETE' })
+}
+
 /** POST /kb/ingest/jobs/{id}/plan —— 生成/刷新 Plan（LLM 或骨架） */
 export async function generateKbIngestPlanApi(id: number | string) {
   return request<KbIngestJob>(`${KB_BASE}/ingest/jobs/${toEntityId(id)}/plan`, {
@@ -1489,6 +1501,34 @@ export async function commitKbIngestApi(id: number | string, sync = false) {
   )
 }
 
+/** T18 · POST /kb/ingest/jobs/express —— 创建批次 + Express Plan + 生成草稿 */
+export async function expressStartKbIngestApi(payload: KbIngestJobCreateRequest, useLlmPlan = false) {
+  return request<KbIngestExpressStartResult>(
+    `${KB_BASE}/ingest/jobs/express${buildQuery({ useLlmPlan: String(useLlmPlan) })}`,
+    {
+      method: 'POST',
+      body: jsonEntityBody(payload as Record<string, unknown>),
+      timeoutMs: 300_000,
+    },
+  )
+}
+
+/** T18 · POST /kb/ingest/jobs/{id}/prepare */
+export async function prepareKbIngestApi(id: number | string, useLlmPlan = false) {
+  return request<KbIngestPrepareResult>(
+    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/prepare${buildQuery({ useLlmPlan: String(useLlmPlan) })}`,
+    { method: 'POST', timeoutMs: 300_000 },
+  )
+}
+
+/** T18 · POST /kb/ingest/jobs/{id}/publish */
+export async function publishKbIngestApi(id: number | string, sync = true, approveAll = true) {
+  return request<KbIngestPublishResult>(
+    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/publish${buildQuery({ sync: String(sync), approveAll: String(approveAll) })}`,
+    { method: 'POST', timeoutMs: 300_000 },
+  )
+}
+
 /* ---- T15e 模板 ---- */
 
 export async function getKbIngestTemplatesApi(spaceId?: number | string) {
@@ -1503,6 +1543,10 @@ export async function createKbIngestTemplateApi(payload: KbIngestTemplateCreateR
 }
 
 export async function deleteKbIngestTemplateApi(id: number | string) {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok<boolean>(true)
+  }
   return request<boolean>(`${KB_BASE}/ingest/templates/${toEntityId(id)}`, { method: 'DELETE' })
 }
 

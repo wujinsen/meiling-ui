@@ -715,6 +715,8 @@ export type KbIngestPlanUpdateRequest = {
 
 /** Plan JSON 结构（前端解析 planJson 后的形态） */
 export type KbIngestPlanCreateItem = {
+  /** 目标分类 ID（T17）；落盘目录 = kb_category.dir_slug */
+  categoryId?: number | string
   type?: string
   slug?: string
   title?: string
@@ -764,6 +766,10 @@ export type KbIngestDraft = {
   draft?: string
   approval: 'draft' | 'approved' | 'rejected' | string
   updateTime?: string
+  /** T17a：Plan 指定分类（只读） */
+  categoryId?: number | string
+  dirSlug?: string
+  categoryName?: string
 }
 
 /** POST /kb/ingest/jobs/{id}/generate 结果（T15e 断点续跑） */
@@ -834,4 +840,25 @@ export type KbIngestCommitResult = {
   indexUpdated: boolean
   syncTriggered: boolean
   syncResult?: KbSyncTrigger
+}
+
+/** T18 · prepare 一步结果 */
+export type KbIngestPrepareResult = {
+  job: KbIngestJob
+  generate: KbIngestGenerateResult
+  drafts: KbIngestDraft[]
+}
+
+/** T18 · publish 一步结果 */
+export type KbIngestPublishResult = {
+  lint: KbIngestLint
+  committed: boolean
+  commit?: KbIngestCommitResult
+  approvedCount: number
+}
+
+/** T18 · 创建 + prepare */
+export type KbIngestExpressStartResult = {
+  job: KbIngestJob
+  prepare: KbIngestPrepareResult
 }

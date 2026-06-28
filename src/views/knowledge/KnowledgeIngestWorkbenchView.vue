@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Check, ChevronDown, ChevronRight, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Upload, X } from 'lucide-vue-next'
+import { ArrowLeft, Check, ChevronDown, ChevronRight, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Trash2, Upload, X, Zap } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
+import IngestPlanCreateTable from '@/components/knowledge/IngestPlanCreateTable.vue'
 import {
   commitKbIngestApi,
   createKbIngestJobApi,
   createKbIngestJobFromTemplateApi,
+  deleteKbIngestJobApi,
+  deleteKbIngestTemplateApi,
   exportKbIngestAgentPromptApi,
+  expressStartKbIngestApi,
   generateKbIngestDraftsApi,
   generateKbIngestPlanApi,
+  getKbCategoryTreeApi,
   getKbIngestJobApi,
   getKbIngestJobsApi,
   getKbIngestDraftsApi,
@@ -20,6 +25,7 @@ import {
   getKbIngestRawCoverageApi,
   getKbIngestTemplatesApi,
   lintKbIngestApi,
+  publishKbIngestApi,
   regenerateKbIngestDraftApi,
   saveKbIngestJobAsTemplateApi,
   setKbIngestDraftApprovalApi,
@@ -33,7 +39,18 @@ import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
+import { flattenKbCategoryTree } from '@/utils/kbCategoryTree'
+import {
+  applyCategoryInference,
+  buildCategoryIndex,
+  createRowToPlanItem,
+  parseCreateRowsFromPlan,
+  wikiCommitPath,
+  wikiDirForSpace,
+  type IngestPlanCreateRow,
+} from '@/utils/ingestPlanPath'
 import type {
+  KbCategoryTree,
   KbRawCoverage,
   KbRawCoverageFilter,
   KbRawCoverageItem,
@@ -51,12 +68,18 @@ const router = useRouter()
 const { spaces, ensureSpacesLoaded } = useKbSpace()
 const { fullPermission } = useActionPermissions()
 
-const ingestSpaceId = ref('')
+const ingestSpaceCode = ref('')
 
 const jobId = computed(() => {
   const raw = route.query.id
   const v = Array.isArray(raw) ? raw[0] : raw
   return toEntityId(typeof v === 'string' ? v : undefined) ?? undefined
+})
+
+const expressMode = computed(() => {
+  const raw = route.query.express
+  const v = Array.isArray(raw) ? raw[0] : raw
+  return v === '1' || v === 'true'
 })
 
 /* ---------------- 列表 / 新建模式 ---------------- */
@@ -73,12 +96,17 @@ const formTopic = ref('')
 const formBatchNo = ref('')
 const formExpectTypes = ref('')
 const creating = ref(false)
+const expressStarting = ref(false)
+const publishingExpress = ref(false)
 const templates = ref<KbIngestTemplate[]>([])
 const templatesLoading = ref(false)
 const creatingFromTemplate = ref(false)
 const saveTemplateOpen = ref(false)
 const saveTemplateName = ref('')
 const saveTemplateSaving = ref(false)
+
+const deletingJobId = ref<string | null>(null)
+const deletingTemplateId = ref<string | null>(null)
 
 const defaultSpace = computed(() => spaces.value.find((s) => s.spaceCode === 'enterprise-kb') ?? spaces.value[0])
 
@@ -93,18 +121,18 @@ function spaceCanIngestEdit(space: KbAccessibleSpace | null | undefined): boolea
 
 const editableSpaces = computed(() => spaces.value.filter((s) => spaceCanIngestEdit(s)))
 const selectedSpace = computed(
-  () => spaces.value.find((s) => toEntityId(s.id) === toEntityId(ingestSpaceId.value)) ?? null,
+  () => spaces.value.find((s) => s.spaceCode === ingestSpaceCode.value) ?? null,
 )
 const selectedSpaceQueryId = computed(() => toEntityId(selectedSpace.value?.id))
 const canEdit = computed(() => spaceCanIngestEdit(selectedSpace.value))
 
 function initIngestSpace() {
   if (jobId.value || !spaces.value.length) return
-  const cur = toEntityId(ingestSpaceId.value)
-  const ok = editableSpaces.value.some((s) => toEntityId(s.id) === cur)
+  const cur = ingestSpaceCode.value.trim()
+  const ok = editableSpaces.value.some((s) => s.spaceCode === cur)
   const pick = editableSpaces.value[0] ?? defaultSpace.value
-  const id = toEntityId(pick?.id)
-  if (id && (!ok || !cur)) ingestSpaceId.value = id
+  const code = pick?.spaceCode
+  if (code && (!ok || !cur)) ingestSpaceCode.value = code
 }
 
 function guardIngestEdit(): boolean {
@@ -334,6 +362,57 @@ async function loadTemplates() {
   }
 }
 
+async function removeJob(job: KbIngestJob, event?: Event) {
+  event?.stopPropagation()
+  if (!guardIngestEdit()) return
+  const id = toEntityId(job.id)
+  if (!id || deletingJobId.value) return
+  const label = job.topic?.trim() || job.batchNo || id
+  const ok = await confirm({
+    title: t('knowledge.ingest.deleteJob'),
+    message: t('knowledge.ingest.deleteJobConfirm', { topic: label }),
+    confirmText: t('knowledge.ingest.deleteJob'),
+    cancelText: t('confirm.cancel'),
+  })
+  if (!ok) return
+  deletingJobId.value = id
+  try {
+    const res = await deleteKbIngestJobApi(id)
+    if (res.code !== API_SUCCESS_CODE) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    showToast('success', t('knowledge.ingest.deleteJobOk'))
+    jobs.value = jobs.value.filter((j) => toEntityId(j.id) !== id)
+    if (jobId.value === id) backToList()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
+  } finally {
+    deletingJobId.value = null
+  }
+}
+
+async function removeTemplate(tpl: KbIngestTemplate) {
+  if (!guardIngestEdit()) return
+  const id = toEntityId(tpl.id)
+  if (!id || deletingTemplateId.value) return
+  const ok = await confirm({
+    title: t('knowledge.ingest.deleteTemplate'),
+    message: t('knowledge.ingest.deleteTemplateConfirm', { name: tpl.name ?? id }),
+    confirmText: t('knowledge.ingest.deleteTemplate'),
+    cancelText: t('confirm.cancel'),
+  })
+  if (!ok) return
+  deletingTemplateId.value = id
+  try {
+    const res = await deleteKbIngestTemplateApi(id)
+    if (res.code !== API_SUCCESS_CODE) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    showToast('success', t('knowledge.ingest.deleteTemplateOk'))
+    templates.value = templates.value.filter((x) => toEntityId(x.id) !== id)
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
+  } finally {
+    deletingTemplateId.value = null
+  }
+}
+
 async function createJobFromTemplate(tpl: KbIngestTemplate) {
   if (!guardIngestEdit()) return
   if (creatingFromTemplate.value) return
@@ -412,13 +491,84 @@ async function createJob() {
   }
 }
 
+async function expressStart() {
+  if (!guardIngestEdit()) return
+  if (expressStarting.value || creating.value) return
+  if (!formTopic.value.trim()) {
+    showToast('error', t('knowledge.ingest.topic'))
+    return
+  }
+  if (selectedRaw.value.size === 0) {
+    showToast('error', t('knowledge.ingest.selected', { count: 0 }))
+    return
+  }
+  expressStarting.value = true
+  try {
+    const res = await expressStartKbIngestApi({
+      spaceId: selectedSpaceQueryId.value,
+      topic: formTopic.value.trim(),
+      batchNo: formBatchNo.value.trim() || undefined,
+      expectTypes: formExpectTypes.value.trim() || undefined,
+      rawPaths: Array.from(selectedRaw.value),
+    })
+    if (res.code !== API_SUCCESS_CODE || !res.data?.job?.id) {
+      throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    }
+    const gen = res.data.prepare?.generate
+    if (gen?.failed && gen.failed > 0) {
+      showToast('error', t('knowledge.ingest.expressPreparePartial', { failed: gen.failed }))
+    } else {
+      showToast('success', t('knowledge.ingest.expressPrepareOk', { count: gen?.generated ?? 0 }))
+    }
+    void router.push({ path: '/knowledge/ingest', query: { id: String(res.data.job.id), express: '1' } })
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
+  } finally {
+    expressStarting.value = false
+  }
+}
+
 /* ---------------- 批次详情模式 ---------------- */
 const job = ref<KbIngestJob | null>(null)
 const jobLoading = ref(false)
 const jobLoadError = ref('')
+
+function resolveJobSpaceLabel(j: Pick<KbIngestJob, 'spaceCode' | 'spaceId'> | null | undefined): string {
+  if (!j) return ''
+  if (j.spaceCode) {
+    const byCode = spaces.value.find((s) => s.spaceCode === j.spaceCode)
+    if (byCode?.spaceName) return byCode.spaceName
+  }
+  const sid = toEntityId(j.spaceId)
+  if (sid) {
+    const byId = spaces.value.find((s) => toEntityId(s.id) === sid)
+    if (byId?.spaceName) return byId.spaceName
+  }
+  return j.spaceCode?.trim() || sid || ''
+}
+
+const jobSpaceLabel = computed(() => resolveJobSpaceLabel(job.value))
 const planText = ref('')
 const planGenerating = ref(false)
 const planSaving = ref(false)
+const planJsonAdvanced = ref(false)
+const planCreateRows = ref<IngestPlanCreateRow[]>([])
+const syncingPlan = ref(false)
+const categoryTree = ref<KbCategoryTree[]>([])
+const categoriesLoading = ref(false)
+
+const categoryOptions = computed(() => {
+  const index = buildCategoryIndex(categoryTree.value)
+  return flattenKbCategoryTree(categoryTree.value).map((opt) => {
+    const cat = index.get(opt.id)
+    if (cat?.dirSlug) {
+      const base = opt.label.replace(/^[　└\s]+/, '').trim()
+      const prefix = opt.label.slice(0, opt.label.indexOf(base))
+      return { ...opt, label: `${prefix}${base} (${cat.dirSlug})` }
+    }
+    return opt
+  })
+})
 
 const drafts = ref<KbIngestDraft[]>([])
 const draftsGenerating = ref(false)
@@ -471,6 +621,45 @@ const allApproved = computed(() => drafts.value.length > 0 && drafts.value.every
 const approvedCount = computed(() => drafts.value.filter((d) => d.approval === 'approved').length)
 const canCommit = computed(
   () => jobCanEdit.value && allApproved.value && approvedCount.value > 0 && lint.value?.commitReady === true,
+)
+
+type CommitPathPreview = {
+  slug: string
+  displaySlug: string
+  action: string
+  path: string
+}
+
+const approvedCommitPaths = computed<CommitPathPreview[]>(() => {
+  const spaceCode = job.value?.spaceCode
+  return drafts.value
+    .filter((d) => d.approval === 'approved')
+    .map((d) => ({
+      slug: d.slug,
+      displaySlug: d.displaySlug,
+      action: d.action,
+      path: wikiCommitPath(spaceCode, d.slug),
+    }))
+})
+
+const wikiRootDir = computed(() => wikiDirForSpace(job.value?.spaceCode))
+
+function buildCommitConfirmMessage(expressAll = false): string {
+  const paths = expressAll
+    ? drafts.value.map((d) => wikiCommitPath(job.value?.spaceCode, d.slug))
+    : approvedCommitPaths.value.map((p) => p.path)
+  const count = expressAll ? drafts.value.length : approvedCount.value
+  const intro = expressAll
+    ? t('knowledge.ingest.expressCommitConfirmIntro', { count })
+    : t('knowledge.ingest.commitConfirmIntro', { count })
+  const lines = paths.map((p) => `• ${p}`)
+  const shown = lines.slice(0, 12)
+  const tail = lines.length > 12 ? `\n… +${lines.length - 12}` : ''
+  return `${intro}\n\n${shown.join('\n')}${tail}`
+}
+
+const canPublishExpress = computed(
+  () => jobCanEdit.value && drafts.value.length > 0 && job.value?.status !== 'committed',
 )
 
 const hasSavedPlan = computed(() => Boolean(job.value?.planVersion && job.value.planVersion > 0))
@@ -535,6 +724,14 @@ function statusLabel(s?: string) {
 }
 
 const planObj = computed(() => {
+  if (!planJsonAdvanced.value && planCreateRows.value.length) {
+    try {
+      const base = planText.value.trim() ? JSON.parse(planText.value) : {}
+      return { ...base, create: planCreateRows.value.map(createRowToPlanItem) }
+    } catch {
+      return null
+    }
+  }
   try {
     return planText.value.trim() ? JSON.parse(planText.value) : null
   } catch {
@@ -555,7 +752,8 @@ async function loadJob() {
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.loadFailed'))
     job.value = res.data
     planText.value = res.data.planJson ? prettyJson(res.data.planJson) : ''
-    await loadDrafts()
+    syncRowsFromPlanText()
+    await Promise.all([loadDrafts(), loadCategories()])
   } catch (e) {
     job.value = null
     jobLoadError.value = e instanceof Error ? e.message : t('knowledge.ingest.loadFailed')
@@ -573,6 +771,77 @@ function prettyJson(s: string) {
   }
 }
 
+function syncRowsFromPlanText() {
+  if (!planText.value.trim()) {
+    planCreateRows.value = []
+    return
+  }
+  try {
+    const obj = JSON.parse(planText.value)
+    let rows = parseCreateRowsFromPlan(obj?.create)
+    rows = applyCategoryInference(rows, categoryTree.value)
+    planCreateRows.value = rows
+  } catch {
+    planCreateRows.value = []
+  }
+}
+
+function applyRowsToPlanText() {
+  if (!planText.value.trim() && !planCreateRows.value.length) return
+  let base: Record<string, unknown> = {}
+  try {
+    base = planText.value.trim() ? JSON.parse(planText.value) : {}
+  } catch {
+    return
+  }
+  base.create = planCreateRows.value.map(createRowToPlanItem)
+  syncingPlan.value = true
+  planText.value = prettyJson(JSON.stringify(base))
+  void nextTick(() => {
+    syncingPlan.value = false
+  })
+}
+
+async function loadCategories() {
+  const sid = toEntityId(job.value?.spaceId)
+  if (!sid) {
+    categoryTree.value = []
+    return
+  }
+  categoriesLoading.value = true
+  try {
+    const res = await getKbCategoryTreeApi(sid, false)
+    if (res.code === API_SUCCESS_CODE && res.data) {
+      categoryTree.value = res.data
+      if (planCreateRows.value.length) {
+        planCreateRows.value = applyCategoryInference(planCreateRows.value, res.data)
+        if (!planJsonAdvanced.value) applyRowsToPlanText()
+      }
+    }
+  } catch {
+    categoryTree.value = []
+  } finally {
+    categoriesLoading.value = false
+  }
+}
+
+function togglePlanJsonAdvanced() {
+  if (planJsonAdvanced.value) {
+    syncRowsFromPlanText()
+    planJsonAdvanced.value = false
+  } else {
+    applyRowsToPlanText()
+    planJsonAdvanced.value = true
+  }
+}
+
+function draftPathTooltip(d: KbIngestDraft) {
+  const parts = [d.slug]
+  if (d.categoryName && d.dirSlug) parts.push(`${d.categoryName} (${d.dirSlug}/)`)
+  else if (d.dirSlug) parts.push(`${d.dirSlug}/`)
+  return parts.join(' · ')
+}
+
 async function generatePlan() {
   if (!guardIngestEdit()) return
   if (!jobId.value || planGenerating.value) return
@@ -582,6 +851,7 @@ async function generatePlan() {
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
     job.value = res.data
     planText.value = res.data.planJson ? prettyJson(res.data.planJson) : ''
+    syncRowsFromPlanText()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
   } finally {
@@ -592,6 +862,7 @@ async function generatePlan() {
 async function savePlan() {
   if (!guardIngestEdit()) return
   if (!jobId.value || planSaving.value) return
+  if (!planJsonAdvanced.value) applyRowsToPlanText()
   if (!planObj.value) {
     showToast('error', t('knowledge.ingest.planJsonInvalid'))
     return
@@ -732,9 +1003,11 @@ async function setApproval(d: KbIngestDraft, approval: 'approved' | 'rejected' |
   if (!jobId.value) return
   try {
     const res = await setKbIngestDraftApprovalApi(jobId.value, d.slug, approval)
-    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
-    replaceDraft(res.data)
+    if (res.code !== API_SUCCESS_CODE) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    replaceDraft(res.data ?? { ...d, approval })
     lint.value = null
+    if (approval === 'approved') showToast('success', t('knowledge.ingest.approveOk'))
+    else if (approval === 'rejected') showToast('success', t('knowledge.ingest.rejectOk'))
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
   }
@@ -758,6 +1031,53 @@ async function runLint() {
   }
 }
 
+async function publishExpress() {
+  if (!guardIngestEdit()) return
+  if (!jobId.value || publishingExpress.value) return
+  if (!drafts.value.length) {
+    showToast('error', t('knowledge.ingest.noDrafts'))
+    return
+  }
+  const ok = await confirm({
+    title: t('knowledge.ingest.expressPublish'),
+    message: `${t('knowledge.ingest.expressPublishConfirm')}\n\n${buildCommitConfirmMessage(true)}`,
+    confirmText: t('knowledge.ingest.expressPublish'),
+    cancelText: t('confirm.cancel'),
+  })
+  if (!ok) return
+  publishingExpress.value = true
+  try {
+    const res = await publishKbIngestApi(jobId.value, true, true)
+    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    lint.value = res.data.lint
+    if (!res.data.committed) {
+      const blocking = res.data.lint?.blockingCount ?? 0
+      showToast(
+        'error',
+        blocking > 0
+          ? t('knowledge.ingest.lintBlocked', { count: blocking })
+          : t('knowledge.ingest.expressPublishBlocked'),
+      )
+      return
+    }
+    showToast(
+      'success',
+      t('knowledge.ingest.commitSuccess', {
+        created: res.data.commit?.created ?? res.data.approvedCount,
+        updated: res.data.commit?.updated ?? 0,
+      }),
+    )
+    if (res.data.commit?.syncTriggered && res.data.commit.syncResult?.success) {
+      showToast('success', t('knowledge.ingest.syncTriggered'))
+    }
+    await loadJob()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
+  } finally {
+    publishingExpress.value = false
+  }
+}
+
 async function commit(sync: boolean) {
   if (!guardIngestEdit()) return
   if (!jobId.value || committing.value) return
@@ -767,7 +1087,7 @@ async function commit(sync: boolean) {
   }
   const ok = await confirm({
     title: sync ? t('knowledge.ingest.commitAndSync') : t('knowledge.ingest.commit'),
-    message: t('knowledge.ingest.commitSuccess', { created: approvedCount.value, updated: 0 }),
+    message: buildCommitConfirmMessage(),
     confirmText: t('knowledge.ingest.commit'),
     cancelText: t('confirm.cancel'),
   })
@@ -808,11 +1128,25 @@ watch(rawTree, (tree) => {
   if (tree.length) expandAllRawDirs()
 })
 
+watch(planText, () => {
+  if (syncingPlan.value || planJsonAdvanced.value) return
+  syncRowsFromPlanText()
+})
+
+watch(planCreateRows, () => {
+  if (syncingPlan.value || planJsonAdvanced.value) return
+  applyRowsToPlanText()
+}, { deep: true })
+
 watch(jobId, (id) => {
   job.value = null
   drafts.value = []
   activeSlug.value = ''
   lint.value = null
+  planText.value = ''
+  planCreateRows.value = []
+  planJsonAdvanced.value = false
+  categoryTree.value = []
   if (id) void loadJob()
   else {
     void loadJobs()
@@ -852,7 +1186,7 @@ onMounted(async () => {
       <div class="card p-5">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('knowledge.ingest.pageTitle') }}</h2>
-          <KbSpaceDropdown v-model="ingestSpaceId" hide-all-option />
+          <KbSpaceDropdown v-model="ingestSpaceCode" hide-all-option />
         </div>
         <p class="mt-1 text-xs text-gray-400">{{ t('knowledge.ingest.subtitle') }}</p>
         <p v-if="!editableSpaces.length" class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
@@ -974,16 +1308,29 @@ onMounted(async () => {
             </template>
           </div>
 
-          <button
-            type="button"
-            class="btn-primary mt-4 self-start text-sm"
-            :disabled="Boolean(createDisabledReason)"
-            :title="createDisabledReason || undefined"
-            @click="createJob"
-          >
-            <Loader2 v-if="creating" class="h-4 w-4 animate-spin" />
-            {{ creating ? t('knowledge.ingest.creating') : t('knowledge.ingest.create') }}
-          </button>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn-primary text-sm"
+              :disabled="Boolean(createDisabledReason) || expressStarting || creating"
+              :title="createDisabledReason || t('knowledge.ingest.expressPreviewHint')"
+              @click="expressStart"
+            >
+              <Loader2 v-if="expressStarting" class="h-4 w-4 animate-spin" />
+              <Zap v-else class="h-4 w-4" />
+              {{ expressStarting ? t('knowledge.ingest.expressStarting') : t('knowledge.ingest.expressPreview') }}
+            </button>
+            <button
+              type="button"
+              class="btn-ghost text-sm"
+              :disabled="Boolean(createDisabledReason) || expressStarting || creating"
+              :title="createDisabledReason || undefined"
+              @click="createJob"
+            >
+              <Loader2 v-if="creating" class="h-4 w-4 animate-spin" />
+              {{ creating ? t('knowledge.ingest.creating') : t('knowledge.ingest.create') }}
+            </button>
+          </div>
           <p v-if="createDisabledReason" class="mt-2 text-xs text-amber-700 dark:text-amber-300">{{ createDisabledReason }}</p>
         </div>
 
@@ -1003,7 +1350,20 @@ onMounted(async () => {
                 <p class="truncate font-medium text-gray-800 dark:text-gray-100">{{ j.topic }}</p>
                 <p class="truncate text-xs text-gray-400">#{{ j.batchNo }} · {{ j.rawPaths?.length ?? 0 }} raw</p>
               </div>
-              <span class="badge bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">{{ statusLabel(j.status) }}</span>
+              <div class="flex shrink-0 items-center gap-1.5">
+                <span class="badge bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">{{ statusLabel(j.status) }}</span>
+                <button
+                  v-if="canEdit"
+                  type="button"
+                  class="btn-ghost p-1.5 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                  :disabled="deletingJobId === toEntityId(j.id)"
+                  :title="t('knowledge.ingest.deleteJob')"
+                  @click="removeJob(j, $event)"
+                >
+                  <Loader2 v-if="deletingJobId === toEntityId(j.id)" class="h-3.5 w-3.5 animate-spin" />
+                  <Trash2 v-else class="h-3.5 w-3.5" />
+                </button>
+              </div>
             </li>
           </ul>
         </div>
@@ -1027,15 +1387,28 @@ onMounted(async () => {
                 <span v-if="tpl.hasPlan"> · plan</span>
               </p>
             </div>
-            <button
-              type="button"
-              class="btn-ghost shrink-0 text-xs"
-              :disabled="creatingFromTemplate || !canEdit"
-              @click="createJobFromTemplate(tpl)"
-            >
-              <Loader2 v-if="creatingFromTemplate" class="h-3.5 w-3.5 animate-spin" />
-              {{ t('knowledge.ingest.fromTemplate') }}
-            </button>
+            <div class="flex shrink-0 flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                class="btn-ghost shrink-0 text-xs"
+                :disabled="creatingFromTemplate || !canEdit"
+                @click="createJobFromTemplate(tpl)"
+              >
+                <Loader2 v-if="creatingFromTemplate" class="h-3.5 w-3.5 animate-spin" />
+                {{ t('knowledge.ingest.fromTemplate') }}
+              </button>
+              <button
+                v-if="canEdit"
+                type="button"
+                class="btn-ghost p-1.5 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                :disabled="deletingTemplateId === toEntityId(tpl.id)"
+                :title="t('knowledge.ingest.deleteTemplate')"
+                @click="removeTemplate(tpl)"
+              >
+                <Loader2 v-if="deletingTemplateId === toEntityId(tpl.id)" class="h-3.5 w-3.5 animate-spin" />
+                <Trash2 v-else class="h-3.5 w-3.5" />
+              </button>
+            </div>
           </li>
         </ul>
       </div>
@@ -1063,7 +1436,7 @@ onMounted(async () => {
               <h2 class="truncate text-base font-semibold text-gray-900 dark:text-white">{{ job?.topic || t('knowledge.ingest.pageTitle') }}</h2>
               <span v-if="job" class="badge bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">#{{ job.batchNo }}</span>
               <span v-if="job" class="badge bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">{{ statusLabel(job.status) }}</span>
-              <span v-if="job?.spaceCode" class="badge bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{{ job.spaceCode }}</span>
+              <span v-if="jobSpaceLabel" class="badge bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">{{ jobSpaceLabel }}</span>
             </div>
           </div>
           <button
@@ -1074,14 +1447,47 @@ onMounted(async () => {
           >
             {{ t('knowledge.ingest.saveAsTemplate') }}
           </button>
+          <button
+            v-if="jobCanEdit && job"
+            type="button"
+            class="btn-ghost shrink-0 text-sm text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+            :disabled="Boolean(deletingJobId)"
+            @click="removeJob(job)"
+          >
+            <Loader2 v-if="deletingJobId === toEntityId(job.id)" class="mr-1 h-4 w-4 animate-spin" />
+            <Trash2 v-else class="mr-1 h-4 w-4" />
+            {{ t('knowledge.ingest.deleteJob') }}
+          </button>
         </div>
         <p v-if="job && !jobCanEdit" class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
           {{ t('knowledge.ingest.readOnlyHint') }}
         </p>
       </div>
 
+      <div
+        v-if="expressMode && jobCanEdit && job?.status !== 'committed'"
+        class="card border-brand-200 bg-brand-50/50 p-5 dark:border-brand-500/30 dark:bg-brand-500/10"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('knowledge.ingest.expressBannerTitle') }}</p>
+            <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">{{ t('knowledge.ingest.expressBannerHint') }}</p>
+          </div>
+          <button
+            type="button"
+            class="btn-primary shrink-0 text-sm"
+            :disabled="!canPublishExpress || publishingExpress"
+            @click="publishExpress"
+          >
+            <Loader2 v-if="publishingExpress" class="h-4 w-4 animate-spin" />
+            <Upload v-else class="h-4 w-4" />
+            {{ publishingExpress ? t('knowledge.ingest.expressPublishing') : t('knowledge.ingest.expressPublish') }}
+          </button>
+        </div>
+      </div>
+
       <!-- ① Plan -->
-      <div class="card p-5">
+      <div class="card flex flex-col p-5">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('knowledge.ingest.planSection') }}</h3>
           <div class="flex flex-wrap items-center gap-2">
@@ -1123,12 +1529,37 @@ onMounted(async () => {
         </p>
         <p v-else-if="job && !job.planVersion && !planText" class="mt-3 text-xs text-gray-400">{{ t('knowledge.ingest.planEmpty') }}</p>
         <p v-if="job?.planSource" class="mt-2 text-xs text-gray-400">{{ t('knowledge.ingest.planSource', { source: job.planSource }) }}</p>
+
+        <div v-if="!planJsonAdvanced" class="mt-3">
+          <IngestPlanCreateTable
+            v-if="planCreateRows.length"
+            v-model="planCreateRows"
+            :category-options="categoryOptions"
+            :category-tree="categoryTree"
+            :categories-loading="categoriesLoading"
+            :space-code="job?.spaceCode"
+            :readonly="!jobCanEdit"
+          />
+          <p v-else-if="planText.trim()" class="text-xs text-gray-400">{{ t('knowledge.ingest.planCreateEmpty') }}</p>
+        </div>
+
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="btn-ghost text-xs"
+            @click="togglePlanJsonAdvanced"
+          >
+            {{ planJsonAdvanced ? t('knowledge.ingest.planVisualMode') : t('knowledge.ingest.planJsonAdvanced') }}
+          </button>
+        </div>
+
         <textarea
+          v-show="planJsonAdvanced"
           v-model="planText"
-          class="field-input mt-3 min-h-[min(40vh,26rem)] resize-y font-mono text-xs leading-relaxed"
+          class="field-input kb-ingest-plan-editor mt-3"
           :placeholder="t('knowledge.ingest.planEditorPlaceholder')"
           spellcheck="false"
-          :disabled="!jobCanEdit"
+          :readonly="!jobCanEdit"
         />
         <div v-if="conflicts.length" class="mt-3 rounded-lg border border-amber-100 bg-amber-50/70 p-3 text-xs text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
           <p class="mb-1 font-medium">{{ t('knowledge.ingest.conflictsTitle') }}</p>
@@ -1202,11 +1633,13 @@ onMounted(async () => {
               @click="selectDraft(d)"
             >
               <div class="flex items-center justify-between gap-1">
-                <span class="truncate font-medium text-gray-800 dark:text-gray-100">{{ d.displaySlug }}</span>
+                <span class="truncate font-medium text-gray-800 dark:text-gray-100" :title="draftPathTooltip(d)">{{ d.displaySlug }}</span>
                 <span class="badge shrink-0" :class="approvalBadgeClass(d.approval)">{{ approvalLabel(d.approval) }}</span>
               </div>
-              <p class="mt-0.5 truncate text-gray-400">
-                {{ d.action === 'enrich' ? t('knowledge.ingest.enrichLabel') : t('knowledge.ingest.createLabel') }} · {{ d.kbType }}
+              <p class="mt-0.5 truncate text-gray-400" :title="d.slug">
+                {{ d.action === 'enrich' ? t('knowledge.ingest.enrichLabel') : t('knowledge.ingest.createLabel') }}
+                · {{ d.kbType }}
+                <span v-if="d.dirSlug"> · {{ d.dirSlug }}/</span>
               </p>
             </li>
           </ul>
@@ -1334,6 +1767,17 @@ onMounted(async () => {
               {{ t('knowledge.ingest.runLint') }}
             </button>
             <button
+              v-if="expressMode && canPublishExpress"
+              type="button"
+              class="btn-primary text-sm"
+              :disabled="publishingExpress"
+              @click="publishExpress"
+            >
+              <Loader2 v-if="publishingExpress" class="h-4 w-4 animate-spin" />
+              <Upload v-else class="h-4 w-4" />
+              {{ t('knowledge.ingest.expressPublish') }}
+            </button>
+            <button
               type="button"
               class="btn-ghost text-sm"
               :disabled="committing || !canCommit"
@@ -1359,6 +1803,27 @@ onMounted(async () => {
         <p v-if="commitHint && !canCommit" class="mt-2 rounded-md bg-amber-50/90 px-2.5 py-1.5 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
           {{ commitHint }}
         </p>
+
+        <div
+          v-if="approvedCommitPaths.length"
+          class="mt-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3 dark:border-white/5 dark:bg-white/[0.02]"
+        >
+          <p class="text-xs font-medium text-gray-700 dark:text-gray-200">{{ t('knowledge.ingest.commitPreviewTitle') }}</p>
+          <p class="mt-0.5 text-xs text-gray-400">{{ t('knowledge.ingest.commitPreviewHint', { root: wikiRootDir }) }}</p>
+          <ul class="mt-2 flex flex-col gap-1">
+            <li
+              v-for="item in approvedCommitPaths"
+              :key="item.slug"
+              class="flex flex-wrap items-baseline gap-x-2 font-mono text-[11px]"
+            >
+              <code class="rounded bg-white px-1.5 py-0.5 text-brand-700 dark:bg-white/5 dark:text-brand-300">{{ item.path }}</code>
+              <span class="text-gray-400">
+                {{ item.action === 'enrich' ? t('knowledge.ingest.enrichLabel') : t('knowledge.ingest.createLabel') }}
+                · {{ item.displaySlug }}
+              </span>
+            </li>
+          </ul>
+        </div>
 
         <p v-if="!allApproved && canCommit === false && !commitHint" class="mt-3 text-xs text-amber-600 dark:text-amber-400">{{ t('knowledge.ingest.lintNeedApprove') }}</p>
 

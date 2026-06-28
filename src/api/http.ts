@@ -7,8 +7,48 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 const DEFAULT_TIMEOUT_MS = 8_000
 
 /** Quote ≥16-digit JSON integers before parse — snowflake IDs exceed Number.MAX_SAFE_INTEGER. */
+function quoteBigIntegersOutsideStrings(input: string): string {
+  let out = ''
+  let i = 0
+  let inString = false
+  let escaped = false
+
+  while (i < input.length) {
+    const ch = input[i]!
+
+    if (inString) {
+      out += ch
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      i++
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+      out += ch
+      i++
+      continue
+    }
+
+    const rest = input.slice(i)
+    const m = rest.match(/^([:\[,]\s*)(-?\d{16,})(?=\s*[,}\]])/)
+    if (m) {
+      out += m[1] + '"' + m[2] + '"'
+      i += m[0].length
+      continue
+    }
+
+    out += ch
+    i++
+  }
+
+  return out
+}
+
 function parseResponseJson<T>(text: string): T {
-  const safe = text.replace(/([:\[,]\s*)(-?\d{16,})(?=\s*[,}\]])/g, '$1"$2"')
+  const safe = quoteBigIntegersOutsideStrings(text)
   return JSON.parse(safe) as T
 }
 
