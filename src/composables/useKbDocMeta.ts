@@ -22,7 +22,7 @@ export function useKbDocMeta(spaceId: Ref<string>) {
     loadError.value = ''
     try {
       const [catRes, tagRes] = await Promise.all([
-        getKbCategoryTreeApi(spaceId.value),
+        getKbCategoryTreeApi(spaceId.value, true),
         listKbTagsApi(spaceId.value),
       ])
       if (catRes.code !== API_SUCCESS_CODE || !catRes.data) {

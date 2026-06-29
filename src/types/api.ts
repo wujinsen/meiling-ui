@@ -66,4 +66,7 @@ export type LoginPayload = {
 }
 
 export const API_SUCCESS_CODE = 200
+
+/** Ingest commit/publish raw cluster gate — `data` is `KbIngestRawConflictVo`. */
+export const API_INGEST_RAW_CONFLICT_CODE = 10012
 export const API_TOKEN_INVALID_CODE = 10006

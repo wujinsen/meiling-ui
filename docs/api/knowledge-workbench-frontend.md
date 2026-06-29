@@ -193,15 +193,14 @@ export interface KbWorkflowHintVo {
 
 ### 8.3 raw 簇引用 / commit 门禁 / 模板降级（B3 / B4 / I3）
 
-**结论（2026-06-28，后端书面确认）**：
+**结论（2026-06-26 联调分支 `ci/kb-sync-multi-space-gate`）**：
 
 | 项 | 约定 |
 |----|------|
-| **B4 commit 门禁** | `POST .../commit` / `.../publish` 落盘前校验 raw **簇引用**：若 raw 已被**其它** wiki 页 `sources` 引用 → 业务失败（HTTP 200 + 非 200 `code`，或 4xx，以 [KNOWLEDGE_API.md commit 门禁](KNOWLEDGE_API.md#ingest-commit-门禁) 为准） |
-| **错误体** | **仅 `msg`/`message` 纯文本**；文案含冲突 **wiki slug** 与 **raw 相对路径**（人类可读，非独立 JSON 字段） |
-| **业务码（可选）** | `ingest.rawCoverage.blocked`（见 KNOWLEDGE_API · [ops §2.6](KNOWLEDGE_API.md#26-ingest-commit-门禁)）；前端可用码或 `message` 关键词判定簇引用 |
-| **I3 前端** | Toast + 详情 **`commitError` 红框**：上方固定引导（`rawCoverageBlocked` / `commitErrorHint`），下方 `<pre>` 展示后端 `message` 全文 |
-| **B3 模板降级** | Swagger 验证；LLM 不可用时用户可手动勾「模板入库」，**自动降级 UI 仍 P1 待办** |
+| **B4 commit 门禁** | `POST .../commit` / `.../publish` 落盘前校验 raw **簇引用** → 失败 **`code=10012`**（HTTP 200） |
+| **错误体** | `msg` + **`data: IngestRawConflictVo`**，`conflicts[]` 含 `path`、`wikiSlugs[]`、`coverage` |
+| **I3 前端** | Toast + 详情 **`commitError` 红框**：引导文案 + **冲突表格** + `<pre>` 展示 `msg` |
+| **B3 模板降级** | `useLlmGenerate=false` 时 raw **全文**入库；LLM 不可用时 `llmFallback=true` + `llmFallbackReason` → **Toast** |
 
 ### 8.4 Wiki 治理 script / auto-fix / merge（W1–W8  subset）
 
@@ -229,6 +228,7 @@ export interface KbWorkflowHintVo {
 
 | 日期 | 说明 |
 |------|------|
+| 2026-06-26 | §8.3 对齐 `10012` + `IngestRawConflictVo` + `llmFallback` Toast |
 | 2026-06-28 | §8.3 补 B4 commit 门禁（对齐 KNOWLEDGE_API · ops §2.6）；§7.3 B2/B4 标已结论 |
 | 2026-06-28 | §7.4 前端优先级；§8.2–§8.5 后端结论（接口不变） |
 | 2026-06-28 | 新增 §8 后端联调结论；§8.1 定 Express 列表为预览→详情 publish |

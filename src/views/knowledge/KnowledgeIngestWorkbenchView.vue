@@ -44,7 +44,7 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
 import { flattenKbCategoryTree } from '@/utils/kbCategoryTree'
-import { collectWorkflowNextSteps, isIngestRawClusterConflict } from '@/utils/ingestCommitError'
+import { collectWorkflowNextSteps, isIngestRawClusterConflict, parseIngestCommitFailure } from '@/utils/ingestCommitError'
 import {
   applyCategoryInference,
   buildCategoryIndex,
@@ -61,8 +61,10 @@ import type {
   KbRawCoverageFilter,
   KbRawCoverageItem,
   KbIngestDraft,
+  KbIngestGenerateResult,
   KbIngestJob,
   KbIngestLint,
+  KbIngestRawConflictItem,
   KbIngestTemplate,
   KbRawTreeNode,
   KbAccessibleSpace,
@@ -101,13 +103,13 @@ const rawCoverageLoading = ref(false)
 const selectedRaw = ref<Set<string>>(new Set())
 const formTopic = ref('')
 const formBatchNo = ref('')
-const formExpectTypes = ref('')
 const creating = ref(false)
 const expressStarting = ref(false)
 const expressProcessing = ref(false)
 const publishingExpress = ref(false)
 const expressSkeletonPlan = ref(true)
 const templateMode = ref(false)
+const templateModeActive = ref(false)
 
 const EXPRESS_PROGRESS_STEPS = ['create', 'plan', 'generate', 'lint', 'commit', 'sync'] as const satisfies readonly IngestExpressProgressStep[]
 const expressProgressStage = ref<IngestExpressProgressStep | null>(null)
@@ -549,7 +551,6 @@ async function createJob() {
       spaceId: selectedSpaceQueryId.value,
       topic: formTopic.value.trim(),
       batchNo: formBatchNo.value.trim() || undefined,
-      expectTypes: formExpectTypes.value.trim() || undefined,
       rawPaths: Array.from(selectedRaw.value),
     })
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
@@ -656,7 +657,6 @@ async function expressIngest() {
         spaceId: selectedSpaceQueryId.value,
         topic: formTopic.value.trim(),
         batchNo: formBatchNo.value.trim() || undefined,
-        expectTypes: formExpectTypes.value.trim() || undefined,
         rawPaths: Array.from(selectedRaw.value),
       },
       expressApiOpts(),
@@ -673,6 +673,7 @@ async function expressIngest() {
       throw new Error(t('knowledge.ingest.expressPreparePartial', { failed: gen.failed }))
     }
 
+    applyGenerateResultMeta(gen ?? undefined)
     finishExpressProgress()
     selectedRaw.value = new Set()
     await loadJobs()
@@ -745,11 +746,36 @@ const expressPublishSummary = ref<{ created: number; updated: number; syncOk?: b
 const expressPublishCompleted = ref(false)
 const commitErrorMessage = ref('')
 const commitErrorCode = ref<number | undefined>()
-const commitErrorIsCluster = computed(() => isIngestRawClusterConflict(commitErrorMessage.value, commitErrorCode.value))
+const commitErrorConflicts = ref<KbIngestRawConflictItem[]>([])
+const commitErrorIsCluster = computed(
+  () =>
+    commitErrorConflicts.value.length > 0 ||
+    isIngestRawClusterConflict(commitErrorMessage.value, commitErrorCode.value),
+)
 
 function clearCommitError() {
   commitErrorMessage.value = ''
   commitErrorCode.value = undefined
+  commitErrorConflicts.value = []
+}
+
+function applyCommitFailureFromResponse(res: { code: number; msg?: string; data?: unknown }) {
+  const failure = parseIngestCommitFailure(res)
+  commitErrorMessage.value = failure.message
+  commitErrorCode.value = failure.apiCode
+  commitErrorConflicts.value = failure.conflicts
+}
+
+function applyGenerateResultMeta(result?: Pick<KbIngestGenerateResult, 'templateMode' | 'llmFallback' | 'llmFallbackReason'>) {
+  if (!result) return
+  if (result.templateMode) templateModeActive.value = true
+  if (result.llmFallback) {
+    const reason = result.llmFallbackReason?.trim()
+    showToast(
+      'success',
+      reason ? t('knowledge.ingest.llmFallbackToastWithReason', { reason }) : t('knowledge.ingest.llmFallbackToast'),
+    )
+  }
 }
 
 const lastGenerateStats = ref<{ generated: number; skipped: number; failed: number; total: number } | null>(null)
@@ -1091,8 +1117,9 @@ async function generateDrafts(resume = false) {
   }
   draftsGenerating.value = true
   try {
-    const res = await generateKbIngestDraftsApi(jobId.value, { resume })
+    const res = await generateKbIngestDraftsApi(jobId.value, { resume, useLlmGenerate: !templateMode.value })
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+    applyGenerateResultMeta(res.data)
     drafts.value = res.data.drafts ?? []
     lastGenerateStats.value = {
       generated: res.data.generated ?? 0,
@@ -1161,7 +1188,7 @@ async function regenerateDraft() {
   if (!jobId.value || !d || draftRegenerating.value) return
   draftRegenerating.value = true
   try {
-    const res = await regenerateKbIngestDraftApi(jobId.value, d.slug)
+    const res = await regenerateKbIngestDraftApi(jobId.value, d.slug, !templateMode.value)
     if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
     replaceDraft(res.data)
     draftEditContent.value = res.data.draft ?? ''
@@ -1228,7 +1255,7 @@ async function publishExpress() {
     const res = await publishKbIngestApi(jobId.value, true, true)
     setExpressProgressStage('sync')
     if (res.code !== API_SUCCESS_CODE || !res.data) {
-      commitErrorCode.value = res.code
+      applyCommitFailureFromResponse(res)
       throw new Error(res.msg || t('knowledge.ingest.opFailed'))
     }
     lint.value = res.data.lint
@@ -1265,7 +1292,7 @@ async function publishExpress() {
     finishExpressProgress()
   } catch (e) {
     const msg = e instanceof Error ? e.message : t('knowledge.ingest.opFailed')
-    commitErrorMessage.value = msg
+    if (!commitErrorMessage.value) commitErrorMessage.value = msg
     resetExpressProgress()
     showToast('error', msg)
   } finally {
@@ -1292,7 +1319,7 @@ async function commit(sync: boolean) {
   try {
     const res = await commitKbIngestApi(jobId.value, sync)
     if (res.code !== API_SUCCESS_CODE || !res.data) {
-      commitErrorCode.value = res.code
+      applyCommitFailureFromResponse(res)
       throw new Error(res.msg || t('knowledge.ingest.opFailed'))
     }
     showToast('success', t('knowledge.ingest.commitSuccess', { created: res.data.created, updated: res.data.updated }))
@@ -1304,7 +1331,7 @@ async function commit(sync: boolean) {
     await loadJob()
   } catch (e) {
     const msg = e instanceof Error ? e.message : t('knowledge.ingest.opFailed')
-    commitErrorMessage.value = msg
+    if (!commitErrorMessage.value) commitErrorMessage.value = msg
     showToast('error', msg)
   } finally {
     committing.value = false
@@ -1424,16 +1451,10 @@ onUnmounted(() => {
               <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.topic') }}</span>
               <input v-model="formTopic" type="text" class="field-input" :placeholder="t('knowledge.ingest.topicPlaceholder')" />
             </label>
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label class="flex flex-col gap-1">
-                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.batchNo') }}</span>
-                <input v-model="formBatchNo" type="text" class="field-input" :placeholder="t('knowledge.ingest.batchNoPlaceholder')" />
-              </label>
-              <label class="flex flex-col gap-1">
-                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.expectTypes') }}</span>
-                <input v-model="formExpectTypes" type="text" class="field-input" :placeholder="t('knowledge.ingest.expectTypesPlaceholder')" />
-              </label>
-            </div>
+            <label class="flex flex-col gap-1">
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.batchNo') }}</span>
+              <input v-model="formBatchNo" type="text" class="field-input" :placeholder="t('knowledge.ingest.batchNoPlaceholder')" />
+            </label>
           </div>
 
           <div class="mt-4 flex flex-wrap items-center justify-between gap-2">
@@ -1792,14 +1813,42 @@ onUnmounted(() => {
           </div>
         </div>
         <div
-          v-if="commitErrorMessage && job?.status !== 'committed'"
+          v-if="(commitErrorMessage || commitErrorConflicts.length) && job?.status !== 'committed'"
           class="mt-3 rounded-lg border border-rose-200 bg-rose-50/90 px-3 py-3 dark:border-rose-500/30 dark:bg-rose-500/10"
         >
           <p class="text-sm font-semibold text-rose-800 dark:text-rose-200">{{ t('knowledge.ingest.commitErrorTitle') }}</p>
           <p class="mt-1 text-xs text-rose-700 dark:text-rose-300">
             {{ commitErrorIsCluster ? t('knowledge.ingest.rawCoverageBlocked') : t('knowledge.ingest.commitErrorHint') }}
           </p>
-          <pre class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-rose-900 dark:text-rose-100">{{ commitErrorMessage }}</pre>
+          <div
+            v-if="commitErrorConflicts.length"
+            class="mt-2 overflow-x-auto rounded border border-rose-200/80 dark:border-rose-500/30"
+          >
+            <table class="w-full min-w-[20rem] text-left text-[11px]">
+              <thead class="bg-rose-100/60 text-rose-800 dark:bg-rose-500/15 dark:text-rose-200">
+                <tr>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.ingest.commitConflictPath') }}</th>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.ingest.commitConflictWikiSlugs') }}</th>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.ingest.commitConflictCoverage') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(c, i) in commitErrorConflicts"
+                  :key="`${c.path ?? i}-${i}`"
+                  class="border-t border-rose-100 dark:border-rose-500/20"
+                >
+                  <td class="whitespace-pre-wrap break-all px-2 py-1 font-mono text-rose-900 dark:text-rose-100">{{ c.path ?? '—' }}</td>
+                  <td class="whitespace-pre-wrap break-all px-2 py-1 text-rose-900 dark:text-rose-100">{{ c.wikiSlugs?.join(', ') ?? '—' }}</td>
+                  <td class="whitespace-pre-wrap break-all px-2 py-1 text-rose-900 dark:text-rose-100">{{ c.coverage ?? '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre
+            v-if="commitErrorMessage"
+            class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-rose-900 dark:text-rose-100"
+          >{{ commitErrorMessage }}</pre>
         </div>
         <p
           v-if="expressPipelineBusy && !expressProgressActive && job?.status !== 'committed'"
@@ -1921,6 +1970,16 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <AppCheckbox v-model="templateMode" variant="option" :disabled="!jobCanEdit">
+            {{ t('knowledge.ingest.templateMode') }}
+          </AppCheckbox>
+          <p v-if="templateMode" class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.templateModeHint') }}</p>
+          <p v-if="templateModeActive" class="text-xs font-medium text-amber-700 dark:text-amber-300">
+            {{ t('knowledge.ingest.templateModeActive') }}
+          </p>
+        </div>
+
         <p v-if="generateDraftsHint" class="mt-2 rounded-md bg-amber-50/90 px-2.5 py-1.5 text-xs leading-relaxed text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
           {{ generateDraftsHint }}
         </p>
@@ -1961,8 +2020,8 @@ onUnmounted(() => {
               </div>
               <p class="mt-0.5 truncate text-gray-400" :title="d.slug">
                 {{ d.action === 'enrich' ? t('knowledge.ingest.enrichLabel') : t('knowledge.ingest.createLabel') }}
-                · {{ d.kbType }}
-                <span v-if="d.dirSlug"> · {{ d.dirSlug }}/</span>
+                <span v-if="d.categoryName"> · {{ d.categoryName }}</span>
+                <span v-else-if="d.dirSlug"> · {{ d.dirSlug }}/</span>
               </p>
             </li>
           </ul>
@@ -2128,14 +2187,42 @@ onUnmounted(() => {
         </p>
 
         <div
-          v-if="commitErrorMessage"
+          v-if="commitErrorMessage || commitErrorConflicts.length"
           class="mt-3 rounded-lg border border-rose-200 bg-rose-50/90 px-3 py-3 dark:border-rose-500/30 dark:bg-rose-500/10"
         >
           <p class="text-sm font-semibold text-rose-800 dark:text-rose-200">{{ t('knowledge.ingest.commitErrorTitle') }}</p>
           <p class="mt-1 text-xs text-rose-700 dark:text-rose-300">
             {{ commitErrorIsCluster ? t('knowledge.ingest.rawCoverageBlocked') : t('knowledge.ingest.commitErrorHint') }}
           </p>
-          <pre class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-rose-900 dark:text-rose-100">{{ commitErrorMessage }}</pre>
+          <div
+            v-if="commitErrorConflicts.length"
+            class="mt-2 overflow-x-auto rounded border border-rose-200/80 dark:border-rose-500/30"
+          >
+            <table class="w-full min-w-[20rem] text-left text-[11px]">
+              <thead class="bg-rose-100/60 text-rose-800 dark:bg-rose-500/15 dark:text-rose-200">
+                <tr>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.ingest.commitConflictPath') }}</th>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.ingest.commitConflictWikiSlugs') }}</th>
+                  <th class="px-2 py-1.5 font-medium">{{ t('knowledge.ingest.commitConflictCoverage') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(c, i) in commitErrorConflicts"
+                  :key="`${c.path ?? i}-${i}`"
+                  class="border-t border-rose-100 dark:border-rose-500/20"
+                >
+                  <td class="whitespace-pre-wrap break-all px-2 py-1 font-mono text-rose-900 dark:text-rose-100">{{ c.path ?? '—' }}</td>
+                  <td class="whitespace-pre-wrap break-all px-2 py-1 text-rose-900 dark:text-rose-100">{{ c.wikiSlugs?.join(', ') ?? '—' }}</td>
+                  <td class="whitespace-pre-wrap break-all px-2 py-1 text-rose-900 dark:text-rose-100">{{ c.coverage ?? '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <pre
+            v-if="commitErrorMessage"
+            class="mt-2 max-h-32 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-rose-900 dark:text-rose-100"
+          >{{ commitErrorMessage }}</pre>
         </div>
 
         <KbWorkflowNextSteps v-if="workflowNextSteps.length" class="mt-3" :steps="workflowNextSteps" />

@@ -19,7 +19,8 @@ export type KbIndexItem = {
 }
 
 export type KbIndexGroup = {
-  type: KbType
+  /** category 模式下为 categoryId 或 `uncategorized`；legacy type 模式为 kb_type */
+  type: string
   label: string
   /** meta 模式下的分组文档数 */
   count?: number
@@ -27,7 +28,7 @@ export type KbIndexGroup = {
 }
 
 export type KbIndexItemsPage = {
-  type: KbType
+  type: string
   label: string
   total: number
   pageNum: number
@@ -36,7 +37,7 @@ export type KbIndexItemsPage = {
 }
 
 export type KbIndexLocate = {
-  type: KbType
+  type: string
   label: string
   item: KbIndexItem
 }
@@ -547,6 +548,7 @@ export type KbDocumentListItem = {
   title: string
   summary?: string
   kbType?: KbType
+  categoryName?: string
   domain?: string
   source?: 'kb' | 'manual' | string
   status?: KbDocStatus
@@ -560,6 +562,8 @@ export type KbDocumentSearchParams = {
   spaceId?: number | string
   spaceIds?: Array<number | string>
   categoryId?: number | string
+  /** 仅未分类文档（与 categoryId 互斥） */
+  uncategorizedOnly?: boolean
   keyword?: string
   status?: KbDocStatus | ''
   tagId?: number | string
@@ -907,6 +911,17 @@ export type KbIngestDraft = {
   categoryName?: string
 }
 
+/** commit/publish 簇引用冲突（code=10012） */
+export type KbIngestRawConflictItem = {
+  path?: string
+  wikiSlugs?: string[]
+  coverage?: string
+}
+
+export type KbIngestRawConflictVo = {
+  conflicts?: KbIngestRawConflictItem[]
+}
+
 /** POST /kb/ingest/jobs/{id}/generate 结果（T15e 断点续跑） */
 export type KbIngestGenerateResult = {
   jobId?: number | string
@@ -916,6 +931,9 @@ export type KbIngestGenerateResult = {
   failed?: number
   resume?: boolean
   templateMode?: boolean
+  /** useLlmGenerate=true 且 LLM 不可用时后端自动降级模板 */
+  llmFallback?: boolean
+  llmFallbackReason?: string
   drafts: KbIngestDraft[]
 }
 

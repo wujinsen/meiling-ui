@@ -90,6 +90,7 @@ function buildKbDocumentSearchQuery(params: KbDocumentSearchParams) {
     if (sid != null && sid !== '') qs.append('spaceIds', String(sid))
   }
   if (params.categoryId != null) qs.set('categoryId', String(params.categoryId))
+  if (params.uncategorizedOnly === true) qs.set('uncategorizedOnly', 'true')
   if (params.keyword?.trim()) qs.set('keyword', params.keyword.trim())
   if (params.status !== undefined && params.status !== '') qs.set('status', String(params.status))
   if (params.tagId != null) qs.set('tagId', String(params.tagId))
@@ -278,25 +279,25 @@ const MOCK_INDEX: KbIndex = {
   total: MOCK_PAGES.length,
   groups: [
     {
-      type: 'guide',
-      label: '操作指导',
+      type: '900000000000000101',
+      label: '指南',
       count: MOCK_PAGES.filter((p) => p.kbType === 'guide').length,
       items: MOCK_PAGES.filter((p) => p.kbType === 'guide').map(toIndexItem),
     },
     {
-      type: 'service',
+      type: '900000000000000102',
       label: '微服务',
       count: MOCK_PAGES.filter((p) => p.kbType === 'service').length,
       items: MOCK_PAGES.filter((p) => p.kbType === 'service').map(toIndexItem),
     },
     {
-      type: 'concept',
+      type: '900000000000000103',
       label: '概念',
       count: MOCK_PAGES.filter((p) => p.kbType === 'concept').length,
       items: MOCK_PAGES.filter((p) => p.kbType === 'concept').map(toIndexItem),
     },
     {
-      type: 'interview',
+      type: '900000000000000104',
       label: '面试题',
       count: MOCK_PAGES.filter((p) => p.kbType === 'interview').length,
       items: MOCK_PAGES.filter((p) => p.kbType === 'interview').map(toIndexItem),
@@ -573,22 +574,21 @@ export async function batchRemoveKbSpaceMembersApi(data: import('@/types/knowled
 // 2. 浏览
 // ---------------------------------------------------------------------------
 
-/** 目录 meta（按 groupBy=type|category 分组计数，不含 items） */
-export async function getKbIndexApi(spaceId?: number | string, groupBy: 'type' | 'category' = 'type') {
+/** 目录 meta（默认按分类分组，不含 items） */
+export async function getKbIndexApi(spaceId?: number | string) {
   if (USE_MOCK) {
     await delay(220)
     return ok<KbIndex>(mockIndexMeta())
   }
-  return request<KbIndex>(`${KB_BASE}/index${buildQuery({ spaceId, groupBy })}`, { method: 'GET' })
+  return request<KbIndex>(`${KB_BASE}/index${buildQuery({ spaceId })}`, { method: 'GET' })
 }
 
-/** 目录分组条目分页（key 为 kb_type 或 categoryId/uncategorized） */
+/** 目录分组条目分页（key 为 categoryId / uncategorized） */
 export async function getKbIndexItemsApi(
   key: string,
   spaceId?: number | string,
   pageNum = 1,
   pageSize = 50,
-  groupBy: 'type' | 'category' = 'type',
 ) {
   if (USE_MOCK) {
     await delay(120)
@@ -605,13 +605,13 @@ export async function getKbIndexItemsApi(
     })
   }
   return request<import('@/types/knowledge').KbIndexItemsPage>(
-    `${KB_BASE}/index/items${buildQuery({ spaceId, groupBy, key, pageNum, pageSize })}`,
+    `${KB_BASE}/index/items${buildQuery({ spaceId, key, pageNum, pageSize })}`,
     { method: 'GET' },
   )
 }
 
-/** 目录搜索（服务端过滤） */
-export async function searchKbIndexApi(q: string, spaceId?: number | string, limit = 200, groupBy: 'type' | 'category' = 'type') {
+/** 目录搜索（服务端过滤，结果按分类分组） */
+export async function searchKbIndexApi(q: string, spaceId?: number | string, limit = 200) {
   if (USE_MOCK) {
     await delay(160)
     const kw = q.trim().toLowerCase()
@@ -629,11 +629,11 @@ export async function searchKbIndexApi(q: string, spaceId?: number | string, lim
     const total = groups.reduce((s, g) => s + g.items.length, 0)
     return ok<KbIndex>({ total, groups })
   }
-  return request<KbIndex>(`${KB_BASE}/index/search${buildQuery({ spaceId, q, limit, groupBy })}`, { method: 'GET' })
+  return request<KbIndex>(`${KB_BASE}/index/search${buildQuery({ spaceId, q, limit })}`, { method: 'GET' })
 }
 
-/** 按 slug 定位目录分组 */
-export async function locateKbIndexApi(slug: string, spaceId?: number | string, groupBy: 'type' | 'category' = 'type') {
+/** 按 slug 定位目录分组（type 字段为 categoryId 或 uncategorized） */
+export async function locateKbIndexApi(slug: string, spaceId?: number | string) {
   if (USE_MOCK) {
     await delay(80)
     for (const g of MOCK_INDEX.groups) {
@@ -643,7 +643,7 @@ export async function locateKbIndexApi(slug: string, spaceId?: number | string, 
     return ok<import('@/types/knowledge').KbIndexLocate | undefined>(undefined)
   }
   return request<import('@/types/knowledge').KbIndexLocate>(
-    `${KB_BASE}/index/locate${buildQuery({ spaceId, slug, groupBy })}`,
+    `${KB_BASE}/index/locate${buildQuery({ spaceId, slug })}`,
     { method: 'GET' },
   )
 }
