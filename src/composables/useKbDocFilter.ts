@@ -32,6 +32,8 @@ export function useKbDocFilter(
   const indexTotal = ref(0)
   const indexLoading = ref(false)
 
+  let suppressFacetWatch = false
+
   const categoryChips = computed((): KbCategoryChip[] =>
     categoryGroups.value.map((g) => ({
       type: g.type,
@@ -46,6 +48,30 @@ export function useKbDocFilter(
     return applyKbSpaceScopeParams({}, scopeSpaceIds.value)
   }
 
+  /** v2：体裁 chip 随当前分类筛选联动 */
+  function kbTypeFacetParams(): KbBrowseScopeParams & {
+    categoryId?: string
+    uncategorizedOnly?: boolean
+  } {
+    const params: KbBrowseScopeParams & {
+      categoryId?: string
+      uncategorizedOnly?: boolean
+    } = { ...browseScopeParams() }
+    if (categoryFilter.value === 'uncategorized') {
+      params.uncategorizedOnly = true
+    } else if (categoryFilter.value !== 'all') {
+      params.categoryId = categoryFilter.value
+    }
+    return params
+  }
+
+  /** v2：分类 chip 随当前体裁筛选联动 */
+  function categoryFacetParams(): KbBrowseScopeParams {
+    const params = browseScopeParams()
+    if (kbTypeFilter.value) params.kbType = kbTypeFilter.value
+    return params
+  }
+
   async function loadKbTypeChips() {
     if (options.skipWhenEmpty && scopeSpaceIds.value.length === 0) {
       kbTypeChips.value = []
@@ -53,7 +79,7 @@ export function useKbDocFilter(
     }
     kbTypeLoading.value = true
     try {
-      const res = await getKbIndexTypesApi(browseScopeParams())
+      const res = await getKbIndexTypesApi(kbTypeFacetParams())
       if (res.code === API_SUCCESS_CODE && res.data) {
         kbTypeChips.value = res.data.items
         if (kbTypeFilter.value && !res.data.items.some((c) => c.kbType === kbTypeFilter.value)) {
@@ -77,7 +103,7 @@ export function useKbDocFilter(
     }
     indexLoading.value = true
     try {
-      const res = await getKbIndexApi(browseScopeParams())
+      const res = await getKbIndexApi(categoryFacetParams())
       if (res.code === API_SUCCESS_CODE && res.data) {
         categoryGroups.value = res.data.groups
         indexTotal.value = res.data.total ?? 0
@@ -121,14 +147,26 @@ export function useKbDocFilter(
   }
 
   function resetFilters() {
+    suppressFacetWatch = true
     kbTypeFilter.value = null
     categoryFilter.value = 'all'
+    suppressFacetWatch = false
   }
 
   watch(scopeSpaceIds, () => {
     resetFilters()
     void reloadFilters()
   }, { immediate: true, deep: true })
+
+  watch(categoryFilter, () => {
+    if (suppressFacetWatch) return
+    void loadKbTypeChips()
+  })
+
+  watch(kbTypeFilter, () => {
+    if (suppressFacetWatch) return
+    void loadCategoryIndex()
+  })
 
   return {
     kbTypeFilter,

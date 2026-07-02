@@ -119,6 +119,7 @@ function buildKbBrowseScopeQuery(
   }
   if (params?.categoryId != null) qs.set('categoryId', String(params.categoryId))
   if (params?.uncategorizedOnly === true) qs.set('uncategorizedOnly', 'true')
+  if (params?.kbType?.trim()) qs.set('kbType', params.kbType.trim())
   if (params?.groupBy) qs.set('groupBy', String(params.groupBy))
   if (params?.key) qs.set('key', String(params.key))
   if (params?.slug) qs.set('slug', String(params.slug))

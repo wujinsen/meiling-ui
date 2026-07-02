@@ -71,6 +71,8 @@ export type KbIndex = {
 export type KbBrowseScopeParams = {
   spaceId?: number | string
   spaceIds?: Array<number | string>
+  /** v2：叠加体裁过滤分类 facet 计数 */
+  kbType?: string
 }
 
 export type KbLinkRelation = 'links_to' | 'related' | 'depends_on' | 'same_tag' | string
