@@ -6,16 +6,22 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import { getKbSyncLogsApi, getKbSyncStatusApi, triggerKbSyncApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { assertAction, guardActionWithRefresh } from '@/composables/useActionPermissions'
+import { confirm } from '@/composables/useConfirm'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { KbSyncLog, KbSyncStatus } from '@/types/knowledge'
 import { PERM } from '@/constants/permissions'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
+import { kbSyncTargetLabel, resolveKbSyncParams } from '@/utils/kbSyncScope'
 
 const { t } = useI18n()
 const { selectedSpace, kbQuerySpaceId, kbSpaceQuery, ensureSpacesLoaded } = useKbSpace()
 
 const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
+
+const syncParams = computed(() => resolveKbSyncParams(kbSpaceQuery(), selectedSpace.value))
+const syncTargetLabel = computed(() => kbSyncTargetLabel(selectedSpace.value))
+const canTrigger = computed(() => canSync.value && syncParams.value != null)
 
 const statusLoading = ref(false)
 const logsLoading = ref(false)
@@ -92,22 +98,33 @@ async function refreshAll() {
 
 const busy = computed(() => statusLoading.value || logsLoading.value)
 
-async function trigger() {
+async function trigger(options?: { skipConfirm?: boolean }) {
   const allowed =
     assertAction(PERM.KB_SYNC_TRIGGER) ||
     (await guardActionWithRefresh(PERM.KB_SYNC_TRIGGER))
   if (!allowed) return
+
+  const params = syncParams.value
+  if (!params) {
+    showToast('error', t('knowledge.sync.needSpace'))
+    return
+  }
+
+  if (!options?.skipConfirm) {
+    const label = syncTargetLabel.value || params.spaceCode || params.spaceId || '-'
+    const ok = await confirm({
+      title: t('knowledge.sync.confirmTitle'),
+      message: t('knowledge.sync.confirmMessage', { target: label }),
+      confirmText: t('knowledge.sync.trigger'),
+      danger: true,
+    })
+    if (!ok) return
+  }
+
   triggering.value = true
   lastResult.value = null
   showRawOutput.value = false
   try {
-    const scope = kbSpaceQuery()
-    const params: { spaceId?: number | string; spaceCode?: string } = {}
-    if (scope.spaceId != null) params.spaceId = scope.spaceId
-    else if (scope.spaceCode) params.spaceCode = scope.spaceCode
-    else if (selectedSpace.value?.spaceCode) params.spaceCode = selectedSpace.value.spaceCode
-    else params.spaceCode = 'enterprise-kb'
-
     const res = await triggerKbSyncApi(params)
     if (res.code === API_SUCCESS_CODE && res.data) {
       lastResult.value = { success: res.data.success, output: res.data.outputTail ?? '' }
@@ -137,14 +154,39 @@ watch([pageNum, pageSize], () => loadLogs())
 watch(() => kbQuerySpaceId(), () => {
   lastResult.value = null
   showRawOutput.value = false
+  pageNum.value = 1
+  void refreshAll()
 })
 
-defineExpose({ refreshAll, trigger, busy, triggering, canSync })
+defineExpose({ refreshAll, trigger, busy, triggering, canSync, canTrigger })
 </script>
 
 <template>
   <div class="space-y-4">
     <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('knowledge.sync.subtitle') }}</p>
+
+    <div
+      class="rounded-xl border px-4 py-3"
+      :class="canTrigger
+        ? 'border-brand-200 bg-brand-50/80 dark:border-brand-500/30 dark:bg-brand-500/10'
+        : 'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10'"
+    >
+      <p class="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+        {{ t('knowledge.sync.targetSpace') }}
+      </p>
+      <p
+        v-if="canTrigger"
+        class="mt-1 text-base font-semibold text-gray-900 dark:text-white"
+      >
+        {{ syncTargetLabel }}
+      </p>
+      <p v-else class="mt-1 text-sm text-amber-800 dark:text-amber-200">
+        {{ t('knowledge.sync.needSpace') }}
+      </p>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {{ t('knowledge.sync.targetSpaceHint') }}
+      </p>
+    </div>
 
     <div v-if="!canSync" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
       {{ t('knowledge.sync.noPerm') }}

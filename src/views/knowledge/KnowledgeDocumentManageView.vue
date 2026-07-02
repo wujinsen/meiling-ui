@@ -8,14 +8,16 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbCategoryManagePanel from '@/components/knowledge/KbCategoryManagePanel.vue'
-import KbDocCategoryTree, { type KbDocCategoryFilter } from '@/components/knowledge/KbDocCategoryTree.vue'
+import KbCategorySelect from '@/components/knowledge/KbCategorySelect.vue'
+import KbDocFilterTabs from '@/components/knowledge/KbDocFilterTabs.vue'
 import KbDocumentCreateModal from '@/components/knowledge/KbDocumentCreateModal.vue'
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
-import KbCategorySelect from '@/components/knowledge/KbCategorySelect.vue'
 import KbTagManagePanel from '@/components/knowledge/KbTagManagePanel.vue'
-import { getKbDocumentApi, getKbIndexApi, moveKbDocumentApi, searchKbDocumentsApi } from '@/api/knowledge'
+import { getKbDocumentApi, moveKbDocumentApi, searchKbDocumentsApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
+import { useKbDocFilter, type KbCategoryFilter } from '@/composables/useKbDocFilter'
 import { useKbDocMeta } from '@/composables/useKbDocMeta'
+import { useKbMetaKbTypes } from '@/composables/useKbMetaKbTypes'
 import { assertAction, guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -50,10 +52,22 @@ const query = reactive({
   tagId: '',
 })
 
-const categoryFilter = ref<KbDocCategoryFilter>('all')
-const uncategorizedCount = ref<number | undefined>()
+const {
+  kbTypeFilter,
+  kbTypeChips,
+  kbTypeLoading,
+  categoryChips,
+  categoryFilter,
+  indexLoading,
+  applySearchParams,
+  selectKbType,
+  selectCategory,
+  resetFilters,
+  reloadFilters,
+} = useKbDocFilter(docSpaceId)
 
 const { categories, flatCategories, tags, loading: metaLoading, reload: reloadMeta } = useKbDocMeta(docSpaceId)
+const { kbTypeLabel, ensureLoaded: ensureKbTypeLabels } = useKbMetaKbTypes()
 
 const activeTab = ref<'documents' | 'categories' | 'tags'>('documents')
 
@@ -67,16 +81,13 @@ const fillViewport = computed(() => activeTab.value === 'tags' || activeTab.valu
 
 function onTaxonomyChanged() {
   void reloadMeta()
-  void loadUncategorizedCount()
+  void reloadFilters()
 }
 
 function switchTaxTab(tab: 'documents' | 'categories' | 'tags') {
   activeTab.value = tab
 }
 
-const showCategoryManageLink = computed(
-  () => canEditCurrentSpace.value && !metaLoading.value && flatCategories.value.length === 0,
-)
 const showTagManageLink = computed(
   () => canEditCurrentSpace.value && !metaLoading.value && tags.value.length === 0,
 )
@@ -125,39 +136,20 @@ function categoryLabel(row: KbDocumentListItem): string {
   return findKbCategoryName(categories.value, id) ?? t('knowledge.docManage.categoryNone')
 }
 
-async function loadUncategorizedCount() {
-  if (!docSpaceId.value) {
-    uncategorizedCount.value = undefined
-    return
-  }
-  try {
-    const res = await getKbIndexApi(docSpaceId.value)
-    if (res.code === API_SUCCESS_CODE && res.data) {
-      const g = res.data.groups.find((x) => x.type === 'uncategorized')
-      uncategorizedCount.value = g?.count
-    }
-  } catch {
-    uncategorizedCount.value = undefined
-  }
-}
-
 async function loadList() {
   if (!docSpaceId.value) return
   loading.value = true
   try {
-    const uncategorizedOnly = categoryFilter.value === 'uncategorized'
-    const res = await searchKbDocumentsApi({
+    const params = applySearchParams({
       spaceId: docSpaceId.value,
       source: 'kb',
       keyword: query.keyword.trim() || undefined,
       status: query.status === '' ? '' : query.status,
-      categoryId:
-        !uncategorizedOnly && categoryFilter.value !== 'all' ? categoryFilter.value : undefined,
-      uncategorizedOnly,
       tagId: query.tagId || undefined,
       pageNum: query.pageNum,
       pageSize: query.pageSize,
     })
+    const res = await searchKbDocumentsApi(params)
     if (res.code !== API_SUCCESS_CODE || !res.data) {
       throw new Error(res.msg || t('knowledge.docManage.loadFailed'))
     }
@@ -178,13 +170,18 @@ function search() {
 function resetQuery() {
   query.keyword = ''
   query.status = 1
-  categoryFilter.value = 'all'
+  resetFilters()
   query.tagId = ''
   search()
 }
 
-function onCategoryFilterSelect(value: KbDocCategoryFilter) {
-  categoryFilter.value = value
+function onKbTypeFilterSelect(value: string | null) {
+  selectKbType(value)
+  search()
+}
+
+function onCategoryFilterSelect(value: KbCategoryFilter) {
+  selectCategory(value)
   search()
 }
 
@@ -279,8 +276,8 @@ async function redirectLegacyEditQuery() {
 
 onMounted(async () => {
   await ensureSpacesLoaded()
+  void ensureKbTypeLabels()
   initDocSpace()
-  void loadUncategorizedCount()
   redirectLegacyEditQuery()
 })
 
@@ -288,9 +285,9 @@ watch(editableSpaces, () => initDocSpace(), { deep: true })
 
 watch(docSpaceId, (id) => {
   if (id) setSelectedSpaceId(id)
-  categoryFilter.value = 'all'
+  resetFilters()
   query.tagId = ''
-  void loadUncategorizedCount()
+  void reloadFilters()
   if (query.pageNum === 1) void loadList()
   else query.pageNum = 1
 })
@@ -329,27 +326,21 @@ watch(
       </p>
 
       <template v-if="activeTab === 'documents'">
-      <div class="flex flex-col gap-4 xl:flex-row xl:items-start">
-        <aside class="card w-full shrink-0 p-4 xl:w-[15rem] xl:sticky xl:top-6">
-          <KbDocCategoryTree
-            :categories="categories"
-            :loading="metaLoading"
-            :selected="categoryFilter"
-            :uncategorized-count="uncategorizedCount"
-            @select="onCategoryFilterSelect"
-          />
-          <button
-            v-if="showCategoryManageLink"
-            type="button"
-            class="mt-3 w-full text-left text-xs text-brand-600 hover:underline dark:text-brand-300"
-            @click="switchTaxTab('categories')"
-          >
-            {{ t('knowledge.taxManage.manageCategories') }}
-          </button>
-        </aside>
-
-        <div class="min-w-0 flex-1 space-y-4">
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="card p-4 space-y-4">
+        <KbDocFilterTabs
+          layout="chips"
+          show-both-rows
+          :kb-type-chips="kbTypeChips"
+          :kb-type-filter="kbTypeFilter"
+          :kb-type-loading="kbTypeLoading"
+          :category-chips="categoryChips"
+          :category-filter="categoryFilter"
+          :category-loading="indexLoading"
+          @update:kb-type-filter="onKbTypeFilterSelect"
+          @update:category-filter="onCategoryFilterSelect"
+          @clear="search"
+        />
+        <div class="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4 dark:border-white/5">
         <form class="flex min-w-0 flex-1 flex-wrap items-center gap-2" @submit.prevent="search">
           <div class="relative min-w-[12rem] flex-1">
             <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -391,6 +382,7 @@ watch(
           <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
           <RefreshCw v-else class="h-4 w-4" />
         </button>
+        </div>
       </div>
 
       <div class="card p-5">
@@ -405,6 +397,7 @@ watch(
                 <th>{{ t('knowledge.docManage.colTitle') }}</th>
                 <th>Slug</th>
                 <th>{{ t('knowledge.docManage.colCategory') }}</th>
+                <th>{{ t('knowledge.docManage.colKbType') }}</th>
                 <th>{{ t('knowledge.docManage.colStatus') }}</th>
                 <th>{{ t('knowledge.docManage.colUpdated') }}</th>
                 <th class="data-table-sticky-end text-right">{{ t('knowledge.docManage.colActions') }}</th>
@@ -412,10 +405,10 @@ watch(
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="6" class="px-4 py-12 text-center text-gray-400">{{ t('common.loading') }}</td>
+                <td colspan="7" class="px-4 py-12 text-center text-gray-400">{{ t('common.loading') }}</td>
               </tr>
               <tr v-else-if="!list.length">
-                <td colspan="6" class="px-4 py-12 text-center text-gray-400">{{ t('knowledge.docManage.empty') }}</td>
+                <td colspan="7" class="px-4 py-12 text-center text-gray-400">{{ t('knowledge.docManage.empty') }}</td>
               </tr>
               <tr
                 v-for="row in list"
@@ -427,6 +420,16 @@ watch(
                 <td class="max-w-[200px] truncate font-medium">{{ row.title }}</td>
                 <td class="max-w-[180px] truncate font-mono text-xs text-gray-500">{{ row.slug || '—' }}</td>
                 <td><span class="badge bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300">{{ categoryLabel(row) }}</span></td>
+                <td>
+                  <span
+                    v-if="row.kbType"
+                    class="badge bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300"
+                    :title="kbTypeLabel(row.kbType)"
+                  >
+                    {{ kbTypeLabel(row.kbType) }}
+                  </span>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
                 <td><span class="badge" :class="statusClass(row.status)">{{ statusLabel(row.status) }}</span></td>
                 <td class="text-gray-500">{{ row.updateTime || row.publishTime || '—' }}</td>
                 <td class="data-table-sticky-end text-right" @click.stop>
@@ -463,8 +466,6 @@ watch(
         </div>
         <div v-if="total > 0" class="mt-4">
           <AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" />
-        </div>
-      </div>
         </div>
       </div>
       </template>

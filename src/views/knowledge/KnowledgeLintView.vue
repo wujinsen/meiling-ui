@@ -16,22 +16,25 @@ import { showToast } from '@/composables/useToast'
 import type { KbLintIssue, KbLintIssueStatus, KbLintReport } from '@/types/knowledge'
 import { PERM } from '@/constants/permissions'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
+import { resolveKbSyncParams } from '@/utils/kbSyncScope'
 
 const { t } = useI18n()
 const router = useRouter()
-const { selectedSpaceId, ensureSpacesLoaded, kbQuerySpaceId } = useKbSpace()
+const { selectedSpaceId, selectedSpace, selectedSpaceCode, spaces, setSelectedSpaceCode, ensureSpacesLoaded, kbQuerySpaceId, kbSpaceQuery } = useKbSpace()
 
 const canScan = computed(() => assertAction(PERM.KB_LINT_SCAN))
 const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
+const canTriggerSync = computed(() => canSync.value && resolveKbSyncParams(kbSpaceQuery(), selectedSpace.value) != null)
 
 const activeTab = ref<'lint' | 'sync'>('lint')
 const syncPanelRef = ref<InstanceType<typeof KbSyncPanel> | null>(null)
 const tabOptions = computed(() => {
-  const options: { value: 'lint' | 'sync'; label: string }[] = []
+  const options: { value: 'lint' | 'sync'; label: string }[] = [
+    { value: 'lint', label: t('knowledge.lint.tabLint') },
+  ]
   if (canSync.value) {
     options.push({ value: 'sync', label: t('knowledge.lint.tabSync') })
   }
-  options.push({ value: 'lint', label: t('knowledge.lint.tabLint') })
   return options
 })
 
@@ -185,6 +188,14 @@ watch(selectedSpaceId, async () => {
 watch(canSync, (allowed) => {
   if (!allowed && activeTab.value === 'sync') activeTab.value = 'lint'
 })
+
+watch(activeTab, async (tab) => {
+  if (tab !== 'sync') return
+  await ensureSpacesLoaded()
+  if (!selectedSpaceCode.value && spaces.value.length > 0) {
+    setSelectedSpaceCode(spaces.value[0].spaceCode)
+  }
+})
 </script>
 
 <template>
@@ -194,7 +205,7 @@ watch(canSync, (allowed) => {
     </nav>
 
     <div class="kb-doc-manage-toolbar">
-      <KbSpaceSelector />
+      <KbSpaceSelector :hide-all-option="activeTab === 'sync'" />
       <template v-if="activeTab === 'lint'">
         <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadReport">
           <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.lint.recheck') }}
@@ -218,7 +229,8 @@ watch(canSync, (allowed) => {
           v-if="canSync"
           type="button"
           class="btn-primary shrink-0"
-          :disabled="syncPanelRef?.triggering"
+          :disabled="!canTriggerSync || syncPanelRef?.triggering"
+          :title="!canTriggerSync ? t('knowledge.sync.needSpace') : undefined"
           @click="syncPanelRef?.trigger()"
         >
           <Loader2 v-if="syncPanelRef?.triggering" class="h-4 w-4 animate-spin" />

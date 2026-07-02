@@ -16,6 +16,26 @@ export type KbIndexItem = {
   title: string
   summary?: string
   spaceId?: number | string
+  /** 体裁（document/search 列表行携带，用于侧栏徽标） */
+  kbType?: KbType
+}
+
+/** GET /kb/index/types — 分类下体裁 facet（chip + 计数） */
+export type KbIndexTypeFacetItem = {
+  kbType: string
+  label: string
+  count: number
+}
+
+export type KbIndexTypesResult = {
+  items: KbIndexTypeFacetItem[]
+  total: number
+}
+
+/** GET /kb/meta/kb-types — 体裁白名单下拉 */
+export type KbMetaKbTypeOption = {
+  value: string
+  label: string
 }
 
 export type KbIndexGroup = {
@@ -569,6 +589,8 @@ export type KbDocumentSearchParams = {
   tagId?: number | string
   /** kb = wiki 同步文档；文档管理固定传 kb */
   source?: 'kb' | 'manual' | string
+  /** 体裁：guide/service/concept/article/interview/output；与 categoryId 叠加 */
+  kbType?: KbType | string
   pageNum?: number
   pageSize?: number
 }

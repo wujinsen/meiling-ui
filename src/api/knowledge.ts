@@ -61,6 +61,8 @@ import type {
   KbIngestTemplateCreateRequest,
   KbIngestJobFromTemplateRequest,
   KbIngestSaveAsTemplateRequest,
+  KbIndexTypesResult,
+  KbMetaKbTypeOption,
   KbPlatformLlmConfig,
   KbPlatformLlmConfigSaveRequest,
   KbPlatformLlmConfigTestRequest,
@@ -83,6 +85,19 @@ export function isMockKnowledgeEnabled() {
   return USE_MOCK
 }
 
+/** 兼容 MyBatis Page 的 records / 部分网关的 list 字段 */
+export function normalizeKbPageRecords<T>(data?: MoliPage<T> | Record<string, unknown> | null) {
+  if (!data || typeof data !== 'object') return { records: [] as T[], total: 0 }
+  const raw = data as Record<string, unknown>
+  const records = (
+    Array.isArray(raw.records) ? raw.records
+      : Array.isArray(raw.list) ? raw.list
+        : []
+  ) as T[]
+  const total = Number(raw.total ?? records.length) || 0
+  return { records, total }
+}
+
 function buildKbDocumentSearchQuery(params: KbDocumentSearchParams) {
   const qs = new URLSearchParams()
   if (params.spaceId != null && params.spaceId !== '') qs.set('spaceId', String(params.spaceId))
@@ -95,6 +110,7 @@ function buildKbDocumentSearchQuery(params: KbDocumentSearchParams) {
   if (params.status !== undefined && params.status !== '') qs.set('status', String(params.status))
   if (params.tagId != null) qs.set('tagId', String(params.tagId))
   if (params.source?.trim()) qs.set('source', params.source.trim())
+  if (params.kbType?.trim()) qs.set('kbType', params.kbType.trim())
   if (params.pageNum != null) qs.set('pageNum', String(params.pageNum))
   if (params.pageSize != null) qs.set('pageSize', String(params.pageSize))
   const query = qs.toString()
@@ -580,7 +596,71 @@ export async function getKbIndexApi(spaceId?: number | string) {
     await delay(220)
     return ok<KbIndex>(mockIndexMeta())
   }
-  return request<KbIndex>(`${KB_BASE}/index${buildQuery({ spaceId })}`, { method: 'GET' })
+  return request<KbIndex>(`${KB_BASE}/index${buildQuery({ spaceId, groupBy: 'category' })}`, { method: 'GET' })
+}
+
+/** 分类下体裁 facet（chip + 计数，仅 count>0） */
+export async function getKbIndexTypesApi(params: {
+  spaceId?: number | string
+  categoryId?: number | string
+  uncategorizedOnly?: boolean
+}) {
+  if (USE_MOCK) {
+    await delay(100)
+    const labels: Record<string, string> = {
+      guide: '操作指南',
+      service: '服务实体',
+      concept: '概念',
+      article: '文章',
+      interview: '面试题',
+      output: '汇总',
+    }
+    const counts = new Map<string, number>()
+    if (params.categoryId || params.uncategorizedOnly) {
+      const groupKey = params.uncategorizedOnly ? 'uncategorized' : String(params.categoryId ?? '')
+      const group = MOCK_INDEX.groups.find((g) => g.type === groupKey)
+      const slugs = new Set((group?.items ?? []).map((it) => it.slug))
+      for (const p of MOCK_PAGES) {
+        if (slugs.size && !slugs.has(p.slug)) continue
+        const kt = p.kbType ?? 'article'
+        counts.set(kt, (counts.get(kt) ?? 0) + 1)
+      }
+    } else {
+      for (const p of MOCK_PAGES) {
+        const kt = p.kbType ?? 'article'
+        counts.set(kt, (counts.get(kt) ?? 0) + 1)
+      }
+    }
+    const items = [...counts.entries()]
+      .filter(([, c]) => c > 0)
+      .map(([kbType, count]) => ({ kbType, label: labels[kbType] ?? kbType, count }))
+    const total = items.reduce((s, it) => s + it.count, 0)
+    return ok<KbIndexTypesResult>({ items, total })
+  }
+  return request<KbIndexTypesResult>(
+    `${KB_BASE}/index/types${buildQuery({
+      spaceId: params.spaceId,
+      categoryId: params.uncategorizedOnly ? undefined : params.categoryId,
+      uncategorizedOnly: params.uncategorizedOnly ? 'true' : undefined,
+    })}`,
+    { method: 'GET' },
+  )
+}
+
+/** 体裁白名单（编辑/新建下拉单一数据源） */
+export async function getKbMetaKbTypesApi() {
+  if (USE_MOCK) {
+    await delay(60)
+    return ok<KbMetaKbTypeOption[]>([
+      { value: 'guide', label: '操作指南' },
+      { value: 'service', label: '服务实体' },
+      { value: 'concept', label: '概念' },
+      { value: 'article', label: '文章' },
+      { value: 'interview', label: '面试题' },
+      { value: 'output', label: '汇总' },
+    ])
+  }
+  return request<KbMetaKbTypeOption[]>(`${KB_BASE}/meta/kb-types`, { method: 'GET' })
 }
 
 /** 目录分组条目分页（key 为 categoryId / uncategorized） */
@@ -859,6 +939,13 @@ export async function searchKbDocumentsApi(params: KbDocumentSearchParams) {
     const sid = params.spaceId != null ? String(params.spaceId) : ''
     if (sid) items = items.filter((it) => String(it.spaceId ?? '') === sid)
     if (params.source === 'kb') items = items.filter((it) => it.source === 'kb')
+    if (params.kbType?.trim()) items = items.filter((it) => it.kbType === params.kbType?.trim())
+    if (params.categoryId != null && String(params.categoryId) !== '') {
+      items = items.filter((it) => String(it.categoryId ?? '') === String(params.categoryId))
+    }
+    if (params.uncategorizedOnly) {
+      items = items.filter((it) => !it.categoryId)
+    }
     if (status !== undefined && status !== '') items = items.filter((it) => it.status === status)
     if (kw) {
       items = items.filter(

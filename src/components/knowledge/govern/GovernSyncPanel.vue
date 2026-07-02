@@ -6,9 +6,11 @@ import { triggerKbSyncApi } from '@/api/knowledge'
 import KbSyncPanel from '@/components/knowledge/KbSyncPanel.vue'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { assertAction, guardActionWithRefresh } from '@/composables/useActionPermissions'
+import { confirm } from '@/composables/useConfirm'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { PERM } from '@/constants/permissions'
+import { kbSyncTargetLabel, resolveKbSyncParams } from '@/utils/kbSyncScope'
 
 const props = defineProps<{
   syncReady: boolean
@@ -36,15 +38,23 @@ async function triggerSync() {
     (await guardActionWithRefresh(PERM.KB_SYNC_TRIGGER))
   if (!allowed) return
 
+  const params = resolveKbSyncParams(kbSpaceQuery(), selectedSpace.value)
+  if (!params) {
+    showToast('error', t('knowledge.sync.needSpace'))
+    return
+  }
+
+  const label = kbSyncTargetLabel(selectedSpace.value) || params.spaceCode || params.spaceId || '-'
+  const ok = await confirm({
+    title: t('knowledge.sync.confirmTitle'),
+    message: t('knowledge.sync.confirmMessage', { target: label }),
+    confirmText: t('knowledge.sync.trigger'),
+    danger: true,
+  })
+  if (!ok) return
+
   triggering.value = true
   try {
-    const scope = kbSpaceQuery()
-    const params: { spaceId?: number | string; spaceCode?: string } = {}
-    if (scope.spaceId != null) params.spaceId = scope.spaceId
-    else if (scope.spaceCode) params.spaceCode = scope.spaceCode
-    else if (selectedSpace.value?.spaceCode) params.spaceCode = selectedSpace.value.spaceCode
-    else params.spaceCode = 'enterprise-kb'
-
     const res = await triggerKbSyncApi(params)
     if (res.code === API_SUCCESS_CODE && res.data?.success) {
       showToast('success', t('knowledge.sync.triggerOk'))

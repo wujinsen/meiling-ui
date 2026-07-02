@@ -5,9 +5,18 @@ import { useI18n } from 'vue-i18n'
 import { ChevronDown, ExternalLink, FileText, FoldVertical, Link2, Loader2, Pencil, Search, UnfoldVertical } from 'lucide-vue-next'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
+import KbDocFilterTabs from '@/components/knowledge/KbDocFilterTabs.vue'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
-import { getKbIndexApi, getKbIndexItemsApi, getKbPageApi, locateKbIndexApi, searchKbIndexApi } from '@/api/knowledge'
+import {
+  getKbIndexItemsApi,
+  getKbPageApi,
+  locateKbIndexApi,
+  normalizeKbPageRecords,
+  searchKbDocumentsApi,
+  searchKbIndexApi,
+} from '@/api/knowledge'
 import { assertAction } from '@/composables/useActionPermissions'
+import { useKbDocFilter, type KbCategoryFilter } from '@/composables/useKbDocFilter'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -15,7 +24,7 @@ import { renderMarkdown } from '@/utils/markdown'
 import { toEntityId } from '@/utils/id'
 import { kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
 import { PERM } from '@/constants/permissions'
-import type { KbIndex, KbIndexGroup, KbIndexItem, KbPage } from '@/types/knowledge'
+import type { KbDocumentListItem, KbIndexGroup, KbIndexItem, KbPage } from '@/types/knowledge'
 
 const LAST_SLUG_KEY = 'kb_last_active_slug'
 const GROUP_ITEM_BATCH = 40
@@ -56,19 +65,35 @@ const canWikiEdit = computed(
 const loading = ref(false)
 const loadError = ref('')
 const detailLoading = ref(false)
-const index = shallowRef<KbIndex>({ total: 0, groups: [] })
-const searchIndex = shallowRef<KbIndex | null>(null)
+const searchIndex = shallowRef<import('@/types/knowledge').KbIndex | null>(null)
 const searchLoading = ref(false)
 const keyword = ref('')
-const groupItemsCache = ref<Record<string, KbIndexItem[]>>({})
-const groupItemsTotal = ref<Record<string, number>>({})
-const groupItemsPage = ref<Record<string, number>>({})
-const groupItemsLoading = ref<Record<string, boolean>>({})
+const browseSpaceId = computed(() => kbQuerySpaceId())
+const docFilter = useKbDocFilter(browseSpaceId)
+const {
+  kbTypeFilter,
+  categoryFilter,
+  kbTypeChips,
+  kbTypeLoading,
+  categoryChips,
+  indexTotal,
+  indexLoading,
+  applySearchParams,
+  selectKbType,
+  selectCategory,
+  resetFilters,
+  reloadFilters,
+} = docFilter
+const browseItems = ref<KbIndexItem[]>([])
+const browseTotal = ref(0)
+const browsePageNum = ref(0)
+const browseLoading = ref(false)
+const browseVisibleLimit = ref(GROUP_ITEM_BATCH)
+/** 关键词搜索模式下分组折叠 */
+const openGroups = ref<Record<string, boolean>>({})
+const groupVisibleLimit = ref<Record<string, number>>({})
 const page = ref<KbPage | null>(null)
 const activeSlug = ref('')
-const openGroups = ref<Record<string, boolean>>({})
-/** 分组展开后分批挂载条目，避免一次渲染上千个 DOM 节点 */
-const groupVisibleLimit = ref<Record<string, number>>({})
 const detailRef = ref<HTMLElement | null>(null)
 const treeRef = ref<HTMLElement | null>(null)
 const contentHtml = shallowRef('')
@@ -76,6 +101,7 @@ const slugLookup = ref<Map<string, string>>(new Map())
 
 let openSeq = 0
 let groupGrowSeq = 0
+let fetchBrowseSeq = 0
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 
 function groupCount(group: KbIndexGroup) {
@@ -86,13 +112,21 @@ const displayGroups = computed((): KbIndexGroup[] => {
   if (keyword.value.trim() && searchIndex.value) {
     return searchIndex.value.groups
   }
-  return index.value.groups.map((g) => ({
-    ...g,
-    items: groupItemsCache.value[g.type] ?? [],
-  }))
+  return []
 })
 
 const filteredGroups = computed(() => displayGroups.value.filter((g) => groupCount(g) > 0))
+
+const inSearchMode = computed(() => Boolean(keyword.value.trim() && searchIndex.value))
+
+const visibleBrowseItems = computed(() => browseItems.value.slice(0, browseVisibleLimit.value))
+
+function rebuildSlugLookupFromBrowse() {
+  const groups: KbIndexGroup[] = inSearchMode.value
+    ? (searchIndex.value?.groups ?? [])
+    : [{ type: 'browse', label: '', items: browseItems.value }]
+  rebuildSlugLookup(groups)
+}
 
 function readLastActiveSlug() {
   try {
@@ -134,34 +168,13 @@ function rebuildSlugLookup(groups: KbIndexGroup[]) {
   slugLookup.value = map
 }
 
-function mergeItemsIntoCache(type: string, items: KbIndexItem[], replace = false) {
-  if (!items.length && replace) {
-    groupItemsCache.value = { ...groupItemsCache.value, [type]: [] }
-    return
-  }
-  const prev = replace ? [] : (groupItemsCache.value[type] ?? [])
-  const seen = new Set(prev.map((it) => it.slug))
-  const merged = [...prev]
-  for (const it of items) {
-    if (!seen.has(it.slug)) {
-      seen.add(it.slug)
-      merged.push(it)
-    }
-  }
-  groupItemsCache.value = { ...groupItemsCache.value, [type]: merged }
-  rebuildSlugLookup(displayGroups.value)
+function firstIndexSlug() {
+  if (browseItems.value.length) return browseItems.value[0].slug
+  return ''
 }
 
 function resolveSlug(slug: string) {
   return slugLookup.value.get(slug) ?? slug
-}
-
-function firstIndexSlug() {
-  for (const g of index.value.groups) {
-    const cached = groupItemsCache.value[g.type]
-    if (cached?.length) return cached[0].slug
-  }
-  return ''
 }
 
 function preferredSlug(explicit?: string) {
@@ -199,11 +212,42 @@ watch(
 
 const visibleDocCount = computed(() => {
   if (keyword.value.trim() && searchIndex.value) return searchIndex.value.total
-  return index.value.total
+  if (browseLoading.value) {
+    return browseTotal.value || selectedFacetCount.value
+  }
+  return browseTotal.value
 })
+
+/** 当前选中 chip 的 facet 计数（加载中占位用） */
+const selectedFacetCount = computed(() => {
+  if (kbTypeFilter.value) {
+    const chip = kbTypeChips.value.find((c) => c.kbType === kbTypeFilter.value)
+    if (chip) return Number(chip.count) || 0
+  }
+  if (categoryFilter.value !== 'all') {
+    const chip = categoryChips.value.find((c) => c.type === categoryFilter.value)
+    if (chip) return chip.count
+  }
+  const typeSum = kbTypeChips.value.reduce((s, c) => s + (Number(c.count) || 0), 0)
+  if (typeSum > 0) return typeSum
+  return indexTotal.value
+})
+
+const hasCrossFilter = computed(
+  () => kbTypeFilter.value != null && categoryFilter.value !== 'all',
+)
+
+const showFilterAndEmpty = computed(
+  () =>
+    !browseLoading.value
+    && !browseItems.value.length
+    && hasCrossFilter.value
+    && selectedFacetCount.value > 0,
+)
 
 const allCollapsed = computed(
   () =>
+    inSearchMode.value &&
     filteredGroups.value.length > 0 &&
     filteredGroups.value.every((g) => openGroups.value[g.type] !== true),
 )
@@ -212,152 +256,240 @@ function isGroupOpen(type: string) {
   return openGroups.value[type] === true
 }
 
-function resetTreeExpandState() {
+function resetBrowseState() {
   groupGrowSeq++
+  resetFilters()
+  browseItems.value = []
+  browseTotal.value = 0
+  browsePageNum.value = 0
+  browseVisibleLimit.value = GROUP_ITEM_BATCH
+  browseLoading.value = false
   openGroups.value = {}
   groupVisibleLimit.value = {}
-  groupItemsCache.value = {}
-  groupItemsTotal.value = {}
-  groupItemsPage.value = {}
-  groupItemsLoading.value = {}
   searchIndex.value = null
 }
 
-function ensureGroupItemsRendered(type: string, total: number) {
+async function onKbTypeFilterChange(value: string | null) {
+  selectKbType(value)
+  // 浏览侧栏按 Tab 单维度筛选：选体裁时不叠加分类
+  if (value != null && categoryFilter.value !== 'all') {
+    selectCategory('all')
+  }
+  await reloadBrowseList()
+}
+
+async function onCategoryFilterChange(value: KbCategoryFilter) {
+  selectCategory(value)
+  // 浏览侧栏按 Tab 单维度筛选：选分类时不叠加体裁
+  if (value !== 'all' && kbTypeFilter.value != null) {
+    selectKbType(null)
+  }
+  await reloadBrowseList()
+}
+
+async function reloadBrowseList() {
+  browsePageNum.value = 0
+  browseVisibleLimit.value = GROUP_ITEM_BATCH
+  await fetchBrowseList(1)
+}
+
+function onFilterAccordionActivate() {
+  if (!browseLoading.value && !browseItems.value.length) {
+    void reloadBrowseList()
+  }
+}
+
+function listItemToIndexItem(doc: KbDocumentListItem): KbIndexItem {
+  return {
+    id: doc.id,
+    slug: doc.slug ?? '',
+    title: doc.title,
+    summary: doc.summary,
+    spaceId: doc.spaceId,
+    kbType: doc.kbType,
+  }
+}
+
+function ensureBrowseItemsRendered(total: number) {
   if (total <= 0) return
   const seq = ++groupGrowSeq
-  groupVisibleLimit.value[type] = Math.min(GROUP_ITEM_BATCH, total)
+  browseVisibleLimit.value = Math.min(GROUP_ITEM_BATCH, total)
   if (total <= GROUP_ITEM_BATCH) return
-
   const grow = () => {
     if (seq !== groupGrowSeq) return
-    const cur = groupVisibleLimit.value[type] ?? 0
-    if (cur >= total) return
-    groupVisibleLimit.value[type] = Math.min(cur + GROUP_ITEM_BATCH, total)
-    if (groupVisibleLimit.value[type] < total) requestAnimationFrame(grow)
+    if (browseVisibleLimit.value >= total) return
+    browseVisibleLimit.value = Math.min(browseVisibleLimit.value + GROUP_ITEM_BATCH, total)
+    if (browseVisibleLimit.value < total) requestAnimationFrame(grow)
   }
   requestAnimationFrame(grow)
 }
 
+function hasMoreBrowseItems() {
+  if (browseVisibleLimit.value < browseItems.value.length) return true
+  return browseItems.value.length < browseTotal.value
+}
+
+function loadMoreBrowseItems() {
+  if (browseVisibleLimit.value < browseItems.value.length) {
+    browseVisibleLimit.value = Math.min(browseVisibleLimit.value + GROUP_ITEM_BATCH, browseItems.value.length)
+    return
+  }
+  if (browseItems.value.length < browseTotal.value) {
+    void fetchBrowseList(browsePageNum.value + 1)
+  }
+}
+
+async function fetchBrowseList(pageNum: number) {
+  const seq = ++fetchBrowseSeq
+  browseLoading.value = true
+  try {
+    const spaceId = kbQuerySpaceId()
+    const hasKbType = Boolean(kbTypeFilter.value?.trim())
+    const category = categoryFilter.value
+
+    let items: KbIndexItem[] = []
+    let total = 0
+
+    // 浏览侧栏：体裁 / 分类互斥，只应用当前有效的一维
+    if (hasKbType) {
+      const params = applySearchParams({
+        spaceId,
+        source: 'kb',
+        status: 1,
+        pageNum,
+        pageSize: GROUP_FETCH_SIZE,
+      })
+      // 仅体裁，去掉可能被 composable 保留的分类参数
+      delete params.categoryId
+      params.uncategorizedOnly = undefined
+      const res = await searchKbDocumentsApi(params)
+      if (seq !== fetchBrowseSeq) return
+      if (res.code !== API_SUCCESS_CODE || !res.data) {
+        throw new Error(res.msg || t('knowledge.browse.groupLoadFailed'))
+      }
+      const page = normalizeKbPageRecords<KbDocumentListItem>(res.data)
+      items = page.records.map(listItemToIndexItem)
+      total = page.total
+    } else if (category !== 'all') {
+      const key = category === 'uncategorized' ? 'uncategorized' : category
+      const res = await getKbIndexItemsApi(key, spaceId, pageNum, GROUP_FETCH_SIZE)
+      if (seq !== fetchBrowseSeq) return
+      if (res.code !== API_SUCCESS_CODE || !res.data) {
+        throw new Error(res.msg || t('knowledge.browse.groupLoadFailed'))
+      }
+      items = res.data.items ?? []
+      total = Number(res.data.total ?? items.length) || 0
+    } else {
+      const params = applySearchParams({
+        spaceId,
+        source: 'kb',
+        status: 1,
+        pageNum,
+        pageSize: GROUP_FETCH_SIZE,
+      })
+      const res = await searchKbDocumentsApi(params)
+      if (seq !== fetchBrowseSeq) return
+      if (res.code !== API_SUCCESS_CODE || !res.data) {
+        throw new Error(res.msg || t('knowledge.browse.groupLoadFailed'))
+      }
+      const page = normalizeKbPageRecords<KbDocumentListItem>(res.data)
+      items = page.records.map(listItemToIndexItem)
+      total = page.total
+    }
+
+    if (pageNum === 1) {
+      browseItems.value = items
+    } else {
+      const seen = new Set(browseItems.value.map((it) => it.slug))
+      for (const it of items) {
+        if (!seen.has(it.slug)) browseItems.value.push(it)
+      }
+    }
+    browseTotal.value = total
+    browsePageNum.value = pageNum
+    rebuildSlugLookupFromBrowse()
+    ensureBrowseItemsRendered(browseTotal.value)
+  } catch (e) {
+    if (seq !== fetchBrowseSeq) return
+    if (pageNum === 1) {
+      browseItems.value = []
+      browseTotal.value = 0
+    }
+    showToast('error', e instanceof Error ? e.message : t('knowledge.browse.groupLoadFailed'))
+  } finally {
+    if (seq === fetchBrowseSeq) browseLoading.value = false
+  }
+}
+
 function visibleGroupItems(group: KbIndexGroup) {
-  if (keyword.value.trim()) return group.items
   const limit = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
   return group.items.slice(0, limit)
 }
 
 function hasMoreGroupItems(group: KbIndexGroup) {
-  if (keyword.value.trim()) {
-    const limit = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
-    return limit < group.items.length
-  }
-  const loaded = group.items.length
-  const total = groupItemsTotal.value[group.type] ?? groupCount(group)
-  if (loaded < total) return true
   const limit = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
-  return limit < loaded
+  return limit < group.items.length
 }
 
 function loadMoreGroupItems(group: KbIndexGroup) {
-  if (keyword.value.trim()) {
-    const cur = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
-    groupVisibleLimit.value[group.type] = Math.min(cur + GROUP_ITEM_BATCH, group.items.length)
-    return
-  }
-  const loaded = group.items.length
-  const total = groupItemsTotal.value[group.type] ?? groupCount(group)
-  const limit = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
-  if (limit < loaded) {
-    groupVisibleLimit.value[group.type] = Math.min(limit + GROUP_ITEM_BATCH, loaded)
-    return
-  }
-  if (loaded < total) {
-    const nextPage = (groupItemsPage.value[group.type] ?? 0) + 1
-    void fetchGroupItems(group.type, nextPage)
-  }
-}
-
-function openGroup(type: string) {
-  openGroups.value[type] = true
-  if (!keyword.value.trim()) {
-    void ensureGroupItemsLoaded(type)
-  }
-  const meta = index.value.groups.find((g) => g.type === type)
-  const total = groupItemsTotal.value[type] ?? meta?.count ?? groupItemsCache.value[type]?.length ?? 0
-  ensureGroupItemsRendered(type, total)
-}
-
-async function ensureGroupItemsLoaded(type: string) {
-  // locate / 深链可能只写入 1 条，不能仅凭 cache 非空就跳过首屏分页
-  if (groupItemsPage.value[type] != null) return
-  if (groupItemsLoading.value[type]) return
-  await fetchGroupItems(type, 1)
-}
-
-async function fetchGroupItems(type: string, pageNum: number) {
-  if (groupItemsLoading.value[type]) return
-  groupItemsLoading.value = { ...groupItemsLoading.value, [type]: true }
-  try {
-    const res = await getKbIndexItemsApi(type, kbQuerySpaceId(), pageNum, GROUP_FETCH_SIZE)
-    if (res.code !== API_SUCCESS_CODE || !res.data) {
-      showToast('error', res.msg || t('knowledge.browse.groupLoadFailed'))
-      return
-    }
-    mergeItemsIntoCache(type, res.data.items ?? [], pageNum === 1)
-    groupItemsTotal.value = { ...groupItemsTotal.value, [type]: res.data.total }
-    groupItemsPage.value = { ...groupItemsPage.value, [type]: pageNum }
-    const g = index.value.groups.find((x) => x.type === type)
-    if (g && isGroupOpen(type)) {
-      ensureGroupItemsRendered(type, res.data.total)
-    }
-  } finally {
-    groupItemsLoading.value = { ...groupItemsLoading.value, [type]: false }
-  }
+  const cur = groupVisibleLimit.value[group.type] ?? GROUP_ITEM_BATCH
+  groupVisibleLimit.value[group.type] = Math.min(cur + GROUP_ITEM_BATCH, group.items.length)
 }
 
 function toggleGroup(type: string) {
-  if (isGroupOpen(type)) {
-    openGroups.value[type] = false
-    return
-  }
-  openGroup(type)
+  openGroups.value[type] = !openGroups.value[type]
 }
 
 function toggleAllGroups() {
   const collapse = !allCollapsed.value
   if (collapse) {
-    groupGrowSeq++
     openGroups.value = {}
     groupVisibleLimit.value = {}
     return
   }
-  const next: Record<string, boolean> = { ...openGroups.value }
+  const next: Record<string, boolean> = {}
   for (const g of filteredGroups.value) {
     next[g.type] = true
-    if (!keyword.value.trim()) void ensureGroupItemsLoaded(g.type)
-    ensureGroupItemsRendered(g.type, groupCount(g))
+    ensureGroupItemsRendered(g.type, g.items.length)
   }
   openGroups.value = next
 }
 
-/** 展开当前文档所在分组，避免激活项被折叠隐藏 */
-async function ensureGroupOpenFor(slug: string) {
+function ensureGroupItemsRendered(type: string, total: number) {
+  if (total <= 0) return
+  groupVisibleLimit.value[type] = Math.min(GROUP_ITEM_BATCH, total)
+}
+
+/** 定位文档所在分类并加载列表 */
+async function ensureCategoryForSlug(slug: string) {
+  if (inSearchMode.value) {
+    for (const g of searchIndex.value?.groups ?? []) {
+      if (g.items.some((it) => it.slug === slug) && !isGroupOpen(g.type)) {
+        openGroups.value = { ...openGroups.value, [g.type]: true }
+      }
+    }
+    return
+  }
+  // 体裁筛选模式下不因正文链接自动改分类，避免与 kbType AND 冲突
+  if (kbTypeFilter.value) return
   const spaceId = kbQuerySpaceId()
   try {
     const res = await locateKbIndexApi(slug, spaceId)
     if (res.code === API_SUCCESS_CODE && res.data) {
-      mergeItemsIntoCache(res.data.type, [res.data.item])
-      if (!isGroupOpen(res.data.type)) openGroup(res.data.type)
-      return
+      const located = res.data
+      const cat: KbCategoryFilter =
+        located.type === 'uncategorized' ? 'uncategorized' : located.type
+      if (categoryFilter.value !== cat) {
+        selectCategory(cat)
+        await fetchBrowseList(1)
+      }
+      if (!browseItems.value.some((it) => it.slug === located.item.slug)) {
+        browseItems.value = [located.item, ...browseItems.value]
+        rebuildSlugLookupFromBrowse()
+      }
     }
   } catch {
-    /* fallback below */
-  }
-  for (const g of index.value.groups) {
-    const cached = groupItemsCache.value[g.type]
-    if (cached?.some((it) => it.slug === slug)) {
-      if (!isGroupOpen(g.type)) openGroup(g.type)
-      return
-    }
+    /* ignore */
   }
 }
 
@@ -385,7 +517,7 @@ async function scrollActiveIntoView(slug: string) {
 
 watch(activeSlug, (slug) => {
   if (!slug) return
-  ensureGroupOpenFor(slug)
+  void ensureCategoryForSlug(slug)
   void scrollActiveIntoView(slug)
 })
 
@@ -436,8 +568,15 @@ async function resolveInitialSlug(slugTarget: string, explicitSpaceId?: string) 
     try {
       const res = await locateKbIndexApi(slugTarget, spaceId)
       if (res.code === API_SUCCESS_CODE && res.data) {
-        mergeItemsIntoCache(res.data.type, [res.data.item])
-        openGroup(res.data.type)
+        const located = res.data
+        const cat: KbCategoryFilter =
+          located.type === 'uncategorized' ? 'uncategorized' : located.type
+        selectCategory(cat)
+        await fetchBrowseList(1)
+        if (!browseItems.value.some((it) => it.slug === located.item.slug)) {
+          browseItems.value = [located.item, ...browseItems.value]
+          rebuildSlugLookupFromBrowse()
+        }
       }
     } catch {
       /* ignore */
@@ -446,12 +585,10 @@ async function resolveInitialSlug(slugTarget: string, explicitSpaceId?: string) 
     if (pageData) return resolved
     clearLastActiveSlug()
   }
-  const firstGroup = index.value.groups[0]
-  if (firstGroup) {
-    await ensureGroupItemsLoaded(firstGroup.type)
-    return firstIndexSlug()
+  if (!browseItems.value.length) {
+    await fetchBrowseList(1)
   }
-  return ''
+  return firstIndexSlug()
 }
 
 async function loadIndex(preferred?: string) {
@@ -461,18 +598,15 @@ async function loadIndex(preferred?: string) {
   const spaceId = preferredSpaceId()
 
   try {
-    const res = await getKbIndexApi(kbQuerySpaceId())
-    if (res.code !== API_SUCCESS_CODE || !res.data) {
-      if (res.code !== API_SUCCESS_CODE) loadError.value = res.msg || `接口异常(code=${res.code})`
-      return
-    }
-
-    resetTreeExpandState()
-    index.value = res.data
+    resetBrowseState()
+    await reloadFilters()
 
     const slug = await resolveInitialSlug(slugTarget, spaceId)
     if (slug && (activeSlug.value !== slug || !page.value)) {
       await openSlug(slug, spaceId, false, { silent: true })
+    }
+    if (!inSearchMode.value && !browseItems.value.length) {
+      await fetchBrowseList(1)
     }
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : '加载失败，请确认知识库服务(8090)与网关(21000)已启动'
@@ -596,8 +730,7 @@ watch(selectedSpaceCode, () => {
   page.value = null
   activeSlug.value = ''
   contentHtml.value = ''
-  resetTreeExpandState()
-  index.value = { total: 0, groups: [] }
+  resetBrowseState()
   loadError.value = ''
   void loadIndex()
 })
@@ -636,68 +769,128 @@ watch(
 
     <div v-else class="flex flex-col gap-4 xl:flex-row xl:items-start">
       <!-- 左：分组目录树 -->
-      <aside class="card w-full p-4 xl:w-[22rem] xl:shrink-0 xl:sticky xl:top-6 xl:self-start">
-        <div class="relative mb-2">
+      <aside
+        ref="treeRef"
+        class="card flex w-full flex-col p-4 xl:w-[22rem] xl:shrink-0 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:min-h-[calc(100vh-3rem)]"
+      >
+        <div class="relative mb-2 shrink-0">
           <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input v-model="keyword" type="text" class="field-input pl-9 pr-9" :placeholder="t('knowledge.browse.searchPlaceholder')" />
           <Loader2 v-if="searchLoading" class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-gray-400" />
         </div>
 
-        <div
-          v-if="!loading && !loadError && filteredGroups.length"
-          class="mb-2 flex items-center justify-between gap-2"
-        >
-          <span class="text-xs text-gray-400">{{ t('knowledge.browse.docCount', { count: visibleDocCount }) }}</span>
-          <button type="button" class="btn-tree-toggle shrink-0" @click="toggleAllGroups">
-            <UnfoldVertical v-if="allCollapsed" class="h-4 w-4 text-gray-400" />
-            <FoldVertical v-else class="h-4 w-4 text-gray-400" />
-            {{ allCollapsed ? t('common.expandAll') : t('common.collapseAll') }}
-          </button>
-        </div>
-
         <p v-if="loading" class="py-8 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
         <p v-else-if="loadError" class="py-8 text-center text-sm text-red-500">{{ loadError }}</p>
-        <p v-else-if="!filteredGroups.length" class="py-8 text-center text-sm text-gray-400">
-          {{ keyword.trim() ? t('knowledge.browse.noMatch') : t('knowledge.browse.empty') }}
-        </p>
 
-        <div v-else ref="treeRef" class="max-h-[calc(100vh-16rem)] space-y-1 overflow-y-auto pr-1">
-          <div v-for="group in filteredGroups" :key="group.type">
-            <button
-              type="button"
-              class="kb-tree-group-header sticky top-0 z-10 flex w-full items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:bg-[#171a23] dark:text-gray-200 dark:hover:bg-white/5"
-              @click="toggleGroup(group.type)"
-            >
-              <ChevronDown class="h-4 w-4 shrink-0 text-gray-400 transition" :class="!isGroupOpen(group.type) && '-rotate-90'" />
-              <span class="flex-1 truncate">{{ group.label }}</span>
-              <span class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400">{{ groupCount(group) }}</span>
+        <div v-else-if="!inSearchMode" class="flex min-h-0 flex-1 flex-col">
+          <KbDocFilterTabs
+            fill-height
+            class="min-h-0 flex-1"
+            :kb-type-chips="kbTypeChips"
+            :kb-type-filter="kbTypeFilter"
+            :kb-type-loading="kbTypeLoading"
+            :category-chips="categoryChips"
+            :category-filter="categoryFilter"
+            :category-loading="indexLoading"
+            @update:kb-type-filter="onKbTypeFilterChange"
+            @update:category-filter="onCategoryFilterChange"
+            @activate="onFilterAccordionActivate"
+          >
+            <template #expanded>
+              <div class="space-y-0.5 py-1">
+                <p v-if="browseLoading && !browseItems.length" class="px-2 py-2 text-xs text-gray-400">
+                  {{ t('common.loading') }}
+                </p>
+                <button
+                  v-for="item in visibleBrowseItems"
+                  :key="item.slug"
+                  type="button"
+                  :data-tree-slug="item.slug"
+                  :class="[
+                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition',
+                    item.slug === activeSlug
+                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
+                      : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5',
+                  ]"
+                  @click="openSlug(item.slug, item.spaceId, true)"
+                >
+                  <FileText class="h-3.5 w-3.5 shrink-0 opacity-70" />
+                  <span class="min-w-0 flex-1 truncate">{{ item.title }}</span>
+                </button>
+                <button
+                  v-if="hasMoreBrowseItems()"
+                  type="button"
+                  class="w-full rounded-md px-2 py-1 text-left text-xs text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-300"
+                  @click="loadMoreBrowseItems()"
+                >
+                  {{ t('knowledge.browse.loadMore', { count: browseTotal - visibleBrowseItems.length }) }}
+                </button>
+                <p v-if="!browseLoading && !browseItems.length && showFilterAndEmpty" class="px-2 py-2 text-xs leading-relaxed text-amber-600 dark:text-amber-400">
+                  {{ t('knowledge.browse.filterAndEmpty') }}
+                </p>
+                <p v-else-if="!browseLoading && !browseItems.length" class="px-2 py-3 text-center text-xs text-gray-400">
+                  {{ t('knowledge.browse.empty') }}
+                </p>
+              </div>
+            </template>
+          </KbDocFilterTabs>
+          <p class="mt-auto shrink-0 pt-2 text-xs text-gray-400">
+            {{ t('knowledge.browse.docCount', { count: visibleDocCount }) }}
+          </p>
+        </div>
+
+        <div v-else class="flex min-h-0 flex-1 flex-col">
+          <div
+            v-if="filteredGroups.length"
+            class="mb-2 flex shrink-0 items-center justify-between gap-2"
+          >
+            <span class="text-xs text-gray-400">{{ t('knowledge.browse.docCount', { count: visibleDocCount }) }}</span>
+            <button type="button" class="btn-tree-toggle shrink-0" @click="toggleAllGroups">
+              <UnfoldVertical v-if="allCollapsed" class="h-4 w-4 text-gray-400" />
+              <FoldVertical v-else class="h-4 w-4 text-gray-400" />
+              {{ allCollapsed ? t('common.expandAll') : t('common.collapseAll') }}
             </button>
-            <div v-if="isGroupOpen(group.type)" class="ml-2 space-y-0.5 border-l border-gray-100 pl-2 dark:border-white/10">
-              <p v-if="groupItemsLoading[group.type]" class="px-2 py-1 text-xs text-gray-400">{{ t('common.loading') }}</p>
+          </div>
+          <p v-if="!filteredGroups.length" class="py-8 text-center text-sm text-gray-400">
+            {{ t('knowledge.browse.noMatch') }}
+          </p>
+          <div v-else class="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+            <div v-for="group in filteredGroups" :key="group.type">
               <button
-                v-for="item in visibleGroupItems(group)"
-                :key="item.slug"
                 type="button"
-                :data-tree-slug="item.slug"
-                :class="[
-                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition',
-                  item.slug === activeSlug
-                    ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
-                    : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5',
-                ]"
-                @click="openSlug(item.slug, item.spaceId, true)"
+                class="kb-tree-group-header sticky top-0 z-10 flex w-full items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-left text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:bg-[#171a23] dark:text-gray-200 dark:hover:bg-white/5"
+                @click="toggleGroup(group.type)"
               >
-                <FileText class="h-3.5 w-3.5 shrink-0 opacity-70" />
-                <span class="truncate">{{ item.title }}</span>
+                <ChevronDown class="h-4 w-4 shrink-0 text-gray-400 transition" :class="!isGroupOpen(group.type) && '-rotate-90'" />
+                <span class="flex-1 truncate">{{ group.label }}</span>
+                <span class="badge bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-400">{{ groupCount(group) }}</span>
               </button>
-              <button
-                v-if="hasMoreGroupItems(group)"
-                type="button"
-                class="w-full rounded-md px-2 py-1 text-left text-xs text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-300"
-                @click="loadMoreGroupItems(group)"
-              >
-                {{ t('knowledge.browse.loadMore', { count: (groupItemsTotal[group.type] ?? groupCount(group)) - visibleGroupItems(group).length }) }}
-              </button>
+              <div v-if="isGroupOpen(group.type)" class="ml-2 space-y-0.5 border-l border-gray-100 pl-2 dark:border-white/10">
+                <button
+                  v-for="item in visibleGroupItems(group)"
+                  :key="item.slug"
+                  type="button"
+                  :data-tree-slug="item.slug"
+                  :class="[
+                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition',
+                    item.slug === activeSlug
+                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
+                      : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5',
+                  ]"
+                  @click="openSlug(item.slug, item.spaceId, true)"
+                >
+                  <FileText class="h-3.5 w-3.5 shrink-0 opacity-70" />
+                  <span class="min-w-0 flex-1 truncate">{{ item.title }}</span>
+                </button>
+                <button
+                  v-if="hasMoreGroupItems(group)"
+                  type="button"
+                  class="w-full rounded-md px-2 py-1 text-left text-xs text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-300"
+                  @click="loadMoreGroupItems(group)"
+                >
+                  {{ t('knowledge.browse.loadMore', { count: group.items.length - visibleGroupItems(group).length }) }}
+                </button>
+              </div>
             </div>
           </div>
         </div>

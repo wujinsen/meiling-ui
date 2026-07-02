@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import AppModal from '@/components/ui/AppModal.vue'
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 import { showToast } from '@/composables/useToast'
+import { useKbMetaKbTypes } from '@/composables/useKbMetaKbTypes'
 import {
   KB_WIKI_PAGE_TYPES,
   buildNewWikiMarkdown,
@@ -30,19 +31,30 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { options: metaKbTypes, ensureLoaded: ensureMetaKbTypes } = useKbMetaKbTypes()
 
 const spaceId = ref('')
 const title = ref('')
-const kbType = ref<(typeof KB_WIKI_PAGE_TYPES)[number]>('article')
+const kbType = ref<string>('article')
 const slugSegment = ref('')
 const slugTouched = ref(false)
 
-const kbTypeOptions = computed(() =>
-  KB_WIKI_PAGE_TYPES.map((value) => ({
+const kbTypeOptions = computed(() => {
+  if (metaKbTypes.value.length) {
+    return metaKbTypes.value.map((opt) => ({ value: opt.value, label: opt.label }))
+  }
+  return KB_WIKI_PAGE_TYPES.map((value) => ({
     value,
     label: t(`knowledge.docManage.kbType.${value}`),
-  })),
-)
+  }))
+})
+
+async function loadMetaKbTypes() {
+  const loaded = await ensureMetaKbTypes()
+  if (loaded.length && !loaded.some((o) => o.value === kbType.value)) {
+    kbType.value = loaded[0]?.value ?? 'article'
+  }
+}
 
 const pathSlug = computed(() => buildWikiPathSlug(kbType.value, title.value, slugSegment.value))
 
@@ -55,6 +67,7 @@ watch(
     slugSegment.value = ''
     slugTouched.value = false
     spaceId.value = props.defaultSpaceId ?? ''
+    void loadMetaKbTypes()
   },
   { immediate: true },
 )

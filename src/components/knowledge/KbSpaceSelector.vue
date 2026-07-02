@@ -6,8 +6,10 @@ import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 const props = withDefaults(
   defineProps<{
     editableOnly?: boolean
+    /** Wiki Sync 等必须指定单个空间，隐藏「全部可读空间」 */
+    hideAllOption?: boolean
   }>(),
-  { editableOnly: false },
+  { editableOnly: false, hideAllOption: false },
 )
 
 const { spaces, selectedSpaceCode, hasMultipleSpaces, setSelectedSpaceCode } = useKbSpace()
@@ -31,5 +33,10 @@ const visible = computed(() =>
 </script>
 
 <template>
-  <KbSpaceDropdown v-if="visible" v-model="selectValue" :editable-only="editableOnly" />
+  <KbSpaceDropdown
+    v-if="visible"
+    v-model="selectValue"
+    :editable-only="editableOnly"
+    :hide-all-option="hideAllOption"
+  />
 </template>
