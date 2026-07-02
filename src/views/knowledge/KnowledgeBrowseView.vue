@@ -6,9 +6,8 @@ import { ChevronDown, ExternalLink, FileText, FoldVertical, Link2, Loader2, Penc
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
 import KbDocFilterTabs from '@/components/knowledge/KbDocFilterTabs.vue'
-import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
+import KbSpaceScopePicker from '@/components/knowledge/KbSpaceScopePicker.vue'
 import {
-  getKbIndexItemsApi,
   getKbPageApi,
   locateKbIndexApi,
   normalizeKbPageRecords,
@@ -17,11 +16,13 @@ import {
 } from '@/api/knowledge'
 import { assertAction } from '@/composables/useActionPermissions'
 import { useKbDocFilter, type KbCategoryFilter } from '@/composables/useKbDocFilter'
+import { useKbSpaceScope } from '@/composables/useKbSpaceScope'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
 import { toEntityId } from '@/utils/id'
+import { toKbSpaceScopeParams } from '@/utils/kbSpaceScope'
 import { kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
 import { PERM } from '@/constants/permissions'
 import type { KbDocumentListItem, KbIndexGroup, KbIndexItem, KbPage } from '@/types/knowledge'
@@ -36,7 +37,8 @@ const inflightPages = new Map<string, Promise<KbPage | undefined>>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { selectedSpaceCode, selectedSpace, spaces, loadError: spaceLoadError, loading: spaceLoading, ensureSpacesLoaded, kbQuerySpaceId, resolvePageSpaceId } = useKbSpace()
+const { selectedSpace, spaces, loadError: spaceLoadError, loading: spaceLoading, ensureSpacesLoaded, resolvePageSpaceId } = useKbSpace()
+const { scopeSpaceIds, ensureScopeReady } = useKbSpaceScope()
 
 const noAccessibleSpaces = computed(
   () => !spaceLoading.value && spaces.value.length === 0 && !spaceLoadError.value,
@@ -68,8 +70,7 @@ const detailLoading = ref(false)
 const searchIndex = shallowRef<import('@/types/knowledge').KbIndex | null>(null)
 const searchLoading = ref(false)
 const keyword = ref('')
-const browseSpaceId = computed(() => kbQuerySpaceId())
-const docFilter = useKbDocFilter(browseSpaceId)
+const docFilter = useKbDocFilter(scopeSpaceIds)
 const {
   kbTypeFilter,
   categoryFilter,
@@ -186,7 +187,12 @@ function preferredSlug(explicit?: string) {
 function preferredSpaceId() {
   const q = route.query.spaceId
   if (typeof q === 'string' && q) return q
-  return kbQuerySpaceId()
+  if (scopeSpaceIds.value.length === 1) return scopeSpaceIds.value[0]
+  return undefined
+}
+
+function browseScopeParams() {
+  return toKbSpaceScopeParams(scopeSpaceIds.value)
 }
 
 function scheduleMarkdownRender(content?: string) {
@@ -233,15 +239,15 @@ const selectedFacetCount = computed(() => {
   return indexTotal.value
 })
 
-const hasCrossFilter = computed(
-  () => kbTypeFilter.value != null && categoryFilter.value !== 'all',
+const hasActiveFilter = computed(
+  () => kbTypeFilter.value != null || categoryFilter.value !== 'all',
 )
 
 const showFilterAndEmpty = computed(
   () =>
     !browseLoading.value
     && !browseItems.value.length
-    && hasCrossFilter.value
+    && hasActiveFilter.value
     && selectedFacetCount.value > 0,
 )
 
@@ -271,19 +277,11 @@ function resetBrowseState() {
 
 async function onKbTypeFilterChange(value: string | null) {
   selectKbType(value)
-  // 浏览侧栏按 Tab 单维度筛选：选体裁时不叠加分类
-  if (value != null && categoryFilter.value !== 'all') {
-    selectCategory('all')
-  }
   await reloadBrowseList()
 }
 
 async function onCategoryFilterChange(value: KbCategoryFilter) {
   selectCategory(value)
-  // 浏览侧栏按 Tab 单维度筛选：选分类时不叠加体裁
-  if (value !== 'all' && kbTypeFilter.value != null) {
-    selectKbType(null)
-  }
   await reloadBrowseList()
 }
 
@@ -291,12 +289,6 @@ async function reloadBrowseList() {
   browsePageNum.value = 0
   browseVisibleLimit.value = GROUP_ITEM_BATCH
   await fetchBrowseList(1)
-}
-
-function onFilterAccordionActivate() {
-  if (!browseLoading.value && !browseItems.value.length) {
-    void reloadBrowseList()
-  }
 }
 
 function listItemToIndexItem(doc: KbDocumentListItem): KbIndexItem {
@@ -343,59 +335,20 @@ async function fetchBrowseList(pageNum: number) {
   const seq = ++fetchBrowseSeq
   browseLoading.value = true
   try {
-    const spaceId = kbQuerySpaceId()
-    const hasKbType = Boolean(kbTypeFilter.value?.trim())
-    const category = categoryFilter.value
-
-    let items: KbIndexItem[] = []
-    let total = 0
-
-    // 浏览侧栏：体裁 / 分类互斥，只应用当前有效的一维
-    if (hasKbType) {
-      const params = applySearchParams({
-        spaceId,
-        source: 'kb',
-        status: 1,
-        pageNum,
-        pageSize: GROUP_FETCH_SIZE,
-      })
-      // 仅体裁，去掉可能被 composable 保留的分类参数
-      delete params.categoryId
-      params.uncategorizedOnly = undefined
-      const res = await searchKbDocumentsApi(params)
-      if (seq !== fetchBrowseSeq) return
-      if (res.code !== API_SUCCESS_CODE || !res.data) {
-        throw new Error(res.msg || t('knowledge.browse.groupLoadFailed'))
-      }
-      const page = normalizeKbPageRecords<KbDocumentListItem>(res.data)
-      items = page.records.map(listItemToIndexItem)
-      total = page.total
-    } else if (category !== 'all') {
-      const key = category === 'uncategorized' ? 'uncategorized' : category
-      const res = await getKbIndexItemsApi(key, spaceId, pageNum, GROUP_FETCH_SIZE)
-      if (seq !== fetchBrowseSeq) return
-      if (res.code !== API_SUCCESS_CODE || !res.data) {
-        throw new Error(res.msg || t('knowledge.browse.groupLoadFailed'))
-      }
-      items = res.data.items ?? []
-      total = Number(res.data.total ?? items.length) || 0
-    } else {
-      const params = applySearchParams({
-        spaceId,
-        source: 'kb',
-        status: 1,
-        pageNum,
-        pageSize: GROUP_FETCH_SIZE,
-      })
-      const res = await searchKbDocumentsApi(params)
-      if (seq !== fetchBrowseSeq) return
-      if (res.code !== API_SUCCESS_CODE || !res.data) {
-        throw new Error(res.msg || t('knowledge.browse.groupLoadFailed'))
-      }
-      const page = normalizeKbPageRecords<KbDocumentListItem>(res.data)
-      items = page.records.map(listItemToIndexItem)
-      total = page.total
+    const params = applySearchParams({
+      source: 'kb',
+      status: 1,
+      pageNum,
+      pageSize: GROUP_FETCH_SIZE,
+    })
+    const res = await searchKbDocumentsApi(params)
+    if (seq !== fetchBrowseSeq) return
+    if (res.code !== API_SUCCESS_CODE || !res.data) {
+      throw new Error(res.msg || t('knowledge.browse.groupLoadFailed'))
     }
+    const page = normalizeKbPageRecords<KbDocumentListItem>(res.data)
+    const items = page.records.map(listItemToIndexItem)
+    const total = page.total
 
     if (pageNum === 1) {
       browseItems.value = items
@@ -472,9 +425,8 @@ async function ensureCategoryForSlug(slug: string) {
   }
   // 体裁筛选模式下不因正文链接自动改分类，避免与 kbType AND 冲突
   if (kbTypeFilter.value) return
-  const spaceId = kbQuerySpaceId()
   try {
-    const res = await locateKbIndexApi(slug, spaceId)
+    const res = await locateKbIndexApi(slug, browseScopeParams())
     if (res.code === API_SUCCESS_CODE && res.data) {
       const located = res.data
       const cat: KbCategoryFilter =
@@ -537,7 +489,7 @@ watch(keyword, (kw) => {
 async function runIndexSearch(q: string) {
   searchLoading.value = true
   try {
-    const res = await searchKbIndexApi(q, kbQuerySpaceId(), 200)
+    const res = await searchKbIndexApi(q, browseScopeParams(), 200)
     if (res.code !== API_SUCCESS_CODE || !res.data) return
     if (keyword.value.trim() !== q) return
     searchIndex.value = res.data
@@ -562,7 +514,7 @@ function formatTime(value?: string) {
 }
 
 async function resolveInitialSlug(slugTarget: string, explicitSpaceId?: string) {
-  const spaceId = explicitSpaceId ?? kbQuerySpaceId()
+  const spaceId = explicitSpaceId ?? preferredSpaceId()
   if (slugTarget) {
     const resolved = resolveSlug(slugTarget)
     try {
@@ -718,12 +670,12 @@ function openWikiEdit() {
 const browseReady = ref(false)
 
 onMounted(async () => {
-  await ensureSpacesLoaded()
+  await ensureScopeReady()
   browseReady.value = true
   void loadIndex()
 })
 
-watch(selectedSpaceCode, () => {
+watch(scopeSpaceIds, () => {
   if (!browseReady.value) return
   pageCache.clear()
   inflightPages.clear()
@@ -733,7 +685,7 @@ watch(selectedSpaceCode, () => {
   resetBrowseState()
   loadError.value = ''
   void loadIndex()
-})
+}, { deep: true })
 
 watch(
   () => [route.query.slug, route.query.spaceId] as const,
@@ -749,7 +701,7 @@ watch(
   <div class="page-stack">
     <div v-if="!noAccessibleSpaces && !accessDeniedMessage" class="kb-browse-toolbar">
       <div class="kb-browse-toolbar-scopes">
-        <KbSpaceSelector />
+        <KbSpaceScopePicker />
         <KbAttachmentsPanel :document-id="page?.docId" :can-edit="canEditAttachments" />
       </div>
     </div>
@@ -784,8 +736,9 @@ watch(
 
         <div v-else-if="!inSearchMode" class="flex min-h-0 flex-1 flex-col">
           <KbDocFilterTabs
-            fill-height
-            class="min-h-0 flex-1"
+            layout="chips"
+            show-both-rows
+            class="shrink-0"
             :kb-type-chips="kbTypeChips"
             :kb-type-filter="kbTypeFilter"
             :kb-type-loading="kbTypeLoading"
@@ -794,46 +747,42 @@ watch(
             :category-loading="indexLoading"
             @update:kb-type-filter="onKbTypeFilterChange"
             @update:category-filter="onCategoryFilterChange"
-            @activate="onFilterAccordionActivate"
-          >
-            <template #expanded>
-              <div class="space-y-0.5 py-1">
-                <p v-if="browseLoading && !browseItems.length" class="px-2 py-2 text-xs text-gray-400">
-                  {{ t('common.loading') }}
-                </p>
-                <button
-                  v-for="item in visibleBrowseItems"
-                  :key="item.slug"
-                  type="button"
-                  :data-tree-slug="item.slug"
-                  :class="[
-                    'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition',
-                    item.slug === activeSlug
-                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
-                      : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5',
-                  ]"
-                  @click="openSlug(item.slug, item.spaceId, true)"
-                >
-                  <FileText class="h-3.5 w-3.5 shrink-0 opacity-70" />
-                  <span class="min-w-0 flex-1 truncate">{{ item.title }}</span>
-                </button>
-                <button
-                  v-if="hasMoreBrowseItems()"
-                  type="button"
-                  class="w-full rounded-md px-2 py-1 text-left text-xs text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-300"
-                  @click="loadMoreBrowseItems()"
-                >
-                  {{ t('knowledge.browse.loadMore', { count: browseTotal - visibleBrowseItems.length }) }}
-                </button>
-                <p v-if="!browseLoading && !browseItems.length && showFilterAndEmpty" class="px-2 py-2 text-xs leading-relaxed text-amber-600 dark:text-amber-400">
-                  {{ t('knowledge.browse.filterAndEmpty') }}
-                </p>
-                <p v-else-if="!browseLoading && !browseItems.length" class="px-2 py-3 text-center text-xs text-gray-400">
-                  {{ t('knowledge.browse.empty') }}
-                </p>
-              </div>
-            </template>
-          </KbDocFilterTabs>
+          />
+          <div class="mt-3 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5">
+            <p v-if="browseLoading && !browseItems.length" class="px-2 py-2 text-xs text-gray-400">
+              {{ t('common.loading') }}
+            </p>
+            <button
+              v-for="item in visibleBrowseItems"
+              :key="item.slug"
+              type="button"
+              :data-tree-slug="item.slug"
+              :class="[
+                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition',
+                item.slug === activeSlug
+                  ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300'
+                  : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/5',
+              ]"
+              @click="openSlug(item.slug, item.spaceId, true)"
+            >
+              <FileText class="h-3.5 w-3.5 shrink-0 opacity-70" />
+              <span class="min-w-0 flex-1 truncate">{{ item.title }}</span>
+            </button>
+            <button
+              v-if="hasMoreBrowseItems()"
+              type="button"
+              class="w-full rounded-md px-2 py-1 text-left text-xs text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-300"
+              @click="loadMoreBrowseItems()"
+            >
+              {{ t('knowledge.browse.loadMore', { count: browseTotal - visibleBrowseItems.length }) }}
+            </button>
+            <p v-if="!browseLoading && !browseItems.length && showFilterAndEmpty" class="px-2 py-2 text-xs leading-relaxed text-amber-600 dark:text-amber-400">
+              {{ t('knowledge.browse.filterAndEmpty') }}
+            </p>
+            <p v-else-if="!browseLoading && !browseItems.length" class="px-2 py-3 text-center text-xs text-gray-400">
+              {{ t('knowledge.browse.empty') }}
+            </p>
+          </div>
           <p class="mt-auto shrink-0 pt-2 text-xs text-gray-400">
             {{ t('knowledge.browse.docCount', { count: visibleDocCount }) }}
           </p>

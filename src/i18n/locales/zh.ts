@@ -133,6 +133,8 @@ export default {
     space: {
       label: '知识空间',
       allAccessible: '全部可读空间',
+      selectedCount: '已选 {count} 个空间',
+      multiSelectHint: '勾选若干空间；不选即查看全部可读空间',
       private: '私有',
       internal: '内部',
       public: '公开',
@@ -647,7 +649,7 @@ export default {
       readOnlySpaceHint: '当前空间为只读（viewer 角色），可浏览文档列表，编辑/新建需 editor 或 admin 角色。',
       move: '移动分类',
       moveTitle: '移动到分类（=目录）',
-      moveDesc: '将文档「{title}」移动到另一分类：会移动 wiki 文件、自动改全路径引用，并按目标分类默认体裁更新 frontmatter，随后触发同步。',
+      moveDesc: '将文档「{title}」移动到另一分类：会移动 wiki 文件、自动改全路径引用，随后触发同步（frontmatter type 不变，需改体裁请编辑 wiki）。',
       moveTargetPlaceholder: '请选择目标分类',
       moveWarning: '注意：移动后 slug 会从「旧目录/名」变为「新目录/名」，旧深链将失效。',
       moveNeedCategory: '请选择目标分类',

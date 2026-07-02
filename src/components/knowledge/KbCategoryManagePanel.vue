@@ -35,20 +35,8 @@ const form = ref({
   categoryName: '',
   parentId: '0',
   dirSlug: '',
-  defaultType: '',
   sort: 0,
 })
-
-const TYPE_OPTIONS = computed(() => [
-  { value: '', label: '—' },
-  { value: 'guide', label: t('knowledge.docManage.kbType.guide') },
-  { value: 'service', label: t('knowledge.docManage.kbType.service') },
-  { value: 'concept', label: t('knowledge.docManage.kbType.concept') },
-  { value: 'article', label: t('knowledge.docManage.kbType.article') },
-  { value: 'interview', label: t('knowledge.docManage.kbType.interview') },
-  { value: 'output', label: t('knowledge.docManage.kbType.output') },
-  { value: 'exam', label: t('knowledge.docManage.kbType.exam') },
-])
 const DIR_SLUG_RE = /^[A-Za-z0-9_-]{1,64}$/
 
 const { expanded, toggleExpand, expandAllIfEmpty } = useTreeExpand()
@@ -87,7 +75,7 @@ async function loadTree() {
 function openCreate(parentId?: string) {
   if (!guardAction(PERM.KB_DOCUMENT_EDIT)) return
   editingId.value = null
-  form.value = { categoryName: '', parentId: parentId ?? '', dirSlug: '', defaultType: '', sort: 0 }
+  form.value = { categoryName: '', parentId: parentId ?? '', dirSlug: '', sort: 0 }
   modalOpen.value = true
 }
 
@@ -100,7 +88,6 @@ function openEdit(row: KbCategoryTree) {
     categoryName: row.categoryName,
     parentId: toEntityId(row.parentId) ?? '0',
     dirSlug: row.dirSlug ?? '',
-    defaultType: row.defaultType ?? '',
     sort: row.sort ?? 0,
   }
   modalOpen.value = true
@@ -124,7 +111,6 @@ async function submit() {
       categoryName: form.value.categoryName.trim(),
       // dir_slug 仅创建时提交（创建后不可改）
       dirSlug: editingId.value ? undefined : form.value.dirSlug.trim(),
-      defaultType: form.value.defaultType || undefined,
       sort: form.value.sort,
     }
     const res = await saveKbCategoryApi(payload)
@@ -193,7 +179,6 @@ watch(
           <tr>
             <th>{{ t('knowledge.taxManage.colName') }}</th>
             <th>目录</th>
-            <th>默认体裁</th>
             <th>文档数</th>
             <th>{{ t('knowledge.taxManage.colSort') }}</th>
             <th class="text-right">{{ t('knowledge.docManage.colActions') }}</th>
@@ -220,7 +205,6 @@ watch(
               <code v-if="row.dirSlug" class="rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-white/10">{{ row.dirSlug }}/</code>
               <span v-else class="text-gray-300">—</span>
             </td>
-            <td class="text-gray-500">{{ row.defaultType || '—' }}</td>
             <td class="text-gray-500">{{ row.docCount ?? 0 }}</td>
             <td class="text-gray-500">{{ row.sort ?? 0 }}</td>
             <td class="text-right">
@@ -264,12 +248,6 @@ watch(
           <p class="mt-1 text-xs text-gray-400">
             {{ editingId ? '目录绑定后不可修改' : '创建分类会在该空间 wiki 下新建此子目录' }}
           </p>
-        </FormField>
-        <FormField label="默认体裁 (default_type)">
-          <select v-model="form.defaultType" class="field-input">
-            <option v-for="opt in TYPE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
-          <p class="mt-1 text-xs text-gray-400">文档移入该分类时，自动把 frontmatter type 改为此体裁（空=不改）</p>
         </FormField>
         <FormField :label="t('knowledge.taxManage.colSort')">
           <input v-model.number="form.sort" type="number" min="0" class="field-input" />

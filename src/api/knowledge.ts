@@ -6,6 +6,7 @@ import type {
   KbAskRequest,
   KbAskResponse,
   KbAttachment,
+  KbBrowseScopeParams,
   KbCategoryTree,
   KbCategorySaveRequest,
   KbDocumentDetail,
@@ -96,6 +97,37 @@ export function normalizeKbPageRecords<T>(data?: MoliPage<T> | Record<string, un
   ) as T[]
   const total = Number(raw.total ?? records.length) || 0
   return { records, total }
+}
+
+function buildKbBrowseScopeQuery(
+  params?: KbBrowseScopeParams & {
+    categoryId?: number | string
+    uncategorizedOnly?: boolean
+    groupBy?: string
+    key?: string
+    slug?: string
+    q?: string
+    limit?: number
+    pageNum?: number
+    pageSize?: number
+  },
+) {
+  const qs = new URLSearchParams()
+  if (params?.spaceId != null && params.spaceId !== '') qs.set('spaceId', String(params.spaceId))
+  for (const sid of params?.spaceIds ?? []) {
+    if (sid != null && sid !== '') qs.append('spaceIds', String(sid))
+  }
+  if (params?.categoryId != null) qs.set('categoryId', String(params.categoryId))
+  if (params?.uncategorizedOnly === true) qs.set('uncategorizedOnly', 'true')
+  if (params?.groupBy) qs.set('groupBy', String(params.groupBy))
+  if (params?.key) qs.set('key', String(params.key))
+  if (params?.slug) qs.set('slug', String(params.slug))
+  if (params?.q) qs.set('q', String(params.q))
+  if (params?.limit != null) qs.set('limit', String(params.limit))
+  if (params?.pageNum != null) qs.set('pageNum', String(params.pageNum))
+  if (params?.pageSize != null) qs.set('pageSize', String(params.pageSize))
+  const query = qs.toString()
+  return query ? `?${query}` : ''
 }
 
 function buildKbDocumentSearchQuery(params: KbDocumentSearchParams) {
@@ -591,17 +623,16 @@ export async function batchRemoveKbSpaceMembersApi(data: import('@/types/knowled
 // ---------------------------------------------------------------------------
 
 /** 目录 meta（默认按分类分组，不含 items） */
-export async function getKbIndexApi(spaceId?: number | string) {
+export async function getKbIndexApi(params?: KbBrowseScopeParams) {
   if (USE_MOCK) {
     await delay(220)
     return ok<KbIndex>(mockIndexMeta())
   }
-  return request<KbIndex>(`${KB_BASE}/index${buildQuery({ spaceId, groupBy: 'category' })}`, { method: 'GET' })
+  return request<KbIndex>(`${KB_BASE}/index${buildKbBrowseScopeQuery({ ...params, groupBy: 'category' })}`, { method: 'GET' })
 }
 
 /** 分类下体裁 facet（chip + 计数，仅 count>0） */
-export async function getKbIndexTypesApi(params: {
-  spaceId?: number | string
+export async function getKbIndexTypesApi(params: KbBrowseScopeParams & {
   categoryId?: number | string
   uncategorizedOnly?: boolean
 }) {
@@ -638,10 +669,10 @@ export async function getKbIndexTypesApi(params: {
     return ok<KbIndexTypesResult>({ items, total })
   }
   return request<KbIndexTypesResult>(
-    `${KB_BASE}/index/types${buildQuery({
-      spaceId: params.spaceId,
+    `${KB_BASE}/index/types${buildKbBrowseScopeQuery({
+      ...params,
       categoryId: params.uncategorizedOnly ? undefined : params.categoryId,
-      uncategorizedOnly: params.uncategorizedOnly ? 'true' : undefined,
+      uncategorizedOnly: params.uncategorizedOnly,
     })}`,
     { method: 'GET' },
   )
@@ -666,7 +697,7 @@ export async function getKbMetaKbTypesApi() {
 /** 目录分组条目分页（key 为 categoryId / uncategorized） */
 export async function getKbIndexItemsApi(
   key: string,
-  spaceId?: number | string,
+  scope?: KbBrowseScopeParams,
   pageNum = 1,
   pageSize = 50,
 ) {
@@ -685,13 +716,13 @@ export async function getKbIndexItemsApi(
     })
   }
   return request<import('@/types/knowledge').KbIndexItemsPage>(
-    `${KB_BASE}/index/items${buildQuery({ spaceId, key, pageNum, pageSize })}`,
+    `${KB_BASE}/index/items${buildKbBrowseScopeQuery({ ...scope, key, pageNum, pageSize })}`,
     { method: 'GET' },
   )
 }
 
 /** 目录搜索（服务端过滤，结果按分类分组） */
-export async function searchKbIndexApi(q: string, spaceId?: number | string, limit = 200) {
+export async function searchKbIndexApi(q: string, scope?: KbBrowseScopeParams, limit = 200) {
   if (USE_MOCK) {
     await delay(160)
     const kw = q.trim().toLowerCase()
@@ -709,11 +740,11 @@ export async function searchKbIndexApi(q: string, spaceId?: number | string, lim
     const total = groups.reduce((s, g) => s + g.items.length, 0)
     return ok<KbIndex>({ total, groups })
   }
-  return request<KbIndex>(`${KB_BASE}/index/search${buildQuery({ spaceId, q, limit })}`, { method: 'GET' })
+  return request<KbIndex>(`${KB_BASE}/index/search${buildKbBrowseScopeQuery({ ...scope, q, limit })}`, { method: 'GET' })
 }
 
 /** 按 slug 定位目录分组（type 字段为 categoryId 或 uncategorized） */
-export async function locateKbIndexApi(slug: string, spaceId?: number | string) {
+export async function locateKbIndexApi(slug: string, scope?: KbBrowseScopeParams) {
   if (USE_MOCK) {
     await delay(80)
     for (const g of MOCK_INDEX.groups) {
@@ -723,7 +754,7 @@ export async function locateKbIndexApi(slug: string, spaceId?: number | string) 
     return ok<import('@/types/knowledge').KbIndexLocate | undefined>(undefined)
   }
   return request<import('@/types/knowledge').KbIndexLocate>(
-    `${KB_BASE}/index/locate${buildQuery({ spaceId, slug })}`,
+    `${KB_BASE}/index/locate${buildKbBrowseScopeQuery({ ...scope, slug })}`,
     { method: 'GET' },
   )
 }

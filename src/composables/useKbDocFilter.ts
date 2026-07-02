@@ -1,7 +1,8 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { getKbIndexApi, getKbIndexTypesApi } from '@/api/knowledge'
 import { API_SUCCESS_CODE } from '@/types/api'
-import type { KbDocumentSearchParams, KbIndexGroup, KbIndexTypeFacetItem } from '@/types/knowledge'
+import type { KbBrowseScopeParams, KbDocumentSearchParams, KbIndexGroup, KbIndexTypeFacetItem } from '@/types/knowledge'
+import { applyKbSpaceScopeParams } from '@/utils/kbSpaceScope'
 
 /** 分类 chip：all=不过滤，uncategorized=未分类，其余为 categoryId */
 export type KbCategoryFilter = 'all' | 'uncategorized' | string
@@ -12,8 +13,16 @@ export type KbCategoryChip = {
   count: number
 }
 
-/** 体裁 + 分类两个独立维度（AND），进页即拉全空间 facet */
-export function useKbDocFilter(spaceId: Ref<string | number | undefined>) {
+export type UseKbDocFilterOptions = {
+  /** 空数组时不拉 facet（文档管理等需先选定单空间） */
+  skipWhenEmpty?: boolean
+}
+
+/** 体裁 + 分类两个独立维度（AND）；scopeSpaceIds 空数组 = 全部可读空间 */
+export function useKbDocFilter(
+  scopeSpaceIds: Ref<string[]>,
+  options: UseKbDocFilterOptions = {},
+) {
   const kbTypeFilter = ref<string | null>(null)
   const categoryFilter = ref<KbCategoryFilter>('all')
 
@@ -33,15 +42,18 @@ export function useKbDocFilter(spaceId: Ref<string | number | undefined>) {
 
   const filtersLoading = computed(() => kbTypeLoading.value || indexLoading.value)
 
+  function browseScopeParams(): KbBrowseScopeParams {
+    return applyKbSpaceScopeParams({}, scopeSpaceIds.value)
+  }
+
   async function loadKbTypeChips() {
-    if (!spaceId.value) {
+    if (options.skipWhenEmpty && scopeSpaceIds.value.length === 0) {
       kbTypeChips.value = []
       return
     }
     kbTypeLoading.value = true
     try {
-      // 体裁 facet 始终按全空间计数（API §2.1.3 进页不带 categoryId）
-      const res = await getKbIndexTypesApi({ spaceId: spaceId.value })
+      const res = await getKbIndexTypesApi(browseScopeParams())
       if (res.code === API_SUCCESS_CODE && res.data) {
         kbTypeChips.value = res.data.items
         if (kbTypeFilter.value && !res.data.items.some((c) => c.kbType === kbTypeFilter.value)) {
@@ -58,14 +70,14 @@ export function useKbDocFilter(spaceId: Ref<string | number | undefined>) {
   }
 
   async function loadCategoryIndex() {
-    if (!spaceId.value) {
+    if (options.skipWhenEmpty && scopeSpaceIds.value.length === 0) {
       categoryGroups.value = []
       indexTotal.value = 0
       return
     }
     indexLoading.value = true
     try {
-      const res = await getKbIndexApi(spaceId.value)
+      const res = await getKbIndexApi(browseScopeParams())
       if (res.code === API_SUCCESS_CODE && res.data) {
         categoryGroups.value = res.data.groups
         indexTotal.value = res.data.total ?? 0
@@ -90,6 +102,7 @@ export function useKbDocFilter(spaceId: Ref<string | number | undefined>) {
   }
 
   function applySearchParams(params: KbDocumentSearchParams) {
+    applyKbSpaceScopeParams(params, scopeSpaceIds.value)
     if (kbTypeFilter.value) params.kbType = kbTypeFilter.value
     if (categoryFilter.value === 'uncategorized') {
       params.uncategorizedOnly = true
@@ -112,10 +125,10 @@ export function useKbDocFilter(spaceId: Ref<string | number | undefined>) {
     categoryFilter.value = 'all'
   }
 
-  watch(spaceId, () => {
+  watch(scopeSpaceIds, () => {
     resetFilters()
     void reloadFilters()
-  }, { immediate: true })
+  }, { immediate: true, deep: true })
 
   return {
     kbTypeFilter,

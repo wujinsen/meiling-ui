@@ -133,6 +133,8 @@ export default {
     space: {
       label: 'ナレッジ空間',
       allAccessible: 'アクセス可能な全空間',
+      selectedCount: '{count} 空間を選択',
+      multiSelectHint: '空間を選択して絞り込み。未選択は全空間',
       private: '非公開',
       internal: '内部',
       public: '公開',
@@ -628,7 +630,7 @@ export default {
       readOnlySpaceHint: 'このスペースは読み取り専用（viewer）です。一覧の閲覧は可能ですが、編集・作成には editor または admin が必要です。',
       move: '分類を移動',
       moveTitle: '分類（ディレクトリ）へ移動',
-      moveDesc: '文書「{title}」を別の分類へ移動します：wiki ファイル移動、フルパス参照の更新、対象分類の default_type による frontmatter 更新の後、同期を実行します。',
+      moveDesc: '文書「{title}」を別の分類へ移動します：wiki ファイル移動、フルパス参照の更新の後、同期を実行します（frontmatter type は変更しません）。',
       moveTargetPlaceholder: '移動先の分類を選択',
       moveWarning: '移動後、slug は「旧ディレクトリ/名」から「新ディレクトリ/名」に変わり、旧ディープリンクは無効になります。',
       moveNeedCategory: '移動先の分類を選択してください',

@@ -67,6 +67,12 @@ export type KbIndex = {
   groups: KbIndexGroup[]
 }
 
+/** 浏览 facet / index API 的空间范围（空 = 全部可读空间） */
+export type KbBrowseScopeParams = {
+  spaceId?: number | string
+  spaceIds?: Array<number | string>
+}
+
 export type KbLinkRelation = 'links_to' | 'related' | 'depends_on' | 'same_tag' | string
 
 export type KbPageLink = {
@@ -617,8 +623,6 @@ export type KbCategoryTree = {
   icon?: string
   /** 绑定的 wiki 子目录名（分类=目录，单一真相源） */
   dirSlug?: string
-  /** 默认体裁 kb_type；文档移入时按此改 frontmatter type */
-  defaultType?: string
   /** withCount=true 时返回该分类下文档数 */
   docCount?: number
   sort?: number
@@ -646,8 +650,6 @@ export type KbCategorySaveRequest = {
   icon?: string
   /** 绑定 wiki 子目录；创建必填，创建后不可改 */
   dirSlug?: string
-  /** 默认体裁 kb_type */
-  defaultType?: string
   sort?: number
 }
 

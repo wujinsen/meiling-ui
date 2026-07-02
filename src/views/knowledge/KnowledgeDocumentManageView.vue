@@ -18,7 +18,7 @@ import { useKbSpace } from '@/composables/useKbSpace'
 import { useKbDocFilter, type KbCategoryFilter } from '@/composables/useKbDocFilter'
 import { useKbDocMeta } from '@/composables/useKbDocMeta'
 import { useKbMetaKbTypes } from '@/composables/useKbMetaKbTypes'
-import { assertAction, guardAction } from '@/composables/useActionPermissions'
+import { assertAction, guardAction, useActionPermissions } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
@@ -33,11 +33,16 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const { spaces, ensureSpacesLoaded, loading: spaceLoading, setSelectedSpaceId } = useKbSpace()
+const { fullPermission } = useActionPermissions()
 
-const editableSpaces = computed(() => spaces.value.filter((s) => s.canEdit === true))
+const editableSpaces = computed(() =>
+  spaces.value.filter((s) => s.canEdit === true || fullPermission.value),
+)
 const hasAccessibleSpace = computed(() => spaces.value.length > 0)
 const currentSpace = computed(() => spaces.value.find((s) => toEntityId(s.id) === docSpaceId.value) ?? null)
-const canEditCurrentSpace = computed(() => currentSpace.value?.canEdit === true)
+const canEditCurrentSpace = computed(
+  () => fullPermission.value || currentSpace.value?.canEdit === true,
+)
 
 const docSpaceId = ref('')
 const loading = ref(false)
@@ -52,6 +57,8 @@ const query = reactive({
   tagId: '',
 })
 
+const docScopeIds = computed(() => (docSpaceId.value ? [docSpaceId.value] : []))
+
 const {
   kbTypeFilter,
   kbTypeChips,
@@ -64,7 +71,7 @@ const {
   selectCategory,
   resetFilters,
   reloadFilters,
-} = useKbDocFilter(docSpaceId)
+} = useKbDocFilter(docScopeIds, { skipWhenEmpty: true })
 
 const { categories, flatCategories, tags, loading: metaLoading, reload: reloadMeta } = useKbDocMeta(docSpaceId)
 const { kbTypeLabel, ensureLoaded: ensureKbTypeLabels } = useKbMetaKbTypes()

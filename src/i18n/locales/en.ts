@@ -133,6 +133,8 @@ export default {
     space: {
       label: 'Space',
       allAccessible: 'All accessible spaces',
+      selectedCount: '{count} spaces selected',
+      multiSelectHint: 'Check spaces to filter; none checked means all accessible spaces',
       private: 'Private',
       internal: 'Internal',
       public: 'Public',
@@ -628,7 +630,7 @@ export default {
       readOnlySpaceHint: 'This space is read-only (viewer). You can browse documents; editing requires editor or admin role.',
       move: 'Move category',
       moveTitle: 'Move to category (folder)',
-      moveDesc: 'Move “{title}” to another category: relocates the wiki file, rewrites full-path references, updates frontmatter type from the target category default, then triggers sync.',
+      moveDesc: 'Move “{title}” to another category: relocates the wiki file, rewrites full-path references, then triggers sync (frontmatter type unchanged; edit wiki to change kb_type).',
       moveTargetPlaceholder: 'Select target category',
       moveWarning: 'After moving, the slug changes from old-folder/name to new-folder/name; old deep links will break.',
       moveNeedCategory: 'Select a target category',
