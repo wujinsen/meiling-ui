@@ -28,6 +28,7 @@ import { popWikiDraft } from '@/utils/kbWikiDraft'
 import type { KbWikiEnrichResult, KbWikiLintPreviewItem } from '@/types/knowledge'
 import { PERM } from '@/constants/permissions'
 import { assertAction } from '@/composables/useActionPermissions'
+import { useKbMarkdownRender } from '@/composables/useKbMarkdownRender'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -89,6 +90,7 @@ const changeLog = ref('')
 
 const mainTab = ref<'write' | 'preview' | 'diff'>('write')
 const contentHtml = shallowRef('')
+const markdownRootRef = ref<HTMLElement | null>(null)
 
 const llmAvailable = ref(false)
 const aiPanelOpen = ref(false)
@@ -160,6 +162,13 @@ const canEditSpace = computed(() => {
   const def = spaces.value.find((s) => s.spaceCode === 'enterprise-kb')
   return def ? def.canEdit === true : true
 })
+
+const markdownAssetCtx = computed(() => ({
+  documentSlug: slug.value,
+  spaceId: querySpaceId.value ?? resolvedSpaceId.value,
+}))
+
+useKbMarkdownRender(markdownRootRef, markdownAssetCtx, contentHtml)
 
 const fromLintIssue = computed(() => Boolean(issueId.value))
 
@@ -743,6 +752,7 @@ watch(slug, () => {
           <!-- eslint-disable-next-line vue/no-v-html -->
           <div
             v-else-if="mainTab === 'preview'"
+            ref="markdownRootRef"
             class="kb-markdown mt-3 min-h-[380px] flex-1 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-white/5 dark:bg-white/[0.02]"
             v-html="contentHtml"
           />

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { History, Loader2, Send, Sparkles, ThumbsDown, ThumbsUp, User } from 'lucide-vue-next'
@@ -19,6 +19,7 @@ import { confirm } from '@/composables/useConfirm'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { showToast } from '@/composables/useToast'
 import { renderMarkdown } from '@/utils/markdown'
+import { useKbMarkdownRenderMulti } from '@/composables/useKbMarkdownRender'
 import type { KbAskResponse, KbCitation, KbQaHistory } from '@/types/knowledge'
 
 type ChatTurn = {
@@ -40,6 +41,13 @@ const asking = ref(false)
 const turns = ref<ChatTurn[]>([])
 const listRef = ref<HTMLElement | null>(null)
 let turnId = 0
+
+const markdownAssetCtx = computed(() => ({
+  spaceId: scopeSpaceIds.value[0] ?? '',
+  documentSlug: '',
+}))
+
+useKbMarkdownRenderMulti(listRef, markdownAssetCtx, turns)
 
 const showHistory = ref(false)
 const historyLoading = ref(false)

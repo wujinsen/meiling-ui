@@ -16,6 +16,7 @@ import {
 } from '@/api/knowledge'
 import { assertAction } from '@/composables/useActionPermissions'
 import { useKbDocFilter, type KbCategoryFilterId } from '@/composables/useKbDocFilter'
+import { useKbMarkdownRender } from '@/composables/useKbMarkdownRender'
 import { useKbSpaceScope } from '@/composables/useKbSpaceScope'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { showToast } from '@/composables/useToast'
@@ -98,6 +99,7 @@ const page = ref<KbPage | null>(null)
 const activeSlug = ref('')
 const detailRef = ref<HTMLElement | null>(null)
 const treeRef = ref<HTMLElement | null>(null)
+const markdownRootRef = ref<HTMLElement | null>(null)
 const contentHtml = shallowRef('')
 const slugLookup = ref<Map<string, string>>(new Map())
 /** 初次进入恢复上次文档时，不自动把分类锁定到该文档所属分类 */
@@ -678,6 +680,13 @@ function openWikiEditAttachments() {
 
 const browseReady = ref(false)
 
+const markdownAssetCtx = computed(() => ({
+  documentSlug: page.value?.slug,
+  spaceId: page.value?.spaceId,
+}))
+
+useKbMarkdownRender(markdownRootRef, markdownAssetCtx, contentHtml)
+
 onMounted(async () => {
   await ensureScopeReady()
   browseReady.value = true
@@ -917,7 +926,7 @@ watch(
           </header>
 
           <!-- eslint-disable-next-line vue/no-v-html -->
-          <div class="kb-markdown mt-4" @click="onContentClick" v-html="contentHtml" />
+          <div ref="markdownRootRef" class="kb-markdown mt-4" @click="onContentClick" v-html="contentHtml" />
 
           <section
             v-if="page.outLinks?.length || page.backLinks?.length"

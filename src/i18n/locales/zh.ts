@@ -742,6 +742,9 @@ export default {
     preview: {
       openInBrowse: '在浏览页打开',
     },
+    markdownImage: {
+      loadFailed: '图片加载失败',
+    },
     attachments: {
       title: '附件',
       sectionTitle: '页附件（MinIO）',

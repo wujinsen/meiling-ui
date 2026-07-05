@@ -18,6 +18,11 @@ function renderInline(text: string) {
   })
   html = html.replace(/`([^`]+)`/g, '<code class="kb-code">$1</code>')
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, href: string) => {
+    const safeAlt = escapeHtml(alt)
+    const safeHref = escapeHtml(href.trim())
+    return `<img class="kb-md-img kb-md-img-pending" alt="${safeAlt}" data-kb-asset-src="${safeHref}" loading="lazy" decoding="async" />`
+  })
   return html
 }
 
@@ -48,7 +53,7 @@ function renderTable(header: string[], rows: string[][]) {
 
 const markdownCache = new Map<string, string>()
 const MARKDOWN_CACHE_MAX = 48
-const MARKDOWN_CACHE_VERSION = 'v4'
+const MARKDOWN_CACHE_VERSION = 'v6'
 
 /** Ingest / raw 来源 wiki 常含内嵌 HTML 表格，预览需原样渲染（仅去掉明显 XSS） */
 const HTML_BLOCK_TAGS = ['table', 'div', 'figure', 'section', 'article', 'details'] as const
@@ -189,6 +194,18 @@ function renderMarkdownBody(content: string): string {
     if (quote) {
       closeList()
       out.push(`<blockquote class="kb-md-quote">${renderInline(quote[1])}</blockquote>`)
+      i += 1
+      continue
+    }
+
+    const mdImg = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
+    if (mdImg) {
+      closeList()
+      const safeAlt = escapeHtml(mdImg[1])
+      const safeHref = escapeHtml(mdImg[2].trim())
+      out.push(
+        `<figure class="kb-md-figure"><img class="kb-md-img kb-md-img-pending" alt="${safeAlt}" data-kb-asset-src="${safeHref}" loading="lazy" decoding="async" /></figure>`,
+      )
       i += 1
       continue
     }

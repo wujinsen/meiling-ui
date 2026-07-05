@@ -721,6 +721,9 @@ export default {
       },
     },
     preview: { openInBrowse: '閲覧ページで開く' },
+    markdownImage: {
+      loadFailed: '画像の読み込みに失敗しました',
+    },
     attachments: {
       title: '添付',
       sectionTitle: 'ページ添付（MinIO）',

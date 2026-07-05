@@ -721,6 +721,9 @@ export default {
       },
     },
     preview: { openInBrowse: 'Open in browse' },
+    markdownImage: {
+      loadFailed: 'Image failed to load',
+    },
     attachments: {
       title: 'Attachments',
       sectionTitle: 'Page attachments (MinIO)',

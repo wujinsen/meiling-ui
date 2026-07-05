@@ -356,6 +356,22 @@
     @apply cursor-pointer font-medium text-brand-600 underline decoration-dotted underline-offset-2 hover:text-brand-700 dark:text-brand-400;
   }
 
+  .kb-markdown .kb-md-figure {
+    @apply my-4;
+  }
+
+  .kb-markdown .kb-md-img {
+    @apply max-h-[min(70vh,32rem)] max-w-full rounded-lg border border-gray-100 dark:border-white/10;
+  }
+
+  .kb-markdown .kb-md-img-pending {
+    @apply min-h-[4rem] min-w-[6rem] animate-pulse bg-gray-100 dark:bg-white/5;
+  }
+
+  .kb-markdown .kb-md-img-error {
+    @apply border-dashed border-rose-200 bg-rose-50/50 dark:border-rose-500/30 dark:bg-rose-500/5;
+  }
+
   .kb-markdown .kb-html-block {
     @apply my-3 max-w-full overflow-x-auto;
   }

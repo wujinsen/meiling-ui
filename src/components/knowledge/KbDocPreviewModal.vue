@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { ExternalLink } from 'lucide-vue-next'
 import AppModal from '@/components/ui/AppModal.vue'
 import { getKbDocumentApi, getKbPageApi } from '@/api/knowledge'
+import { useKbMarkdownRender } from '@/composables/useKbMarkdownRender'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
 import type { KbPage } from '@/types/knowledge'
@@ -25,8 +26,16 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const page = ref<KbPage | null>(null)
+const markdownRootRef = ref<HTMLElement | null>(null)
 
 const previewHtml = computed(() => renderMarkdown(page.value?.content))
+
+const markdownAssetCtx = computed(() => ({
+  documentSlug: page.value?.slug ?? props.slug,
+  spaceId: page.value?.spaceId ?? props.spaceId,
+}))
+
+useKbMarkdownRender(markdownRootRef, markdownAssetCtx, previewHtml)
 
 async function load() {
   if (!props.open) return
@@ -96,7 +105,7 @@ watch(
         </button>
       </div>
       <!-- eslint-disable-next-line vue/no-v-html -->
-      <div class="kb-markdown max-h-[70vh] overflow-y-auto" @click="onContentClick" v-html="previewHtml" />
+      <div ref="markdownRootRef" class="kb-markdown max-h-[70vh] overflow-y-auto" @click="onContentClick" v-html="previewHtml" />
     </div>
     <p v-else class="py-10 text-center text-sm text-gray-400">{{ t('knowledge.browse.pageNotFound') }}</p>
   </AppModal>
