@@ -11,11 +11,12 @@ import KbCategoryManagePanel from '@/components/knowledge/KbCategoryManagePanel.
 import KbCategorySelect from '@/components/knowledge/KbCategorySelect.vue'
 import KbDocFilterTabs from '@/components/knowledge/KbDocFilterTabs.vue'
 import KbDocumentCreateModal from '@/components/knowledge/KbDocumentCreateModal.vue'
-import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
+import KbSpaceScopePicker from '@/components/knowledge/KbSpaceScopePicker.vue'
 import KbTagManagePanel from '@/components/knowledge/KbTagManagePanel.vue'
-import { getKbDocumentApi, moveKbDocumentApi, searchKbDocumentsApi } from '@/api/knowledge'
+import { getKbCategoryTreeApi, getKbDocumentApi, moveKbDocumentApi, searchKbDocumentsApi } from '@/api/knowledge'
+import { useKbSpaceScope } from '@/composables/useKbSpaceScope'
 import { useKbSpace } from '@/composables/useKbSpace'
-import { useKbDocFilter, type KbCategoryFilter } from '@/composables/useKbDocFilter'
+import { useKbDocFilter, type KbCategoryFilterId } from '@/composables/useKbDocFilter'
 import { useKbDocMeta } from '@/composables/useKbDocMeta'
 import { useKbMetaKbTypes } from '@/composables/useKbMetaKbTypes'
 import { assertAction, guardAction, useActionPermissions } from '@/composables/useActionPermissions'
@@ -27,24 +28,42 @@ import type { WikiCreatePayload } from '@/components/knowledge/KbDocumentCreateM
 import { PERM } from '@/constants/permissions'
 import { kbWikiEditPath } from '@/router/knowledgeSupplementRoutes'
 import { toEntityId } from '@/utils/id'
-import { findKbCategoryName } from '@/utils/kbCategoryTree'
+import { findKbCategoryName, flattenKbCategoryTree } from '@/utils/kbCategoryTree'
+import type { KbCategoryTree } from '@/types/knowledge'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { spaces, ensureSpacesLoaded, loading: spaceLoading, setSelectedSpaceId } = useKbSpace()
+const { spaces, loading: spaceLoading } = useKbSpace()
+const { scopeSpaceIds, ensureScopeReady } = useKbSpaceScope()
 const { fullPermission } = useActionPermissions()
 
 const editableSpaces = computed(() =>
   spaces.value.filter((s) => s.canEdit === true || fullPermission.value),
 )
 const hasAccessibleSpace = computed(() => spaces.value.length > 0)
-const currentSpace = computed(() => spaces.value.find((s) => toEntityId(s.id) === docSpaceId.value) ?? null)
-const canEditCurrentSpace = computed(
-  () => fullPermission.value || currentSpace.value?.canEdit === true,
-)
 
-const docSpaceId = ref('')
+/** 分类/标签管理、新建文档需单空间；列表查询支持全部/多选 */
+const metaSpaceId = computed(() => {
+  if (scopeSpaceIds.value.length === 1) return scopeSpaceIds.value[0]
+  const preferred = editableSpaces.value[0] ?? spaces.value[0]
+  return preferred ? toEntityId(preferred.id) ?? '' : ''
+})
+
+const taxonomySingleSpace = computed(() => scopeSpaceIds.value.length === 1)
+
+const canEditScopedSpace = computed(() => {
+  if (scopeSpaceIds.value.length !== 1) return false
+  const space = spaces.value.find((s) => toEntityId(s.id) === scopeSpaceIds.value[0])
+  return fullPermission.value || space?.canEdit === true
+})
+
+function canEditRowSpace(row: KbDocumentListItem) {
+  const sid = toEntityId(row.spaceId)
+  const space = spaces.value.find((s) => toEntityId(s.id) === sid)
+  return fullPermission.value || space?.canEdit === true
+}
+
 const loading = ref(false)
 const list = ref<KbDocumentListItem[]>([])
 const total = ref(0)
@@ -57,23 +76,23 @@ const query = reactive({
   tagId: '',
 })
 
-const docScopeIds = computed(() => (docSpaceId.value ? [docSpaceId.value] : []))
+const docScopeIds = scopeSpaceIds
 
 const {
-  kbTypeFilter,
+  kbTypeFilters,
   kbTypeChips,
   kbTypeLoading,
   categoryChips,
-  categoryFilter,
+  categoryFilters,
   indexLoading,
   applySearchParams,
-  selectKbType,
-  selectCategory,
+  setKbTypeFilters,
+  setCategoryFilters,
   resetFilters,
   reloadFilters,
-} = useKbDocFilter(docScopeIds, { skipWhenEmpty: true })
+} = useKbDocFilter(docScopeIds)
 
-const { categories, flatCategories, tags, loading: metaLoading, reload: reloadMeta } = useKbDocMeta(docSpaceId)
+const { categories, tags, loading: metaLoading, reload: reloadMeta } = useKbDocMeta(metaSpaceId)
 const { kbTypeLabel, ensureLoaded: ensureKbTypeLabels } = useKbMetaKbTypes()
 
 const activeTab = ref<'documents' | 'categories' | 'tags'>('documents')
@@ -96,7 +115,7 @@ function switchTaxTab(tab: 'documents' | 'categories' | 'tags') {
 }
 
 const showTagManageLink = computed(
-  () => canEditCurrentSpace.value && !metaLoading.value && tags.value.length === 0,
+  () => taxonomySingleSpace.value && canEditScopedSpace.value && !metaLoading.value && tags.value.length === 0,
 )
 
 const createOpen = ref(false)
@@ -110,14 +129,28 @@ const statusOptions = computed(() => [
   { value: '2', label: t('knowledge.docManage.statusArchived') },
 ])
 
-function initDocSpace() {
-  if (!spaces.value.length) return
-  const ok = spaces.value.some((s) => toEntityId(s.id) === docSpaceId.value)
-  if (!ok) {
-    const preferred = editableSpaces.value[0] ?? spaces.value[0]
-    docSpaceId.value = toEntityId(preferred.id) ?? ''
+async function loadList() {
+  loading.value = true
+  try {
+    const params = applySearchParams({
+      source: 'kb',
+      keyword: query.keyword.trim() || undefined,
+      status: query.status === '' ? '' : query.status,
+      tagId: taxonomySingleSpace.value && query.tagId ? query.tagId : undefined,
+      pageNum: query.pageNum,
+      pageSize: query.pageSize,
+    })
+    const res = await searchKbDocumentsApi(params)
+    if (res.code !== API_SUCCESS_CODE || !res.data) {
+      throw new Error(res.msg || t('knowledge.docManage.loadFailed'))
+    }
+    list.value = res.data.records ?? []
+    total.value = Number(res.data.total ?? 0) || 0
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('knowledge.docManage.loadFailed'))
+  } finally {
+    loading.value = false
   }
-  if (docSpaceId.value) setSelectedSpaceId(docSpaceId.value)
 }
 
 function statusLabel(status?: KbDocStatus) {
@@ -143,32 +176,6 @@ function categoryLabel(row: KbDocumentListItem): string {
   return findKbCategoryName(categories.value, id) ?? t('knowledge.docManage.categoryNone')
 }
 
-async function loadList() {
-  if (!docSpaceId.value) return
-  loading.value = true
-  try {
-    const params = applySearchParams({
-      spaceId: docSpaceId.value,
-      source: 'kb',
-      keyword: query.keyword.trim() || undefined,
-      status: query.status === '' ? '' : query.status,
-      tagId: query.tagId || undefined,
-      pageNum: query.pageNum,
-      pageSize: query.pageSize,
-    })
-    const res = await searchKbDocumentsApi(params)
-    if (res.code !== API_SUCCESS_CODE || !res.data) {
-      throw new Error(res.msg || t('knowledge.docManage.loadFailed'))
-    }
-    list.value = res.data.records ?? []
-    total.value = Number(res.data.total ?? 0) || 0
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('knowledge.docManage.loadFailed'))
-  } finally {
-    loading.value = false
-  }
-}
-
 function search() {
   if (query.pageNum === 1) void loadList()
   else query.pageNum = 1
@@ -182,18 +189,26 @@ function resetQuery() {
   search()
 }
 
-function onKbTypeFilterSelect(value: string | null) {
-  selectKbType(value)
+function onKbTypeFilterSelect(value: string[]) {
+  setKbTypeFilters(value)
   search()
 }
 
-function onCategoryFilterSelect(value: KbCategoryFilter) {
-  selectCategory(value)
+function onCategoryFilterSelect(value: KbCategoryFilterId[]) {
+  setCategoryFilters(value)
   search()
 }
 
 function openCreate() {
   if (!guardAction(PERM.KB_WIKI_EDIT)) return
+  if (!taxonomySingleSpace.value) {
+    showToast('error', t('knowledge.docManage.taxonomyNeedSingleSpace'))
+    return
+  }
+  if (!canEditScopedSpace.value) {
+    showToast('error', t('knowledge.docManage.readOnlySpaceHint'))
+    return
+  }
   createOpen.value = true
 }
 
@@ -203,7 +218,7 @@ function openEdit(row: KbDocumentListItem) {
     showToast('error', t('knowledge.docManage.wikiEditOnly'))
     return
   }
-  void router.push(kbWikiEditPath(row.slug!, row.spaceId ?? docSpaceId.value))
+  void router.push(kbWikiEditPath(row.slug!, row.spaceId ?? metaSpaceId.value))
 }
 
 function openBrowse(row: KbDocumentListItem) {
@@ -218,16 +233,33 @@ const moveOpen = ref(false)
 const moving = ref(false)
 const moveRow = ref<KbDocumentListItem | null>(null)
 const moveTargetCategoryId = ref('')
+const moveCategories = ref<KbCategoryTree[]>([])
+const moveMetaLoading = ref(false)
+const moveFlatCategories = computed(() => flattenKbCategoryTree(moveCategories.value))
 
-function openMove(row: KbDocumentListItem) {
+async function openMove(row: KbDocumentListItem) {
   if (!guardAction(PERM.KB_DOCUMENT_EDIT)) return
+  if (!canEditRowSpace(row)) {
+    showToast('error', t('knowledge.docManage.readOnlySpaceHint'))
+    return
+  }
   if (!row.slug) {
     showToast('error', t('knowledge.docManage.wikiEditOnly'))
     return
   }
   moveRow.value = row
   moveTargetCategoryId.value = toEntityId(row.categoryId) ?? ''
+  moveCategories.value = []
   moveOpen.value = true
+  const sid = toEntityId(row.spaceId)
+  if (!sid) return
+  moveMetaLoading.value = true
+  try {
+    const res = await getKbCategoryTreeApi(sid, true)
+    if (res.code === API_SUCCESS_CODE && res.data) moveCategories.value = res.data
+  } finally {
+    moveMetaLoading.value = false
+  }
 }
 
 async function submitMove() {
@@ -282,22 +314,18 @@ async function redirectLegacyEditQuery() {
 }
 
 onMounted(async () => {
-  await ensureSpacesLoaded()
+  await ensureScopeReady()
   void ensureKbTypeLabels()
-  initDocSpace()
+  void loadList()
   redirectLegacyEditQuery()
 })
 
-watch(editableSpaces, () => initDocSpace(), { deep: true })
-
-watch(docSpaceId, (id) => {
-  if (id) setSelectedSpaceId(id)
+watch(scopeSpaceIds, () => {
   resetFilters()
   query.tagId = ''
-  void reloadFilters()
   if (query.pageNum === 1) void loadList()
   else query.pageNum = 1
-})
+}, { deep: true })
 
 watch(
   () => route.query.editId,
@@ -323,12 +351,18 @@ watch(
 
     <template v-else>
       <div class="kb-doc-manage-toolbar">
-        <KbSpaceDropdown v-model="docSpaceId" hide-all-option value-field="id" />
+        <KbSpaceScopePicker />
         <nav class="kb-doc-manage-tabs" :aria-label="t('knowledge.docManage.title')">
           <SegmentControl v-model="activeTab" :options="tabOptions" />
         </nav>
       </div>
-      <p v-if="!canEditCurrentSpace" class="text-xs text-amber-600 dark:text-amber-400">
+      <p v-if="!taxonomySingleSpace && activeTab !== 'documents'" class="text-xs text-amber-600 dark:text-amber-400">
+        {{ t('knowledge.docManage.taxonomyNeedSingleSpace') }}
+      </p>
+      <p v-else-if="activeTab === 'documents' && !taxonomySingleSpace" class="text-xs text-gray-500 dark:text-gray-400">
+        {{ t('knowledge.docManage.multiSpaceListHint') }}
+      </p>
+      <p v-else-if="activeTab === 'documents' && taxonomySingleSpace && !canEditScopedSpace" class="text-xs text-amber-600 dark:text-amber-400">
         {{ t('knowledge.docManage.readOnlySpaceHint') }}
       </p>
 
@@ -337,14 +371,15 @@ watch(
         <KbDocFilterTabs
           layout="chips"
           show-both-rows
+          :category-enabled="taxonomySingleSpace"
           :kb-type-chips="kbTypeChips"
-          :kb-type-filter="kbTypeFilter"
+          :kb-type-filters="kbTypeFilters"
           :kb-type-loading="kbTypeLoading"
           :category-chips="categoryChips"
-          :category-filter="categoryFilter"
+          :category-filters="categoryFilters"
           :category-loading="indexLoading"
-          @update:kb-type-filter="onKbTypeFilterSelect"
-          @update:category-filter="onCategoryFilterSelect"
+          @update:kb-type-filters="onKbTypeFilterSelect"
+          @update:category-filters="onCategoryFilterSelect"
           @clear="search"
         />
         <div class="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4 dark:border-white/5">
@@ -362,7 +397,12 @@ watch(
             <option v-for="opt in statusOptions" :key="String(opt.value)" :value="opt.value">{{ opt.label }}</option>
           </select>
           <div class="kb-doc-manage-filter-wrap">
-            <select v-model="query.tagId" class="field-input w-auto min-w-[8rem]" :disabled="metaLoading">
+            <select
+              v-model="query.tagId"
+              class="field-input w-auto min-w-[8rem]"
+              :disabled="metaLoading || !taxonomySingleSpace"
+              :title="!taxonomySingleSpace ? t('knowledge.docManage.tagFilterMultiSpace') : undefined"
+            >
               <option value="">{{ t('knowledge.docManage.tagAll') }}</option>
               <option v-for="tag in tags" :key="String(tag.id)" :value="toEntityId(tag.id)">{{ tag.tagName }}</option>
             </select>
@@ -382,7 +422,7 @@ watch(
             <RefreshCw class="h-4 w-4" /> {{ t('knowledge.docManage.reset') }}
           </button>
         </form>
-        <button v-if="canCreate && canEditCurrentSpace" type="button" class="btn-primary shrink-0" @click="openCreate">
+        <button v-if="canCreate && canEditScopedSpace && taxonomySingleSpace" type="button" class="btn-primary shrink-0" @click="openCreate">
           <Plus class="h-4 w-4" /> {{ t('knowledge.docManage.create') }}
         </button>
         <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadList">
@@ -450,7 +490,7 @@ watch(
                       <Pencil class="h-3.5 w-3.5" />{{ t('knowledge.docManage.edit') }}
                     </button>
                     <button
-                      v-if="canEditCurrentSpace && row.slug"
+                      v-if="canEditRowSpace(row) && row.slug"
                       type="button"
                       class="btn-action-edit"
                       @click="openMove(row)"
@@ -478,21 +518,21 @@ watch(
       </template>
 
       <KbCategoryManagePanel
-        v-else-if="activeTab === 'categories'"
-        :space-id="docSpaceId"
+        v-else-if="activeTab === 'categories' && taxonomySingleSpace"
+        :space-id="metaSpaceId"
         @changed="onTaxonomyChanged"
       />
 
       <KbTagManagePanel
-        v-else
-        :space-id="docSpaceId"
+        v-else-if="activeTab === 'tags' && taxonomySingleSpace"
+        :space-id="metaSpaceId"
         @changed="onTaxonomyChanged"
       />
     </template>
 
     <KbDocumentCreateModal
       :open="createOpen"
-      :default-space-id="docSpaceId"
+      :default-space-id="metaSpaceId"
       @close="createOpen = false"
       @wiki-created="onWikiCreated"
     />
@@ -504,8 +544,8 @@ watch(
         </p>
         <KbCategorySelect
           v-model="moveTargetCategoryId"
-          :options="flatCategories"
-          :loading="metaLoading"
+          :options="moveFlatCategories"
+          :loading="moveMetaLoading"
           :empty-label="t('knowledge.docManage.moveTargetPlaceholder')"
         />
         <p class="text-xs text-amber-600 dark:text-amber-400">

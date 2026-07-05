@@ -4,8 +4,8 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import type { KbBrowseScopeParams, KbDocumentSearchParams, KbIndexGroup, KbIndexTypeFacetItem } from '@/types/knowledge'
 import { applyKbSpaceScopeParams } from '@/utils/kbSpaceScope'
 
-/** 分类 chip：all=不过滤，uncategorized=未分类，其余为 categoryId */
-export type KbCategoryFilter = 'all' | 'uncategorized' | string
+/** 分类筛选项：categoryId 或 `uncategorized` */
+export type KbCategoryFilterId = 'uncategorized' | string
 
 export type KbCategoryChip = {
   type: string
@@ -18,13 +18,35 @@ export type UseKbDocFilterOptions = {
   skipWhenEmpty?: boolean
 }
 
-/** 体裁 + 分类两个独立维度（AND）；scopeSpaceIds 空数组 = 全部可读空间 */
+function appendKbTypeListParams(target: KbBrowseScopeParams, kbTypes: string[]) {
+  if (kbTypes.length === 1) target.kbType = kbTypes[0]
+  else if (kbTypes.length > 1) target.kbTypes = [...kbTypes]
+}
+
+function appendCategoryListParams(
+  target: { categoryId?: string | number; categoryIds?: Array<string | number>; uncategorizedOnly?: boolean },
+  categoryFilters: string[],
+) {
+  const ids = categoryFilters.filter((id) => id !== 'uncategorized')
+  const withUncategorized = categoryFilters.includes('uncategorized')
+  if (withUncategorized) {
+    target.uncategorizedOnly = true
+    // 单值 categoryId 与 uncategorizedOnly 同传会 400；改用 categoryIds 列表组合
+    if (ids.length >= 1) target.categoryIds = [...ids]
+  } else if (ids.length === 1) {
+    target.categoryId = ids[0]
+  } else if (ids.length > 1) {
+    target.categoryIds = [...ids]
+  }
+}
+
+/** 体裁 + 分类两个独立维度（维度内 OR、维度间 AND）；scopeSpaceIds 空数组 = 全部可读空间 */
 export function useKbDocFilter(
   scopeSpaceIds: Ref<string[]>,
   options: UseKbDocFilterOptions = {},
 ) {
-  const kbTypeFilter = ref<string | null>(null)
-  const categoryFilter = ref<KbCategoryFilter>('all')
+  const kbTypeFilters = ref<string[]>([])
+  const categoryFilters = ref<KbCategoryFilterId[]>([])
 
   const kbTypeChips = ref<KbIndexTypeFacetItem[]>([])
   const kbTypeLoading = ref(false)
@@ -32,15 +54,40 @@ export function useKbDocFilter(
   const indexTotal = ref(0)
   const indexLoading = ref(false)
 
+  const kbTypeUniverse = ref<KbIndexTypeFacetItem[]>([])
+  const categoryUniverse = ref<KbIndexGroup[]>([])
+
   let suppressFacetWatch = false
+
+  const groupCount = (g: KbIndexGroup) => Number(g.count ?? g.items?.length ?? 0) || 0
 
   const categoryChips = computed((): KbCategoryChip[] =>
     categoryGroups.value.map((g) => ({
       type: g.type,
       label: g.label,
-      count: Number(g.count ?? g.items?.length ?? 0) || 0,
+      count: groupCount(g),
     })),
   )
+
+  const hasActiveFilter = computed(
+    () => kbTypeFilters.value.length > 0 || categoryFilters.value.length > 0,
+  )
+
+  const kbTypeChipsMerged = computed((): KbIndexTypeFacetItem[] => {
+    if (!kbTypeUniverse.value.length) return kbTypeChips.value
+    const counts = new Map(kbTypeChips.value.map((c) => [c.kbType, Number(c.count) || 0]))
+    return kbTypeUniverse.value.map((u) => ({ ...u, count: counts.get(u.kbType) ?? 0 }))
+  })
+
+  const categoryChipsMerged = computed((): KbCategoryChip[] => {
+    if (!categoryUniverse.value.length) return categoryChips.value
+    const counts = new Map(categoryGroups.value.map((g) => [g.type, groupCount(g)]))
+    return categoryUniverse.value.map((g) => ({
+      type: g.type,
+      label: g.label,
+      count: counts.get(g.type) ?? 0,
+    }))
+  })
 
   const filtersLoading = computed(() => kbTypeLoading.value || indexLoading.value)
 
@@ -48,27 +95,15 @@ export function useKbDocFilter(
     return applyKbSpaceScopeParams({}, scopeSpaceIds.value)
   }
 
-  /** v2：体裁 chip 随当前分类筛选联动 */
-  function kbTypeFacetParams(): KbBrowseScopeParams & {
-    categoryId?: string
-    uncategorizedOnly?: boolean
-  } {
-    const params: KbBrowseScopeParams & {
-      categoryId?: string
-      uncategorizedOnly?: boolean
-    } = { ...browseScopeParams() }
-    if (categoryFilter.value === 'uncategorized') {
-      params.uncategorizedOnly = true
-    } else if (categoryFilter.value !== 'all') {
-      params.categoryId = categoryFilter.value
-    }
+  function kbTypeFacetParams(): KbBrowseScopeParams {
+    const params = { ...browseScopeParams() }
+    appendCategoryListParams(params, categoryFilters.value)
     return params
   }
 
-  /** v2：分类 chip 随当前体裁筛选联动 */
   function categoryFacetParams(): KbBrowseScopeParams {
     const params = browseScopeParams()
-    if (kbTypeFilter.value) params.kbType = kbTypeFilter.value
+    appendKbTypeListParams(params, kbTypeFilters.value)
     return params
   }
 
@@ -82,9 +117,6 @@ export function useKbDocFilter(
       const res = await getKbIndexTypesApi(kbTypeFacetParams())
       if (res.code === API_SUCCESS_CODE && res.data) {
         kbTypeChips.value = res.data.items
-        if (kbTypeFilter.value && !res.data.items.some((c) => c.kbType === kbTypeFilter.value)) {
-          kbTypeFilter.value = null
-        }
       } else {
         kbTypeChips.value = []
       }
@@ -107,10 +139,6 @@ export function useKbDocFilter(
       if (res.code === API_SUCCESS_CODE && res.data) {
         categoryGroups.value = res.data.groups
         indexTotal.value = res.data.total ?? 0
-        const types = new Set(categoryGroups.value.map((g) => g.type))
-        if (categoryFilter.value !== 'all' && !types.has(categoryFilter.value)) {
-          categoryFilter.value = 'all'
-        }
       } else {
         categoryGroups.value = []
         indexTotal.value = 0
@@ -129,59 +157,80 @@ export function useKbDocFilter(
 
   function applySearchParams(params: KbDocumentSearchParams) {
     applyKbSpaceScopeParams(params, scopeSpaceIds.value)
-    if (kbTypeFilter.value) params.kbType = kbTypeFilter.value
-    if (categoryFilter.value === 'uncategorized') {
-      params.uncategorizedOnly = true
-    } else if (categoryFilter.value !== 'all') {
-      params.categoryId = categoryFilter.value
-    }
+    appendKbTypeListParams(params, kbTypeFilters.value)
+    appendCategoryListParams(params, categoryFilters.value)
     return params
   }
 
-  function selectKbType(value: string | null) {
-    kbTypeFilter.value = value
+  function setKbTypeFilters(values: string[]) {
+    kbTypeFilters.value = [...new Set(values.filter(Boolean))]
   }
 
-  function selectCategory(value: KbCategoryFilter) {
-    categoryFilter.value = value
+  function setCategoryFilters(values: KbCategoryFilterId[]) {
+    categoryFilters.value = [...new Set(values.filter(Boolean))]
+  }
+
+  function toggleKbType(kbType: string) {
+    const set = new Set(kbTypeFilters.value)
+    if (set.has(kbType)) set.delete(kbType)
+    else set.add(kbType)
+    kbTypeFilters.value = [...set]
+  }
+
+  function toggleCategory(categoryId: KbCategoryFilterId) {
+    const set = new Set(categoryFilters.value)
+    if (set.has(categoryId)) set.delete(categoryId)
+    else set.add(categoryId)
+    categoryFilters.value = [...set]
   }
 
   function resetFilters() {
     suppressFacetWatch = true
-    kbTypeFilter.value = null
-    categoryFilter.value = 'all'
+    kbTypeFilters.value = []
+    categoryFilters.value = []
     suppressFacetWatch = false
   }
 
-  watch(scopeSpaceIds, () => {
+  async function refreshUniverse() {
     resetFilters()
-    void reloadFilters()
+    await reloadFilters()
+    kbTypeUniverse.value = kbTypeChips.value.map((c) => ({ ...c }))
+    categoryUniverse.value = categoryGroups.value.map((g) => ({ ...g }))
+  }
+
+  watch(scopeSpaceIds, () => {
+    void refreshUniverse()
   }, { immediate: true, deep: true })
 
-  watch(categoryFilter, () => {
+  watch(categoryFilters, () => {
     if (suppressFacetWatch) return
     void loadKbTypeChips()
-  })
+  }, { deep: true })
 
-  watch(kbTypeFilter, () => {
+  watch(kbTypeFilters, () => {
     if (suppressFacetWatch) return
     void loadCategoryIndex()
-  })
+  }, { deep: true })
 
   return {
-    kbTypeFilter,
-    categoryFilter,
+    kbTypeFilters,
+    categoryFilters,
     kbTypeChips,
+    kbTypeChipsMerged,
     kbTypeLoading,
     categoryGroups,
     categoryChips,
+    categoryChipsMerged,
     indexTotal,
     indexLoading,
     filtersLoading,
+    hasActiveFilter,
     reloadFilters,
     applySearchParams,
-    selectKbType,
-    selectCategory,
+    setKbTypeFilters,
+    setCategoryFilters,
+    toggleKbType,
+    toggleCategory,
     resetFilters,
   }
 }

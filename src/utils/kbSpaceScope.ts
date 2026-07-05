@@ -10,14 +10,15 @@ export function toKbSpaceScopeParams(selectedIds: string[]): KbSpaceScopeParams 
   return { spaceIds: selectedIds }
 }
 
-export function applyKbSpaceScopeParams<T extends KbSpaceScopeParams>(
+export function applyKbSpaceScopeParams<T extends object>(
   target: T,
   selectedIds: string[],
 ): T {
   const scope = toKbSpaceScopeParams(selectedIds)
-  if (scope.spaceId) target.spaceId = scope.spaceId
-  else delete target.spaceId
-  if (scope.spaceIds?.length) target.spaceIds = scope.spaceIds
-  else delete target.spaceIds
+  const record = target as T & KbSpaceScopeParams
+  if (scope.spaceId) record.spaceId = scope.spaceId
+  else delete record.spaceId
+  if (scope.spaceIds?.length) record.spaceIds = scope.spaceIds
+  else delete record.spaceIds
   return target
 }

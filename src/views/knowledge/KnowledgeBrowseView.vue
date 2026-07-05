@@ -15,7 +15,7 @@ import {
   searchKbIndexApi,
 } from '@/api/knowledge'
 import { assertAction } from '@/composables/useActionPermissions'
-import { useKbDocFilter, type KbCategoryFilter } from '@/composables/useKbDocFilter'
+import { useKbDocFilter, type KbCategoryFilterId } from '@/composables/useKbDocFilter'
 import { useKbSpaceScope } from '@/composables/useKbSpaceScope'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { showToast } from '@/composables/useToast'
@@ -37,7 +37,7 @@ const inflightPages = new Map<string, Promise<KbPage | undefined>>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const { selectedSpace, spaces, loadError: spaceLoadError, loading: spaceLoading, ensureSpacesLoaded, resolvePageSpaceId } = useKbSpace()
+const { selectedSpace, spaces, loadError: spaceLoadError, loading: spaceLoading, resolvePageSpaceId } = useKbSpace()
 const { scopeSpaceIds, ensureScopeReady } = useKbSpaceScope()
 
 const noAccessibleSpaces = computed(
@@ -72,16 +72,17 @@ const searchLoading = ref(false)
 const keyword = ref('')
 const docFilter = useKbDocFilter(scopeSpaceIds)
 const {
-  kbTypeFilter,
-  categoryFilter,
-  kbTypeChips,
+  kbTypeFilters,
+  categoryFilters,
+  kbTypeChipsMerged,
   kbTypeLoading,
-  categoryChips,
+  categoryChipsMerged,
   indexTotal,
   indexLoading,
+  hasActiveFilter,
   applySearchParams,
-  selectKbType,
-  selectCategory,
+  setKbTypeFilters,
+  setCategoryFilters,
   resetFilters,
   reloadFilters,
 } = docFilter
@@ -99,6 +100,8 @@ const detailRef = ref<HTMLElement | null>(null)
 const treeRef = ref<HTMLElement | null>(null)
 const contentHtml = shallowRef('')
 const slugLookup = ref<Map<string, string>>(new Map())
+/** 初次进入恢复上次文档时，不自动把分类锁定到该文档所属分类 */
+const suppressAutoCategory = ref(false)
 
 let openSeq = 0
 let groupGrowSeq = 0
@@ -224,24 +227,14 @@ const visibleDocCount = computed(() => {
   return browseTotal.value
 })
 
-/** 当前选中 chip 的 facet 计数（加载中占位用） */
-const selectedFacetCount = computed(() => {
-  if (kbTypeFilter.value) {
-    const chip = kbTypeChips.value.find((c) => c.kbType === kbTypeFilter.value)
-    if (chip) return Number(chip.count) || 0
-  }
-  if (categoryFilter.value !== 'all') {
-    const chip = categoryChips.value.find((c) => c.type === categoryFilter.value)
-    if (chip) return chip.count
-  }
-  const typeSum = kbTypeChips.value.reduce((s, c) => s + (Number(c.count) || 0), 0)
-  if (typeSum > 0) return typeSum
-  return indexTotal.value
-})
+/** 加载中占位：以列表 total 为准，不用 facet 求和 */
+const selectedFacetCount = computed(() => browseTotal.value || indexTotal.value)
 
-const hasActiveFilter = computed(
-  () => kbTypeFilter.value != null || categoryFilter.value !== 'all',
-)
+/** 分类为单空间概念：仅在锁定单个空间时可用（跨空间分类会重名/对不上） */
+const isSingleSpaceScope = computed(() => {
+  if (scopeSpaceIds.value.length === 1) return true
+  return scopeSpaceIds.value.length === 0 && spaces.value.length === 1
+})
 
 const showFilterAndEmpty = computed(
   () =>
@@ -275,13 +268,13 @@ function resetBrowseState() {
   searchIndex.value = null
 }
 
-async function onKbTypeFilterChange(value: string | null) {
-  selectKbType(value)
+async function onKbTypeFilterChange(value: string[]) {
+  setKbTypeFilters(value)
   await reloadBrowseList()
 }
 
-async function onCategoryFilterChange(value: KbCategoryFilter) {
-  selectCategory(value)
+async function onCategoryFilterChange(value: KbCategoryFilterId[]) {
+  setCategoryFilters(value)
   await reloadBrowseList()
 }
 
@@ -423,16 +416,19 @@ async function ensureCategoryForSlug(slug: string) {
     }
     return
   }
+  // 初次进入（恢复上次文档）不自动锁定分类，保持「全部」
+  if (suppressAutoCategory.value) return
   // 体裁筛选模式下不因正文链接自动改分类，避免与 kbType AND 冲突
-  if (kbTypeFilter.value) return
+  if (kbTypeFilters.value.length > 0) return
   try {
     const res = await locateKbIndexApi(slug, browseScopeParams())
     if (res.code === API_SUCCESS_CODE && res.data) {
       const located = res.data
-      const cat: KbCategoryFilter =
+      const cat: KbCategoryFilterId =
         located.type === 'uncategorized' ? 'uncategorized' : located.type
-      if (categoryFilter.value !== cat) {
-        selectCategory(cat)
+      const next = [cat]
+      if (JSON.stringify(categoryFilters.value) !== JSON.stringify(next)) {
+        setCategoryFilters(next)
         await fetchBrowseList(1)
       }
       if (!browseItems.value.some((it) => it.slug === located.item.slug)) {
@@ -514,16 +510,21 @@ function formatTime(value?: string) {
 }
 
 async function resolveInitialSlug(slugTarget: string, explicitSpaceId?: string) {
-  const spaceId = explicitSpaceId ?? preferredSpaceId()
+  const scope = explicitSpaceId
+    ? { spaceId: explicitSpaceId }
+    : browseScopeParams()
+  const pageSpaceId = explicitSpaceId ?? preferredSpaceId()
   if (slugTarget) {
     const resolved = resolveSlug(slugTarget)
     try {
-      const res = await locateKbIndexApi(slugTarget, spaceId)
+      const res = await locateKbIndexApi(slugTarget, scope)
       if (res.code === API_SUCCESS_CODE && res.data) {
         const located = res.data
-        const cat: KbCategoryFilter =
+        const cat: KbCategoryFilterId =
           located.type === 'uncategorized' ? 'uncategorized' : located.type
-        selectCategory(cat)
+        if (!suppressAutoCategory.value) {
+          setCategoryFilters([cat])
+        }
         await fetchBrowseList(1)
         if (!browseItems.value.some((it) => it.slug === located.item.slug)) {
           browseItems.value = [located.item, ...browseItems.value]
@@ -533,7 +534,7 @@ async function resolveInitialSlug(slugTarget: string, explicitSpaceId?: string) 
     } catch {
       /* ignore */
     }
-    const pageData = await fetchPage(resolved, spaceId)
+    const pageData = await fetchPage(resolved, pageSpaceId)
     if (pageData) return resolved
     clearLastActiveSlug()
   }
@@ -548,6 +549,9 @@ async function loadIndex(preferred?: string) {
   loadError.value = ''
   const slugTarget = preferredSlug(preferred)
   const spaceId = preferredSpaceId()
+  const explicitSlug =
+    !!preferred || (typeof route.query.slug === 'string' && !!route.query.slug)
+  suppressAutoCategory.value = !!slugTarget && !explicitSlug
 
   try {
     resetBrowseState()
@@ -563,6 +567,7 @@ async function loadIndex(preferred?: string) {
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : '加载失败，请确认知识库服务(8090)与网关(21000)已启动'
   } finally {
+    suppressAutoCategory.value = false
     loading.value = false
   }
 }
@@ -699,13 +704,6 @@ watch(
 
 <template>
   <div class="page-stack">
-    <div v-if="!noAccessibleSpaces && !accessDeniedMessage" class="kb-browse-toolbar">
-      <div class="kb-browse-toolbar-scopes">
-        <KbSpaceScopePicker />
-        <KbAttachmentsPanel :document-id="page?.docId" :can-edit="canEditAttachments" />
-      </div>
-    </div>
-
     <KbAccessDenied
       v-if="noAccessibleSpaces"
       :title="t('knowledge.accessDenied.emptyTitle')"
@@ -725,6 +723,9 @@ watch(
         ref="treeRef"
         class="card flex w-full flex-col p-4 xl:w-[22rem] xl:shrink-0 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:min-h-[calc(100vh-3rem)]"
       >
+        <div v-if="!noAccessibleSpaces && !accessDeniedMessage" class="kb-browse-sidebar-head">
+          <KbSpaceScopePicker show-label block compact />
+        </div>
         <div class="relative mb-2 shrink-0">
           <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input v-model="keyword" type="text" class="field-input pl-9 pr-9" :placeholder="t('knowledge.browse.searchPlaceholder')" />
@@ -735,20 +736,22 @@ watch(
         <p v-else-if="loadError" class="py-8 text-center text-sm text-red-500">{{ loadError }}</p>
 
         <div v-else-if="!inSearchMode" class="flex min-h-0 flex-1 flex-col">
-          <KbDocFilterTabs
-            layout="chips"
-            show-both-rows
-            class="shrink-0"
-            :kb-type-chips="kbTypeChips"
-            :kb-type-filter="kbTypeFilter"
-            :kb-type-loading="kbTypeLoading"
-            :category-chips="categoryChips"
-            :category-filter="categoryFilter"
-            :category-loading="indexLoading"
-            @update:kb-type-filter="onKbTypeFilterChange"
-            @update:category-filter="onCategoryFilterChange"
-          />
-          <div class="mt-3 min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5">
+          <div class="kb-browse-filter-panel shrink-0">
+            <KbDocFilterTabs
+              layout="dropdown"
+              :category-enabled="isSingleSpaceScope"
+              :kb-type-chips="kbTypeChipsMerged"
+              :kb-type-filters="kbTypeFilters"
+              :kb-type-loading="kbTypeLoading"
+              :category-chips="categoryChipsMerged"
+              :category-filters="categoryFilters"
+              :category-loading="indexLoading"
+              @update:kb-type-filters="onKbTypeFilterChange"
+              @update:category-filters="onCategoryFilterChange"
+            />
+          </div>
+          <div class="kb-browse-doc-list mt-3 flex min-h-0 flex-1 flex-col border-t border-gray-100 pt-3 dark:border-white/5">
+            <div class="min-h-0 flex-1 space-y-0.5 overflow-y-auto pr-0.5">
             <p v-if="browseLoading && !browseItems.length" class="px-2 py-2 text-xs text-gray-400">
               {{ t('common.loading') }}
             </p>
@@ -782,10 +785,11 @@ watch(
             <p v-else-if="!browseLoading && !browseItems.length" class="px-2 py-3 text-center text-xs text-gray-400">
               {{ t('knowledge.browse.empty') }}
             </p>
+            </div>
+            <p class="mt-auto shrink-0 pt-2 text-xs text-gray-400">
+              {{ t('knowledge.browse.docCount', { count: visibleDocCount }) }}
+            </p>
           </div>
-          <p class="mt-auto shrink-0 pt-2 text-xs text-gray-400">
-            {{ t('knowledge.browse.docCount', { count: visibleDocCount }) }}
-          </p>
         </div>
 
         <div v-else class="flex min-h-0 flex-1 flex-col">
@@ -875,6 +879,7 @@ watch(
             <div class="flex flex-wrap items-start justify-between gap-3">
               <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ page.title }}</h2>
               <div class="flex shrink-0 flex-wrap items-center gap-2">
+                <KbAttachmentsPanel :document-id="page?.docId" :can-edit="canEditAttachments" />
                 <button
                   v-if="canWikiEdit"
                   type="button"

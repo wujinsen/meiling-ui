@@ -71,8 +71,15 @@ export type KbIndex = {
 export type KbBrowseScopeParams = {
   spaceId?: number | string
   spaceIds?: Array<number | string>
-  /** v2：叠加体裁过滤分类 facet 计数 */
+  /** 单体裁（向后兼容；与 kbTypes 二选一，列表优先） */
   kbType?: string
+  /** 多体裁 OR；facet 联动与 search 共用 */
+  kbTypes?: string[]
+  /** 单分类（向后兼容） */
+  categoryId?: number | string
+  /** 多分类 OR；可与 uncategorizedOnly 组合 */
+  categoryIds?: Array<number | string>
+  uncategorizedOnly?: boolean
 }
 
 export type KbLinkRelation = 'links_to' | 'related' | 'depends_on' | 'same_tag' | string
@@ -590,15 +597,18 @@ export type KbDocumentSearchParams = {
   spaceId?: number | string
   spaceIds?: Array<number | string>
   categoryId?: number | string
-  /** 仅未分类文档（与 categoryId 互斥） */
+  categoryIds?: Array<number | string>
+  /** 仅未分类文档（可与 categoryIds 组合 OR 含未分类） */
   uncategorizedOnly?: boolean
   keyword?: string
   status?: KbDocStatus | ''
   tagId?: number | string
   /** kb = wiki 同步文档；文档管理固定传 kb */
   source?: 'kb' | 'manual' | string
-  /** 体裁：guide/service/concept/article/interview/output；与 categoryId 叠加 */
+  /** 单体裁；与 kbTypes 二选一，列表优先 */
   kbType?: KbType | string
+  /** 多体裁 OR；与 categoryIds 维度间 AND */
+  kbTypes?: string[]
   pageNum?: number
   pageSize?: number
 }

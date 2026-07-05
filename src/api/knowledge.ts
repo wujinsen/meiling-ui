@@ -118,8 +118,14 @@ function buildKbBrowseScopeQuery(
     if (sid != null && sid !== '') qs.append('spaceIds', String(sid))
   }
   if (params?.categoryId != null) qs.set('categoryId', String(params.categoryId))
+  for (const cid of params?.categoryIds ?? []) {
+    if (cid != null && cid !== '') qs.append('categoryIds', String(cid))
+  }
   if (params?.uncategorizedOnly === true) qs.set('uncategorizedOnly', 'true')
   if (params?.kbType?.trim()) qs.set('kbType', params.kbType.trim())
+  for (const kt of params?.kbTypes ?? []) {
+    if (kt?.trim()) qs.append('kbTypes', kt.trim())
+  }
   if (params?.groupBy) qs.set('groupBy', String(params.groupBy))
   if (params?.key) qs.set('key', String(params.key))
   if (params?.slug) qs.set('slug', String(params.slug))
@@ -138,12 +144,18 @@ function buildKbDocumentSearchQuery(params: KbDocumentSearchParams) {
     if (sid != null && sid !== '') qs.append('spaceIds', String(sid))
   }
   if (params.categoryId != null) qs.set('categoryId', String(params.categoryId))
+  for (const cid of params.categoryIds ?? []) {
+    if (cid != null && cid !== '') qs.append('categoryIds', String(cid))
+  }
   if (params.uncategorizedOnly === true) qs.set('uncategorizedOnly', 'true')
   if (params.keyword?.trim()) qs.set('keyword', params.keyword.trim())
   if (params.status !== undefined && params.status !== '') qs.set('status', String(params.status))
   if (params.tagId != null) qs.set('tagId', String(params.tagId))
   if (params.source?.trim()) qs.set('source', params.source.trim())
   if (params.kbType?.trim()) qs.set('kbType', params.kbType.trim())
+  for (const kt of params.kbTypes ?? []) {
+    if (kt?.trim()) qs.append('kbTypes', kt.trim())
+  }
   if (params.pageNum != null) qs.set('pageNum', String(params.pageNum))
   if (params.pageSize != null) qs.set('pageSize', String(params.pageSize))
   const query = qs.toString()
@@ -971,12 +983,24 @@ export async function searchKbDocumentsApi(params: KbDocumentSearchParams) {
     const sid = params.spaceId != null ? String(params.spaceId) : ''
     if (sid) items = items.filter((it) => String(it.spaceId ?? '') === sid)
     if (params.source === 'kb') items = items.filter((it) => it.source === 'kb')
-    if (params.kbType?.trim()) items = items.filter((it) => it.kbType === params.kbType?.trim())
-    if (params.categoryId != null && String(params.categoryId) !== '') {
-      items = items.filter((it) => String(it.categoryId ?? '') === String(params.categoryId))
-    }
-    if (params.uncategorizedOnly) {
-      items = items.filter((it) => !it.categoryId)
+    const kbTypeSet = new Set(
+      [...(params.kbTypes ?? []), params.kbType]
+        .map((t) => String(t ?? '').trim())
+        .filter(Boolean),
+    )
+    if (kbTypeSet.size) items = items.filter((it) => kbTypeSet.has(String(it.kbType ?? '')))
+    const categoryIdSet = new Set(
+      [...(params.categoryIds ?? []), params.categoryId]
+        .map((c) => (c == null ? '' : String(c)))
+        .filter((c) => c !== ''),
+    )
+    if (categoryIdSet.size || params.uncategorizedOnly) {
+      items = items.filter((it) => {
+        const cid = String(it.categoryId ?? '')
+        if (categoryIdSet.has(cid)) return true
+        if (params.uncategorizedOnly && !it.categoryId) return true
+        return false
+      })
     }
     if (status !== undefined && status !== '') items = items.filter((it) => it.status === status)
     if (kw) {

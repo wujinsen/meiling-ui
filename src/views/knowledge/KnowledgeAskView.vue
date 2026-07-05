@@ -3,7 +3,7 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { History, Loader2, Send, Sparkles, ThumbsDown, ThumbsUp, User } from 'lucide-vue-next'
-import KbAskSpacePicker from '@/components/knowledge/KbAskSpacePicker.vue'
+import KbSpaceScopePicker from '@/components/knowledge/KbSpaceScopePicker.vue'
 import KbDocPreviewModal from '@/components/knowledge/KbDocPreviewModal.vue'
 import KbLlmToggle from '@/components/knowledge/KbLlmToggle.vue'
 import AppSwitch from '@/components/ui/AppSwitch.vue'
@@ -12,11 +12,8 @@ import {
   feedbackKbAskApi,
   getKbAskHistoryApi,
 } from '@/api/knowledge'
-import {
-  buildKbAskHistoryScope,
-  buildKbAskScopePayload,
-  type KbAskScopeMode,
-} from '@/composables/useKbAskScope'
+import { buildKbAskHistoryScope, buildKbAskScopePayload } from '@/composables/useKbAskScope'
+import { useKbSpaceScope } from '@/composables/useKbSpaceScope'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { confirm } from '@/composables/useConfirm'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -35,10 +32,8 @@ type ChatTurn = {
 
 const { t } = useI18n()
 const router = useRouter()
-const { ensureSpacesLoaded, resolvePageSpaceId } = useKbSpace()
-
-const scopeMode = ref<KbAskScopeMode>('all')
-const scopeSpaceIds = ref<string[]>([])
+const { resolvePageSpaceId } = useKbSpace()
+const { scopeSpaceIds, ensureScopeReady } = useKbSpaceScope()
 
 const question = ref('')
 const asking = ref(false)
@@ -86,7 +81,7 @@ async function loadHistory() {
   historyLoading.value = true
   try {
     const res = await getKbAskHistoryApi({
-      ...buildKbAskHistoryScope(scopeMode.value, scopeSpaceIds.value),
+      ...buildKbAskHistoryScope(scopeSpaceIds.value),
       pageNum: 1,
       pageSize: 20,
     })
@@ -99,11 +94,6 @@ async function loadHistory() {
 async function ask(text?: string) {
   const q = (text ?? question.value).trim()
   if (!q || asking.value) return
-  if (scopeMode.value === 'custom' && !scopeSpaceIds.value.length) {
-    showToast('error', t('knowledge.ask.crossSpaceEmpty'))
-    return
-  }
-
   const turn: ChatTurn = { id: ++turnId, question: q, loading: true }
   turns.value.push(turn)
   question.value = ''
@@ -115,7 +105,7 @@ async function ask(text?: string) {
       question: q,
       topK: 8,
       useLlm: useLlm.value,
-      ...buildKbAskScopePayload(scopeMode.value, scopeSpaceIds.value),
+      ...buildKbAskScopePayload(scopeSpaceIds.value),
     }
     const res = await askKbApi(payload)
     if (res.code === API_SUCCESS_CODE && res.data) {
@@ -208,11 +198,11 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 onMounted(async () => {
-  await ensureSpacesLoaded()
+  await ensureScopeReady()
   await loadHistory()
 })
 
-watch([scopeMode, scopeSpaceIds], () => loadHistory(), { deep: true })
+watch(scopeSpaceIds, () => loadHistory(), { deep: true })
 watch(showHistory, (open) => {
   if (open) void loadHistory()
 })
@@ -220,12 +210,12 @@ watch(showHistory, (open) => {
 
 <template>
   <div class="page-stack">
-    <div class="card kb-ask-toolbar">
+    <div class="kb-ask-toolbar">
       <div class="kb-ask-toolbar-start">
         <button type="button" class="btn-ghost shrink-0 text-sm" @click="showHistory = !showHistory">
           <History class="h-4 w-4" /> {{ t('knowledge.ask.history') }}
         </button>
-        <KbAskSpacePicker v-model:mode="scopeMode" v-model:selected-ids="scopeSpaceIds" />
+        <KbSpaceScopePicker />
         <div
           class="flex items-center gap-2"
           :class="llmAvailable ? '' : 'opacity-50'"
@@ -393,7 +383,7 @@ watch(showHistory, (open) => {
             <button
               type="button"
               class="btn-primary h-[44px] shrink-0"
-              :disabled="asking || !question.trim() || (scopeMode === 'custom' && !scopeSpaceIds.length)"
+              :disabled="asking || !question.trim()"
               @click="ask()"
             >
               <Loader2 v-if="asking" class="h-4 w-4 animate-spin" />
