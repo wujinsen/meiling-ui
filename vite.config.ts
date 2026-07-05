@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
@@ -45,6 +46,12 @@ export default defineConfig(({ command }) => ({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.{spec,test}.{ts,tsx}'],
   },
   server: {
     /** 同时支持 localhost 与 127.0.0.1；避免仅绑定 127.0.0.1 时部分环境无法访问 */

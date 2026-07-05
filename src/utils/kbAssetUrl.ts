@@ -8,7 +8,7 @@ export type KbAssetUrlContext = {
 }
 
 const KB_RAW_ASSET = /^(\/KnowledgeServer)?\/kb\/raw\/asset\?/i
-const KB_WIKI_ASSET = /^(\/KnowledgeServer)?\/kb\/(?:wiki-moli\/)?asset\?/i
+const KB_WIKI_ASSET = /^(\/KnowledgeServer)?\/kb\/(?:wiki-moli\/|wiki\/)?asset\?/i
 
 export function defaultKbApiBase(): string {
   const env = import.meta.env.VITE_API_BASE_URL ?? ''

@@ -18,7 +18,7 @@ import type {
   KbPlatformLlmConfigSaveRequest,
   KbPlatformLlmConfigTestResult,
 } from '@/types/knowledge'
-import { AlertTriangle, Cpu, Loader2, PlugZap, RefreshCw, Save, Trash2, X } from 'lucide-vue-next'
+import { AlertTriangle, Cpu, KeyRound, Loader2, PlugZap, RefreshCw, Save, Trash2, X } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -54,10 +54,18 @@ const form = reactive({
 })
 
 const apiKeyPlaceholder = computed(() => {
-  if (configLoaded.value?.apiKeyConfigured && configLoaded.value.apiKeyMask) {
-    return t('system.kbLlm.field.apiKeyPlaceholder', { mask: configLoaded.value.apiKeyMask })
+  if (configLoaded.value?.apiKeyConfigured) {
+    return t('system.kbLlm.field.apiKeyPlaceholderReplace')
   }
   return t('system.kbLlm.field.apiKeyEmpty')
+})
+
+type ApiKeyUiState = 'pending' | 'configured' | 'missing'
+
+const apiKeyUiState = computed((): ApiKeyUiState => {
+  if (apiKeyInput.value.trim()) return 'pending'
+  if (configLoaded.value?.apiKeyConfigured) return 'configured'
+  return 'missing'
 })
 
 const sourceLabel = computed(() => {
@@ -390,14 +398,42 @@ onMounted(loadConfig)
 
           <div class="form-grid-row">
             <FormField :label="t('system.kbLlm.field.apiKey')" horizontal class="form-field-span-2">
-              <input
-                v-model="apiKeyInput"
-                type="password"
-                autocomplete="new-password"
-                class="field-input font-mono text-sm"
-                :placeholder="apiKeyPlaceholder"
-              />
-              <p class="mt-1 text-xs text-gray-400">{{ t('system.kbLlm.field.apiKeyHint') }}</p>
+              <div class="space-y-2">
+                <div
+                  class="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+                  :class="{
+                    'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200':
+                      apiKeyUiState === 'configured',
+                    'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200':
+                      apiKeyUiState === 'missing',
+                    'border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-200':
+                      apiKeyUiState === 'pending',
+                  }"
+                >
+                  <KeyRound class="h-4 w-4 shrink-0" />
+                  <span v-if="apiKeyUiState === 'configured'" class="font-medium">
+                    {{ t('system.kbLlm.field.apiKeyConfigured', { mask: configLoaded?.apiKeyMask ?? '****' }) }}
+                  </span>
+                  <span v-else-if="apiKeyUiState === 'pending'" class="font-medium">
+                    {{ t('system.kbLlm.field.apiKeyPendingReplace') }}
+                  </span>
+                  <span v-else class="font-medium">{{ t('system.kbLlm.field.apiKeyNotConfigured') }}</span>
+                  <span
+                    v-if="apiKeyUiState === 'configured'"
+                    class="text-xs opacity-80"
+                  >
+                    · {{ t('system.kbLlm.field.apiKeyKeepHint') }}
+                  </span>
+                </div>
+                <input
+                  v-model="apiKeyInput"
+                  type="password"
+                  autocomplete="new-password"
+                  class="field-input font-mono text-sm"
+                  :placeholder="apiKeyPlaceholder"
+                />
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('system.kbLlm.field.apiKeyHint') }}</p>
+              </div>
             </FormField>
           </div>
 
