@@ -723,8 +723,11 @@ export default {
     preview: { openInBrowse: 'Open in browse' },
     attachments: {
       title: 'Attachments',
+      sectionTitle: 'Page attachments (MinIO)',
+      manageInEdit: 'Manage attachments in editor',
       empty: 'No attachments',
       noDocHint: 'Select a document first',
+      noDocSyncHint: 'Save the wiki and Sync first to obtain a documentId before uploading',
       readOnlyHint: 'This space is read-only. You can view and download attachments only.',
       dropHint: 'Click or drag files here to upload',
       dropSub: 'Multiple files supported; max {max} per file',

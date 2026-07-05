@@ -723,8 +723,11 @@ export default {
     preview: { openInBrowse: '閲覧ページで開く' },
     attachments: {
       title: '添付',
+      sectionTitle: 'ページ添付（MinIO）',
+      manageInEdit: '編集ページで添付を管理',
       empty: '添付なし',
       noDocHint: '先にドキュメントを選択してください',
+      noDocSyncHint: 'Wiki を保存して Sync し、documentId を取得してからアップロードしてください',
       readOnlyHint: 'このスペースは読み取り専用です。添付ファイルの閲覧とダウンロードのみ可能です。',
       dropHint: 'クリックまたはドラッグでファイルをアップロード',
       dropSub: '複数ファイル対応。1ファイル最大 {max}',

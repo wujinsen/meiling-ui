@@ -5,9 +5,11 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, ExternalLink, GitMerge, Loader2, Save, Sparkles, Upload } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
+import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
 import {
   aiReviseKbWikiApi,
   getKbLlmConfigApi,
+  getKbPageApi,
   getKbWikiPageApi,
   enrichKbWikiApi,
   previewKbWikiLintApi,
@@ -62,6 +64,13 @@ const fromCreate = computed(() => {
   const v = Array.isArray(raw) ? raw[0] : raw
   return v === '1' || v === 'true'
 })
+const queryDocumentId = computed(() => {
+  const raw = route.query.documentId
+  const v = Array.isArray(raw) ? raw[0] : raw
+  return toEntityId(typeof v === 'string' ? v : undefined)
+})
+
+const documentId = ref<string | undefined>()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -185,6 +194,25 @@ watch(
   { immediate: true },
 )
 
+async function resolveDocumentId() {
+  if (queryDocumentId.value) {
+    documentId.value = queryDocumentId.value
+    return
+  }
+  if (!slug.value || !fileExists.value) {
+    documentId.value = undefined
+    return
+  }
+  try {
+    const res = await getKbPageApi(slug.value, querySpaceId.value ?? resolvedSpaceId.value)
+    if (res.code === API_SUCCESS_CODE && res.data?.docId != null) {
+      documentId.value = toEntityId(res.data.docId)
+    }
+  } catch {
+    documentId.value = undefined
+  }
+}
+
 async function loadLlmConfig() {
   try {
     const res = await getKbLlmConfigApi()
@@ -230,6 +258,7 @@ async function load() {
     }
     if (mainTab.value === 'preview') syncPreviewHtml()
     if (fromLintIssue.value) aiPanelOpen.value = true
+    await resolveDocumentId()
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : t('knowledge.wikiEdit.loadFailed')
   } finally {
@@ -490,6 +519,7 @@ async function doSync() {
       throw new Error(res.msg || res.data?.outputTail || t('knowledge.sync.triggerFailed'))
     }
     showToast('success', t('knowledge.wikiEdit.syncOk'))
+    await resolveDocumentId()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.wikiEdit.syncFailed'))
   } finally {
@@ -763,6 +793,14 @@ watch(slug, () => {
               :placeholder="t('knowledge.wikiEdit.changeLogPlaceholder')"
             />
           </label>
+
+          <KbAttachmentsPanel
+            class="mt-4 shrink-0"
+            layout="section"
+            variant="edit"
+            :document-id="documentId"
+            :can-edit="canEditSpace"
+          />
         </div>
 
         <!-- AI 协助面板（含单篇治理预设） -->

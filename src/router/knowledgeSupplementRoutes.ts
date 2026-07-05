@@ -176,10 +176,12 @@ export function kbWikiEditPath(
     issueType?: string
     issueDetail?: string
     fromCreate?: boolean
+    documentId?: number | string
   },
 ) {
   const qs = new URLSearchParams({ slug })
   if (spaceId != null && spaceId !== '') qs.set('spaceId', String(spaceId))
+  if (extra?.documentId != null && extra.documentId !== '') qs.set('documentId', String(extra.documentId))
   if (extra?.issueId != null && extra.issueId !== '') qs.set('issueId', String(extra.issueId))
   if (extra?.issueType?.trim()) qs.set('issueType', extra.issueType.trim())
   if (extra?.issueDetail?.trim()) qs.set('issueDetail', extra.issueDetail.trim())

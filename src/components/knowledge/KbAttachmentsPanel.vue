@@ -30,13 +30,35 @@ import type { KbAttachment } from '@/types/knowledge'
 
 
 
-const props = defineProps<{
+const props = withDefaults(
 
-  documentId?: number | string
+  defineProps<{
 
-  canEdit?: boolean
+    documentId?: number | string
 
-}>()
+    canEdit?: boolean
+
+    /** browse=只读列表+下载；edit=上传/删除（受 canEdit 约束） */
+
+    variant?: 'browse' | 'edit'
+
+    /** toolbar=浏览页下拉；section=编辑页内嵌区块 */
+
+    layout?: 'toolbar' | 'section'
+
+  }>(),
+
+  {
+
+    canEdit: false,
+
+    variant: 'edit',
+
+    layout: 'toolbar',
+
+  },
+
+)
 
 
 
@@ -71,6 +93,24 @@ useEscapeClose(open, () => {
 
 
 const hasDocument = computed(() => props.documentId != null && props.documentId !== '')
+
+const isBrowse = computed(() => props.variant === 'browse')
+
+const isSection = computed(() => props.layout === 'section')
+
+const showWriteActions = computed(() => !isBrowse.value && props.canEdit)
+
+const panelVisible = computed(() => isSection.value || open.value)
+
+const noDocMessage = computed(() =>
+
+  isSection.value
+
+    ? t('knowledge.attachments.noDocSyncHint')
+
+    : t('knowledge.attachments.noDocHint'),
+
+)
 
 const countLabel = computed(() => (items.value.length > 0 ? String(items.value.length) : ''))
 
@@ -128,7 +168,7 @@ function onUploadClick() {
 
   }
 
-  if (!props.canEdit) {
+  if (!showWriteActions.value) {
 
     showToast('error', t('knowledge.attachments.readOnlyHint'))
 
@@ -192,7 +232,7 @@ function validateFile(file: File) {
 
 async function uploadFile(file: File) {
 
-  if (!props.documentId || !props.canEdit) return false
+  if (!props.documentId || !showWriteActions.value) return false
 
   const res = await uploadKbAttachmentApi(props.documentId, file)
 
@@ -206,7 +246,7 @@ async function uploadFile(file: File) {
 
 async function uploadFiles(files: File[]) {
 
-  if (!props.documentId || !props.canEdit || !files.length) return
+  if (!props.documentId || !showWriteActions.value || !files.length) return
 
 
 
@@ -326,7 +366,7 @@ function onDropzoneKeydown(event: KeyboardEvent) {
 
 function onDragOver(event: DragEvent) {
 
-  if (!props.canEdit) return
+  if (!showWriteActions.value) return
 
   event.preventDefault()
 
@@ -348,7 +388,7 @@ async function onDrop(event: DragEvent) {
 
   dragOver.value = false
 
-  if (!props.canEdit) {
+  if (!showWriteActions.value) {
 
     showToast('error', t('knowledge.attachments.readOnlyHint'))
 
@@ -384,7 +424,7 @@ async function onDownload(item: KbAttachment) {
 
 async function onDelete(item: KbAttachment) {
 
-  if (!props.canEdit) {
+  if (!showWriteActions.value) {
 
     showToast('error', t('knowledge.attachments.readOnlyHint'))
 
@@ -414,7 +454,7 @@ async function onDelete(item: KbAttachment) {
 
 function onDocumentClick(event: MouseEvent) {
 
-  if (!open.value || !rootRef.value) return
+  if (isSection.value || !open.value || !rootRef.value) return
 
   if (!rootRef.value.contains(event.target as Node)) closePanel()
 
@@ -454,13 +494,15 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
 <template>
 
-  <div ref="rootRef" class="kb-attachments-toolbar">
+  <div ref="rootRef" :class="isSection ? 'kb-attachments-section' : 'kb-attachments-toolbar'">
 
     <input ref="fileInput" type="file" class="hidden" multiple @change="onPickFile" />
 
 
 
     <button
+
+      v-if="!isSection"
 
       type="button"
 
@@ -470,7 +512,7 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
       :aria-expanded="open"
 
-      :title="!hasDocument ? t('knowledge.attachments.noDocHint') : undefined"
+      :title="!hasDocument ? noDocMessage : undefined"
 
       @click.stop="togglePanel"
 
@@ -486,9 +528,27 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
 
 
-    <div v-if="open && hasDocument" class="kb-attachments-panel" @click.stop>
+    <div v-if="isSection" class="kb-attachments-section-head">
 
-      <div class="kb-attachments-panel-head">
+      <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('knowledge.attachments.sectionTitle') }}</h3>
+
+      <span v-if="countLabel" class="text-xs text-gray-400">{{ t('knowledge.attachments.count', { count: items.length }) }}</span>
+
+    </div>
+
+
+
+    <div
+
+      v-if="panelVisible && (isSection || hasDocument)"
+
+      :class="isSection ? 'kb-attachments-section-body' : 'kb-attachments-panel'"
+
+      @click.stop
+
+    >
+
+      <div v-if="!isSection" class="kb-attachments-panel-head">
 
         <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('knowledge.attachments.title') }}</span>
 
@@ -500,11 +560,11 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
       <div
 
-        v-if="canEdit"
+        v-if="showWriteActions && hasDocument"
 
         class="kb-attachments-dropzone"
 
-        :class="[dragOver && 'kb-attachments-dropzone-active', uploading && 'pointer-events-none opacity-70']"
+        :class="[dragOver && 'kb-attachments-dropzone-active', uploading && 'pointer-events-none opacity-70', isSection && 'kb-attachments-dropzone-section']"
 
         role="button"
 
@@ -550,7 +610,13 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
       </div>
 
-      <p v-else class="kb-attachments-readonly-hint">{{ t('knowledge.attachments.readOnlyHint') }}</p>
+      <p v-else-if="!isBrowse && !hasDocument && isSection" class="kb-attachments-readonly-hint kb-attachments-readonly-hint-section">
+
+        {{ noDocMessage }}
+
+      </p>
+
+      <p v-else-if="!isBrowse && !showWriteActions && !isSection" class="kb-attachments-readonly-hint">{{ t('knowledge.attachments.readOnlyHint') }}</p>
 
 
 
@@ -558,7 +624,7 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
       <p v-else-if="!items.length" class="px-4 py-3 text-sm text-gray-400">{{ t('knowledge.attachments.empty') }}</p>
 
-      <ul v-else class="kb-attachments-list">
+      <ul v-else class="kb-attachments-list" :class="isSection && 'kb-attachments-list-section'">
 
         <li v-for="item in items" :key="item.id" class="kb-attachments-item">
 
@@ -582,7 +648,7 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
             <button
 
-              v-if="canEdit"
+              v-if="showWriteActions"
 
               type="button"
 

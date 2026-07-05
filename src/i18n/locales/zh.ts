@@ -744,8 +744,11 @@ export default {
     },
     attachments: {
       title: '附件',
+      sectionTitle: '页附件（MinIO）',
+      manageInEdit: '在编辑页管理附件',
       empty: '暂无附件',
       noDocHint: '请先选择一篇文档',
+      noDocSyncHint: '请先保存 wiki 并 Sync，生成 documentId 后再上传',
       readOnlyHint: '当前空间为只读，仅可查看和下载附件',
       dropHint: '点击或拖拽文件到此处上传',
       dropSub: '支持多文件同时上传，单个文件最大 {max}',

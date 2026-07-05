@@ -1206,6 +1206,30 @@
     @apply flex items-center gap-2 rounded-lg px-2 py-2 transition hover:bg-gray-50 dark:hover:bg-white/5;
   }
 
+  .kb-attachments-section {
+    @apply rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-white/5 dark:bg-white/[0.02];
+  }
+
+  .kb-attachments-section-head {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  .kb-attachments-section-body {
+    @apply mt-3;
+  }
+
+  .kb-attachments-dropzone-section {
+    @apply mx-0 mt-0;
+  }
+
+  .kb-attachments-readonly-hint-section {
+    @apply mx-0 mt-0;
+  }
+
+  .kb-attachments-list-section {
+    @apply max-h-48 px-0;
+  }
+
   .kb-sync-result {
     @apply overflow-hidden p-4;
   }

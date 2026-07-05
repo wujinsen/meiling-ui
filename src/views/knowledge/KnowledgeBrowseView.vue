@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown, ExternalLink, FileText, FoldVertical, Link2, Loader2, Pencil, Search, UnfoldVertical } from 'lucide-vue-next'
+import { ChevronDown, ExternalLink, FileText, FoldVertical, Link2, Loader2, Paperclip, Pencil, Search, UnfoldVertical } from 'lucide-vue-next'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
 import KbDocFilterTabs from '@/components/knowledge/KbDocFilterTabs.vue'
@@ -669,7 +669,11 @@ function onContentClick(event: MouseEvent) {
 function openWikiEdit() {
   const slug = page.value?.slug
   if (!slug) return
-  void router.push(kbWikiEditPath(slug, page.value?.spaceId))
+  void router.push(kbWikiEditPath(slug, page.value?.spaceId, { documentId: page.value?.docId }))
+}
+
+function openWikiEditAttachments() {
+  openWikiEdit()
 }
 
 const browseReady = ref(false)
@@ -879,7 +883,17 @@ watch(
             <div class="flex flex-wrap items-start justify-between gap-3">
               <h2 class="text-2xl font-semibold text-gray-900 dark:text-white">{{ page.title }}</h2>
               <div class="flex shrink-0 flex-wrap items-center gap-2">
-                <KbAttachmentsPanel :document-id="page?.docId" :can-edit="canEditAttachments" />
+                <KbAttachmentsPanel variant="browse" :document-id="page?.docId" />
+                <button
+                  v-if="canWikiEdit && page?.docId"
+                  type="button"
+                  class="btn-ghost shrink-0 text-sm"
+                  :title="t('knowledge.attachments.manageInEdit')"
+                  @click="openWikiEditAttachments"
+                >
+                  <Paperclip class="h-4 w-4" /> {{ t('knowledge.attachments.manageInEdit') }}
+                  <ExternalLink class="h-3.5 w-3.5 opacity-60" />
+                </button>
                 <button
                   v-if="canWikiEdit"
                   type="button"
