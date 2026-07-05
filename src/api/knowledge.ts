@@ -1,11 +1,12 @@
 import { request } from '@/api/http'
-import { kbAttachmentUploadTimeoutMs } from '@/constants/knowledge'
+import { kbAttachmentUploadTimeoutMs, kbWikiAssetUploadTimeoutMs } from '@/constants/knowledge'
 import { API_SUCCESS_CODE, type MoliResult } from '@/types/api'
 import type {
   KbAccessibleSpace,
   KbAskRequest,
   KbAskResponse,
   KbAttachment,
+  KbWikiAssetUpload,
   KbBrowseScopeParams,
   KbCategoryTree,
   KbCategorySaveRequest,
@@ -1173,6 +1174,30 @@ export async function uploadKbAttachmentApi(documentId: number | string, file: F
     method: 'POST',
     body: form,
     timeoutMs: kbAttachmentUploadTimeoutMs(file.size),
+  })
+}
+
+/** T22 F2：上传 wiki inline 插图至 {slug}.assets/ */
+export async function uploadKbWikiAssetApi(spaceId: number | string, slug: string, file: File) {
+  if (USE_MOCK) {
+    await delay(300)
+    const rel = `assets/${file.name.replace(/\s+/g, '-')}`
+    return ok<KbWikiAssetUpload>({
+      rel,
+      fileName: file.name,
+      fileSize: file.size,
+      contentType: file.type || 'image/png',
+      markdown: `![${file.name.replace(/\.[^.]+$/, '')}](${rel})`,
+    })
+  }
+  const form = new FormData()
+  form.append('spaceId', String(spaceId))
+  form.append('slug', slug)
+  form.append('file', file)
+  return request<KbWikiAssetUpload>(`${KB_BASE}/wiki/asset`, {
+    method: 'POST',
+    body: form,
+    timeoutMs: kbWikiAssetUploadTimeoutMs(file.size),
   })
 }
 

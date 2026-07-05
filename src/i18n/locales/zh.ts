@@ -745,6 +745,15 @@ export default {
     markdownImage: {
       loadFailed: '图片加载失败',
     },
+    wikiImage: {
+      insert: '插入图片',
+      hint: '上传至当前页 .assets/ 并插入 markdown（最大 {max}）',
+      saveFirst: '请先保存 wiki 文件，再上传插图',
+      uploadOk: '已插入：{name}',
+      uploadFailed: '插图上传失败',
+      fileTooLarge: '{name} 超过大小限制（最大 {max}）',
+      notImage: '{name} 不是支持的图片格式',
+    },
     attachments: {
       title: '附件',
       sectionTitle: '页附件（MinIO）',

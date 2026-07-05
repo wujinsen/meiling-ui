@@ -1,6 +1,7 @@
 import { createApp, nextTick, onUnmounted, watch, type App, type ComputedRef, type Ref } from 'vue'
 import KbMarkdownImage from '@/components/knowledge/KbMarkdownImage.vue'
-import { isKbAssetMarkdownSrc, resolveKbAssetUrl, type KbAssetUrlContext } from '@/utils/kbAssetUrl'
+import { i18n } from '@/i18n'
+import { isKbAssetMarkdownSrc, type KbAssetUrlContext } from '@/utils/kbAssetUrl'
 
 export type KbMarkdownRenderContext = {
   spaceId?: string | number
@@ -60,7 +61,7 @@ export function mountKbMarkdownImages(
   const nodes = root.querySelectorAll<HTMLElement>('img[data-kb-asset-src]')
   for (const node of nodes) {
     const src = node.getAttribute('data-kb-asset-src') ?? ''
-    if (!src || !resolveKbAssetUrl(src, urlCtx)) continue
+    if (!src || !isKbAssetMarkdownSrc(src)) continue
 
     const alt = node.getAttribute('alt') ?? undefined
     const title = node.getAttribute('title') ?? undefined
@@ -75,6 +76,7 @@ export function mountKbMarkdownImages(
       spaceId: urlCtx.spaceId,
       documentSlug: urlCtx.documentSlug,
     })
+    app.use(i18n)
     app.mount(mountPoint)
     records.push({ app, el: mountPoint })
   }
@@ -114,7 +116,8 @@ export function useKbMarkdownRender(
     mountKbMarkdownImages(root ?? undefined, { ...ctx.value })
   }
 
-  watch([contentVersion, ctx], () => void run(), { flush: 'post', deep: true })
+  // containerRef：Wiki 编辑「预览」tab 由 v-if 挂载，切 tab 时 ref 才出现，须一并监听
+  watch([contentVersion, ctx, containerRef], () => void run(), { flush: 'post', deep: true })
 
   onUnmounted(() => {
     unmountKbMarkdownImages(resolveMarkdownRoot(containerRef.value ?? undefined) ?? undefined)
@@ -133,7 +136,7 @@ export function useKbMarkdownRenderMulti(
     mountKbMarkdownInContainer(containerRef.value ?? undefined, { ...ctx.value })
   }
 
-  watch([contentVersion, ctx], () => void run(), { flush: 'post', deep: true })
+  watch([contentVersion, ctx, containerRef], () => void run(), { flush: 'post', deep: true })
 
   onUnmounted(() => {
     unmountKbMarkdownInContainer(containerRef.value ?? undefined)

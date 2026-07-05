@@ -77,5 +77,7 @@ onBeforeUnmount(() => {
     loading="lazy"
     decoding="async"
   />
-  <span v-else-if="failed" class="kb-md-image--error">[{{ t('knowledge.markdownImage.loadFailed') }}]</span>
+  <span v-else-if="failed" class="kb-md-image--error kb-md-img-error inline-block rounded-lg px-3 py-2 text-sm">
+    [{{ t('knowledge.markdownImage.loadFailed') }}]
+  </span>
 </template>

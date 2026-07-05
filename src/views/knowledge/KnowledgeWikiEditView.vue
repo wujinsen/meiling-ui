@@ -6,6 +6,7 @@ import { ArrowLeft, ExternalLink, GitMerge, Loader2, Save, Sparkles, Upload } fr
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
+import KbWikiImageInsert from '@/components/knowledge/KbWikiImageInsert.vue'
 import {
   aiReviseKbWikiApi,
   getKbLlmConfigApi,
@@ -91,6 +92,7 @@ const changeLog = ref('')
 const mainTab = ref<'write' | 'preview' | 'diff'>('write')
 const contentHtml = shallowRef('')
 const markdownRootRef = ref<HTMLElement | null>(null)
+const contentTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
 const llmAvailable = ref(false)
 const aiPanelOpen = ref(false)
@@ -175,6 +177,24 @@ const fromLintIssue = computed(() => Boolean(issueId.value))
 function syncPreviewHtml() {
   contentHtml.value = renderWikiPreviewMarkdown(content.value)
 }
+
+function insertMarkdownAtCursor(markdown: string) {
+  const el = contentTextareaRef.value
+  if (!el) {
+    content.value += markdown
+    return
+  }
+  const start = el.selectionStart ?? content.value.length
+  const end = el.selectionEnd ?? start
+  content.value = content.value.slice(0, start) + markdown + content.value.slice(end)
+  void nextTick(() => {
+    el.focus()
+    const pos = start + markdown.length
+    el.setSelectionRange(pos, pos)
+  })
+}
+
+const activeSpaceId = computed(() => querySpaceId.value ?? resolvedSpaceId.value)
 
 watch(mainTab, (tab) => {
   if (tab === 'preview') syncPreviewHtml()
@@ -728,7 +748,17 @@ watch(slug, () => {
           :class="sidePanelOpen ? 'flex-1 xl:max-w-[58%]' : 'flex-1'"
         >
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <SegmentControl v-model="mainTab" :options="tabOptions" />
+            <div class="flex flex-wrap items-center gap-2">
+              <SegmentControl v-model="mainTab" :options="tabOptions" />
+              <KbWikiImageInsert
+                v-if="mainTab === 'write'"
+                :slug="slug"
+                :space-id="activeSpaceId"
+                :can-edit="canEditSpace"
+                :page-exists="fileExists"
+                @insert="insertMarkdownAtCursor"
+              />
+            </div>
             <div class="flex items-center gap-3 text-xs text-gray-400">
               <span v-if="lintChecking">{{ t('knowledge.wikiEdit.lintChecking') }}</span>
               <span v-else-if="lintPreviewItems.length" class="text-amber-600 dark:text-amber-400">
@@ -743,6 +773,7 @@ watch(slug, () => {
 
           <textarea
             v-if="mainTab === 'write'"
+            ref="contentTextareaRef"
             v-model="content"
             class="field-input mt-3 min-h-[380px] flex-1 resize-y font-mono text-sm leading-relaxed"
             :placeholder="t('knowledge.wikiEdit.contentPlaceholder')"

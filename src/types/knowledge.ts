@@ -521,6 +521,15 @@ export type KbAttachment = {
   createTime?: string
 }
 
+/** T22 F2：Wiki inline 插图上传结果 */
+export type KbWikiAssetUpload = {
+  rel: string
+  fileName: string
+  fileSize: number
+  contentType: string
+  markdown: string
+}
+
 export type KbSyncStatus = {
   batchNo?: string
   spaceId?: number | string

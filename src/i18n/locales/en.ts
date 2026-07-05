@@ -724,6 +724,15 @@ export default {
     markdownImage: {
       loadFailed: 'Image failed to load',
     },
+    wikiImage: {
+      insert: 'Insert image',
+      hint: 'Upload to this page .assets/ and insert markdown (max {max})',
+      saveFirst: 'Save the wiki file before uploading inline images',
+      uploadOk: 'Inserted: {name}',
+      uploadFailed: 'Inline image upload failed',
+      fileTooLarge: '{name} exceeds size limit (max {max})',
+      notImage: '{name} is not a supported image format',
+    },
     attachments: {
       title: 'Attachments',
       sectionTitle: 'Page attachments (MinIO)',

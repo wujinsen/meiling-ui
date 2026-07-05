@@ -63,9 +63,11 @@ export function resolveKbAssetUrl(src: string, ctx: KbAssetUrlContext): string |
 
   if (trimmed.startsWith('assets/') || trimmed.startsWith('./assets/')) {
     const rel = trimmed.replace(/^\.\//, '')
+    const slug = ctx.documentSlug?.trim()
+    if (!slug) return null
     const q = new URLSearchParams({
       spaceId: ctx.spaceId,
-      slug: ctx.documentSlug,
+      slug,
       rel,
     })
     return `${base}/kb/wiki/asset?${q.toString()}`
@@ -82,6 +84,11 @@ export async function fetchKbAssetBlob(resolvedUrl: string): Promise<string> {
     credentials: 'include',
   })
   if (!res.ok) throw new Error(`kb asset ${res.status}`)
+  const contentType = res.headers.get('content-type') ?? ''
+  // 后端业务错误也常以 HTTP 200 + application/json 返回（如 10006/10012），不能当图片 blob
+  if (contentType.includes('application/json') || !contentType.startsWith('image/')) {
+    throw new Error(`kb asset unexpected content-type: ${contentType || 'unknown'}`)
+  }
   const blob = await res.blob()
   return URL.createObjectURL(blob)
 }

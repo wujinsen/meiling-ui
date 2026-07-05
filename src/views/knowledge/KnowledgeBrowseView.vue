@@ -681,7 +681,7 @@ function openWikiEditAttachments() {
 const browseReady = ref(false)
 
 const markdownAssetCtx = computed(() => ({
-  documentSlug: page.value?.slug,
+  documentSlug: page.value?.slug ?? activeSlug.value,
   spaceId: page.value?.spaceId,
 }))
 

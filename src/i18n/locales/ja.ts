@@ -724,6 +724,15 @@ export default {
     markdownImage: {
       loadFailed: '画像の読み込みに失敗しました',
     },
+    wikiImage: {
+      insert: '画像を挿入',
+      hint: '現在ページの .assets/ にアップロードし markdown を挿入（最大 {max}）',
+      saveFirst: 'Wiki ファイルを保存してから画像をアップロードしてください',
+      uploadOk: '挿入しました：{name}',
+      uploadFailed: '画像のアップロードに失敗しました',
+      fileTooLarge: '{name} がサイズ上限を超えています（最大 {max}）',
+      notImage: '{name} はサポートされていない画像形式です',
+    },
     attachments: {
       title: '添付',
       sectionTitle: 'ページ添付（MinIO）',
