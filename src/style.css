@@ -1799,6 +1799,11 @@
     @apply flex flex-col gap-3.5;
   }
 
+  .form-grid-footnote {
+    @apply text-xs text-gray-400 dark:text-gray-500;
+    padding-left: calc(5.5rem + 0.75rem);
+  }
+
   .form-grid-row {
     @apply grid grid-cols-2 gap-x-8;
   }
@@ -1816,7 +1821,7 @@
   }
 
   .form-field.form-field-horizontal {
-    @apply grid items-center gap-x-3 gap-y-0;
+    @apply grid items-start gap-x-3 gap-y-1;
     grid-template-columns: 5.5rem minmax(0, 11.5rem);
   }
 
@@ -1826,6 +1831,14 @@
 
   .form-field.form-field-horizontal.form-field-span-2 {
     grid-column: span 2;
+  }
+
+  .form-field.form-field-horizontal .form-field-control {
+    @apply min-w-0 space-y-1;
+  }
+
+  .form-field.form-field-horizontal .form-hint {
+    grid-column: 2;
   }
 
   .form-field.form-field-horizontal.form-field-wide {

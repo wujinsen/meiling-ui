@@ -119,8 +119,8 @@ function submit() {
         <div class="form-grid-row">
           <FormField :label="t('knowledge.docManage.fieldSpace')" horizontal required class="form-field-span-2">
             <KbSpaceDropdown v-model="spaceId" editable-only value-field="id" />
-            <p class="form-hint mt-1">{{ t('knowledge.docManage.createSpaceHint') }}</p>
-            <p v-if="spaceError" class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ spaceError }}</p>
+            <p class="form-hint">{{ t('knowledge.docManage.createSpaceHint') }}</p>
+            <p v-if="spaceError" class="text-xs text-amber-600 dark:text-amber-400">{{ spaceError }}</p>
           </FormField>
         </div>
         <div class="form-grid-row">
@@ -140,19 +140,19 @@ function submit() {
             class="form-field-span-2"
             :hint="t('knowledge.docManage.slugHint', { slug: pathSlug })"
           >
-            <div class="flex items-center gap-1 font-mono text-xs text-gray-400">
-              <span>{{ kbType }}/</span>
+            <div class="flex min-w-0 items-center gap-1.5">
+              <span class="shrink-0 font-mono text-xs text-gray-400">{{ kbType }}/</span>
               <input
                 v-model="slugSegment"
                 type="text"
-                class="field-input flex-1 font-mono text-sm"
+                class="field-input min-w-0 flex-1 font-mono text-sm"
                 :placeholder="t('knowledge.docManage.slugPlaceholder')"
                 @input="slugTouched = true"
               />
             </div>
           </FormField>
         </div>
-        <p class="text-xs text-gray-400">{{ t('knowledge.docManage.createHint') }}</p>
+        <p class="form-grid-footnote">{{ t('knowledge.docManage.createHint') }}</p>
       </div>
     </form>
     <template #footer>

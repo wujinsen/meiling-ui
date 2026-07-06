@@ -13,7 +13,10 @@ defineProps<{
     <span class="form-label">
       {{ label }}<span v-if="required" class="form-required">*</span>
     </span>
-    <slot />
+    <div v-if="horizontal" class="form-field-control">
+      <slot />
+    </div>
+    <slot v-else />
     <p v-if="hint" class="form-hint">{{ hint }}</p>
   </label>
 </template>
