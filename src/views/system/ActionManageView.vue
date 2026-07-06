@@ -287,36 +287,44 @@ onMounted(async () => {
     </div>
 
     <AppModal :open="modalOpen" :title="modalTitle" wide @close="closeModal">
-      <form class="form-modal" @submit.prevent="submitForm">
-        <FormField v-if="!isEdit" :label="t('system.action.permCode')" required>
-          <input v-model="form.permCode" type="text" class="field-input" :placeholder="t('system.action.permCodeHint')" />
-        </FormField>
-        <FormField v-else :label="t('system.action.permCode')">
-          <input :value="form.permCode" type="text" class="field-input" disabled />
-        </FormField>
-        <FormField :label="t('system.action.name')" required>
-          <input v-model="form.name" type="text" class="field-input" />
-        </FormField>
-        <FormField :label="t('system.action.menu')">
-          <select v-model="form.menuId" class="field-input">
-            <option :value="undefined">{{ t('system.action.menuNone') }}</option>
-            <option v-for="m in pageMenus" :key="String(m.id)" :value="m.id">{{ m.menuName }}</option>
-          </select>
-        </FormField>
-        <FormField :label="t('system.action.orderNum')">
-          <input v-model.number="form.orderNum" type="number" min="0" class="field-input" />
-        </FormField>
-        <FormField :label="t('system.action.status')">
-          <select v-model.number="form.status" class="field-input">
-            <option :value="1">{{ t('system.action.statusOn') }}</option>
-            <option :value="0">{{ t('system.action.statusOff') }}</option>
-          </select>
-        </FormField>
-        <div class="form-modal-actions">
-          <button type="button" class="btn-ghost" @click="closeModal">{{ t('system.action.cancel') }}</button>
-          <button type="submit" class="btn-primary" :disabled="saving">{{ t('system.action.save') }}</button>
+      <form class="form-modal" novalidate @submit.prevent="submitForm">
+        <div class="form-grid-pairs">
+          <div class="form-grid-row">
+            <FormField v-if="!isEdit" :label="t('system.action.permCode')" horizontal required>
+              <input v-model="form.permCode" type="text" class="field-input" :placeholder="t('system.action.permCodeHint')" />
+            </FormField>
+            <FormField v-else :label="t('system.action.permCode')" horizontal>
+              <input :value="form.permCode" type="text" class="field-input" disabled />
+            </FormField>
+            <FormField :label="t('system.action.name')" horizontal required>
+              <input v-model="form.name" type="text" class="field-input" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('system.action.menu')" horizontal>
+              <select v-model="form.menuId" class="field-input">
+                <option :value="undefined">{{ t('system.action.menuNone') }}</option>
+                <option v-for="m in pageMenus" :key="String(m.id)" :value="m.id">{{ m.menuName }}</option>
+              </select>
+            </FormField>
+            <FormField :label="t('system.action.orderNum')" horizontal>
+              <input v-model.number="form.orderNum" type="number" min="0" class="field-input" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('system.action.status')" horizontal>
+              <select v-model.number="form.status" class="field-input">
+                <option :value="1">{{ t('system.action.statusOn') }}</option>
+                <option :value="0">{{ t('system.action.statusOff') }}</option>
+              </select>
+            </FormField>
+          </div>
         </div>
       </form>
+      <template #footer>
+        <button type="button" class="btn-ghost" @click="closeModal">{{ t('system.action.cancel') }}</button>
+        <button type="button" class="btn-primary" :disabled="saving" @click="submitForm">{{ t('system.action.save') }}</button>
+      </template>
     </AppModal>
   </div>
 </template>

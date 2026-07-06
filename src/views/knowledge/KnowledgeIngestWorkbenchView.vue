@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Trash2, Upload, X, Zap } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppModal from '@/components/ui/AppModal.vue'
+import FormField from '@/components/ui/FormField.vue'
 import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import IngestExpressProgressPanel, { type IngestExpressProgressStep } from '@/components/knowledge/IngestExpressProgressPanel.vue'
 import KbWorkflowNextSteps from '@/components/knowledge/KbWorkflowNextSteps.vue'
@@ -2276,20 +2277,30 @@ onUnmounted(() => {
     <AppModal
       :open="saveTemplateOpen"
       :title="t('knowledge.ingest.saveAsTemplate')"
+      wide
       @close="saveTemplateOpen = false"
     >
-      <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.saveAsTemplateDesc') }}</p>
-      <label class="flex flex-col gap-1.5">
-        <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.saveAsTemplatePrompt') }}</span>
-        <input
-          v-model="saveTemplateName"
-          type="text"
-          class="field-input"
-          :placeholder="t('knowledge.ingest.saveAsTemplatePlaceholder')"
-          @keydown.enter.prevent="submitSaveTemplate"
-        />
-      </label>
-      <p v-if="job?.planVersion" class="mt-2 text-xs text-gray-400">{{ t('knowledge.ingest.saveAsTemplateIncludePlan') }}</p>
+      <form class="form-modal" novalidate @submit.prevent="submitSaveTemplate">
+        <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">{{ t('knowledge.ingest.saveAsTemplateDesc') }}</p>
+        <div class="form-grid-pairs">
+          <div class="form-grid-row">
+            <FormField
+              :label="t('knowledge.ingest.saveAsTemplatePrompt')"
+              horizontal
+              required
+              class="form-field-span-2"
+              :hint="job?.planVersion ? t('knowledge.ingest.saveAsTemplateIncludePlan') : undefined"
+            >
+              <input
+                v-model="saveTemplateName"
+                type="text"
+                class="field-input"
+                :placeholder="t('knowledge.ingest.saveAsTemplatePlaceholder')"
+              />
+            </FormField>
+          </div>
+        </div>
+      </form>
       <template #footer>
         <button type="button" class="btn-ghost" :disabled="saveTemplateSaving" @click="saveTemplateOpen = false">
           {{ t('confirm.cancel') }}

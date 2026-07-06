@@ -739,29 +739,37 @@ onMounted(() => loadSpaces())
       </div>
     </div>
 
-    <AppModal :open="spaceModalOpen" :title="spaceModalTitle" @close="spaceModalOpen = false">
-      <div class="space-y-4">
-        <FormField :label="t('knowledge.spaceManage.form.code')" required>
-          <input v-model="spaceForm.spaceCode" class="field-input" :disabled="spaceForm.id != null" />
-        </FormField>
-        <FormField :label="t('knowledge.spaceManage.form.name')" required>
-          <input v-model="spaceForm.spaceName" class="field-input" />
-        </FormField>
-        <FormField :label="t('knowledge.spaceManage.form.description')">
-          <textarea v-model="spaceForm.description" rows="2" class="field-input" />
-        </FormField>
-        <FormField :label="t('knowledge.spaceManage.form.visibility')">
-          <select v-model.number="spaceForm.visibility" class="field-input">
-            <option :value="2">{{ t('knowledge.space.public') }}</option>
-            <option :value="1">{{ t('knowledge.space.internal') }}</option>
-            <option :value="0">{{ t('knowledge.space.private') }}</option>
-          </select>
-        </FormField>
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" class="btn-ghost" @click="spaceModalOpen = false">{{ t('confirm.cancel') }}</button>
-          <button type="button" class="btn-primary" :disabled="savingSpace" @click="submitSpace">{{ t('confirm.ok') }}</button>
+    <AppModal :open="spaceModalOpen" :title="spaceModalTitle" wide @close="spaceModalOpen = false">
+      <form class="form-modal" novalidate @submit.prevent="submitSpace">
+        <div class="form-grid-pairs">
+          <div class="form-grid-row">
+            <FormField :label="t('knowledge.spaceManage.form.code')" horizontal required>
+              <input v-model="spaceForm.spaceCode" class="field-input" :disabled="spaceForm.id != null" />
+            </FormField>
+            <FormField :label="t('knowledge.spaceManage.form.name')" horizontal required>
+              <input v-model="spaceForm.spaceName" class="field-input" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('knowledge.spaceManage.form.visibility')" horizontal>
+              <select v-model.number="spaceForm.visibility" class="field-input">
+                <option :value="2">{{ t('knowledge.space.public') }}</option>
+                <option :value="1">{{ t('knowledge.space.internal') }}</option>
+                <option :value="0">{{ t('knowledge.space.private') }}</option>
+              </select>
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('knowledge.spaceManage.form.description')" horizontal class="form-field-span-2">
+              <textarea v-model="spaceForm.description" rows="3" class="field-input resize-y" />
+            </FormField>
+          </div>
         </div>
-      </div>
+      </form>
+      <template #footer>
+        <button type="button" class="btn-ghost" @click="spaceModalOpen = false">{{ t('confirm.cancel') }}</button>
+        <button type="button" class="btn-primary" :disabled="savingSpace" @click="submitSpace">{{ t('confirm.ok') }}</button>
+      </template>
     </AppModal>
 
     <AppModal

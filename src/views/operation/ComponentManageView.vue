@@ -5,6 +5,7 @@ import { addComponentApi, deleteComponentApi, getComponentApi, listComponentApi,
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import AppModal from '@/components/ui/AppModal.vue'
+import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
 import { guardAction } from '@/composables/useActionPermissions'
 import { PERM } from '@/constants/permissions'
@@ -204,16 +205,48 @@ onMounted(loadList)
       <div v-if="total > 0" class="mt-4"><AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" /></div>
     </div>
     <AppModal :open="modalOpen" :title="modalTitle" wide @close="closeModal">
-      <form class="grid grid-cols-1 gap-4 sm:grid-cols-2" @submit.prevent="submitForm">
-        <label class="flex flex-col gap-1 text-sm sm:col-span-2"><span class="text-gray-500">{{ t('operation.component.componentName') }} *</span><input v-model="form.componentName" class="field-input" /></label>
-        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.serverIp') }}</span><input v-model="form.serverIp" class="field-input" /></label>
-        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.port') }}</span><input v-model="form.port" class="field-input" /></label>
-        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.account') }}</span><input v-model="form.account" class="field-input" /></label>
-        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.password') }}</span><input v-model="form.password" type="password" class="field-input" autocomplete="new-password" /></label>
-        <label class="flex flex-col gap-1 text-sm"><span class="text-gray-500">{{ t('operation.component.version') }}</span><input v-model="form.version" class="field-input" /></label>
-        <label class="flex flex-col gap-1 text-sm sm:col-span-2"><span class="text-gray-500">{{ t('operation.component.deployPath') }}</span><input v-model="form.deployPath" class="field-input" /></label>
-        <label class="flex flex-col gap-1 text-sm sm:col-span-2"><span class="text-gray-500">{{ t('operation.common.environment') }}</span><EnvironmentSelect v-model="form.environment" /></label>
-        <label class="flex flex-col gap-1 text-sm sm:col-span-2"><span class="text-gray-500">{{ t('operation.common.remark') }}</span><textarea v-model="form.remark" rows="3" class="field-input resize-y" /></label>
+      <form class="form-modal" novalidate @submit.prevent="submitForm">
+        <div class="form-grid-pairs">
+          <div class="form-grid-row">
+            <FormField :label="t('operation.component.componentName')" horizontal required class="form-field-span-2">
+              <input v-model="form.componentName" class="field-input" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('operation.component.serverIp')" horizontal>
+              <input v-model="form.serverIp" class="field-input" />
+            </FormField>
+            <FormField :label="t('operation.component.port')" horizontal>
+              <input v-model="form.port" class="field-input" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('operation.component.account')" horizontal>
+              <input v-model="form.account" class="field-input" />
+            </FormField>
+            <FormField :label="t('operation.component.password')" horizontal>
+              <input v-model="form.password" type="password" class="field-input" autocomplete="new-password" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('operation.component.version')" horizontal>
+              <input v-model="form.version" class="field-input" />
+            </FormField>
+            <FormField :label="t('operation.component.deployPath')" horizontal>
+              <input v-model="form.deployPath" class="field-input" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('operation.common.environment')" horizontal class="form-field-span-2">
+              <EnvironmentSelect v-model="form.environment" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('operation.common.remark')" horizontal class="form-field-span-2">
+              <textarea v-model="form.remark" rows="3" class="field-input resize-y" />
+            </FormField>
+          </div>
+        </div>
       </form>
       <template #footer>
         <button type="button" class="btn-ghost" @click="closeModal">{{ t('operation.common.cancel') }}</button>

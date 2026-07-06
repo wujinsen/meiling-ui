@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ExternalLink, FolderInput, Loader2, Pencil, Plus, RefreshCw, Search } from 'lucide-vue-next'
 import AppModal from '@/components/ui/AppModal.vue'
+import FormField from '@/components/ui/FormField.vue'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
@@ -103,8 +104,6 @@ const tabOptions = computed(() => [
   { value: 'tags', label: t('knowledge.taxManage.tabTags') },
 ])
 
-const fillViewport = computed(() => activeTab.value === 'tags' || activeTab.value === 'categories')
-
 function onTaxonomyChanged() {
   void reloadMeta()
   void reloadFilters()
@@ -201,14 +200,6 @@ function onCategoryFilterSelect(value: KbCategoryFilterId[]) {
 
 function openCreate() {
   if (!guardAction(PERM.KB_WIKI_EDIT)) return
-  if (!taxonomySingleSpace.value) {
-    showToast('error', t('knowledge.docManage.taxonomyNeedSingleSpace'))
-    return
-  }
-  if (!canEditScopedSpace.value) {
-    showToast('error', t('knowledge.docManage.readOnlySpaceHint'))
-    return
-  }
   createOpen.value = true
 }
 
@@ -341,7 +332,7 @@ watch(
 </script>
 
 <template>
-  <div class="page-stack" :class="[fillViewport && 'kb-doc-manage-fill']">
+  <div class="page-stack">
     <KbAccessDenied
       v-if="!spaceLoading && !hasAccessibleSpace"
       :title="t('knowledge.docManage.noAccessibleSpaceTitle')"
@@ -361,9 +352,6 @@ watch(
       </p>
       <p v-else-if="activeTab === 'documents' && !taxonomySingleSpace" class="text-xs text-gray-500 dark:text-gray-400">
         {{ t('knowledge.docManage.multiSpaceListHint') }}
-      </p>
-      <p v-else-if="activeTab === 'documents' && taxonomySingleSpace && !canEditScopedSpace" class="text-xs text-amber-600 dark:text-amber-400">
-        {{ t('knowledge.docManage.readOnlySpaceHint') }}
       </p>
 
       <template v-if="activeTab === 'documents'">
@@ -422,7 +410,7 @@ watch(
             <RefreshCw class="h-4 w-4" /> {{ t('knowledge.docManage.reset') }}
           </button>
         </form>
-        <button v-if="canCreate && canEditScopedSpace && taxonomySingleSpace" type="button" class="btn-primary shrink-0" @click="openCreate">
+        <button v-if="canCreate" type="button" class="btn-primary shrink-0" @click="openCreate">
           <Plus class="h-4 w-4" /> {{ t('knowledge.docManage.create') }}
         </button>
         <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadList">
@@ -537,21 +525,27 @@ watch(
       @wiki-created="onWikiCreated"
     />
 
-    <AppModal :open="moveOpen" :title="t('knowledge.docManage.moveTitle')" @close="moveOpen = false">
-      <div class="space-y-3">
-        <p class="text-sm text-gray-500 dark:text-gray-400">
+    <AppModal :open="moveOpen" :title="t('knowledge.docManage.moveTitle')" wide @close="moveOpen = false">
+      <form class="form-modal" novalidate @submit.prevent="submitMove">
+        <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">
           {{ t('knowledge.docManage.moveDesc', { title: moveRow?.title ?? '' }) }}
         </p>
-        <KbCategorySelect
-          v-model="moveTargetCategoryId"
-          :options="moveFlatCategories"
-          :loading="moveMetaLoading"
-          :empty-label="t('knowledge.docManage.moveTargetPlaceholder')"
-        />
-        <p class="text-xs text-amber-600 dark:text-amber-400">
+        <div class="form-grid-pairs">
+          <div class="form-grid-row">
+            <FormField :label="t('knowledge.docManage.fieldCategory')" horizontal required class="form-field-span-2">
+              <KbCategorySelect
+                v-model="moveTargetCategoryId"
+                :options="moveFlatCategories"
+                :loading="moveMetaLoading"
+                :empty-label="t('knowledge.docManage.moveTargetPlaceholder')"
+              />
+            </FormField>
+          </div>
+        </div>
+        <p class="mt-3 text-xs text-amber-600 dark:text-amber-400">
           {{ t('knowledge.docManage.moveWarning') }}
         </p>
-      </div>
+      </form>
       <template #footer>
         <button type="button" class="btn-ghost" @click="moveOpen = false">{{ t('confirm.cancel') }}</button>
         <button type="button" class="btn-primary" :disabled="moving" @click="submitMove">

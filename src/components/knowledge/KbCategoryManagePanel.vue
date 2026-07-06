@@ -43,6 +43,7 @@ const { expanded, toggleExpand, expandAllIfEmpty } = useTreeExpand()
 
 const flatCategories = computed(() => flattenKbCategoryTree(tree.value))
 const flatRows = computed(() => flattenVisibleTree(tree.value, expanded.value))
+const categoryCount = computed(() => flatCategories.value.length)
 const modalTitle = computed(() =>
   editingId.value ? t('knowledge.taxManage.editCategory') : t('knowledge.taxManage.addCategory'),
 )
@@ -109,7 +110,6 @@ async function submit() {
       spaceId: props.spaceId,
       parentId: toParentId(form.value.parentId === '' ? 0 : form.value.parentId),
       categoryName: form.value.categoryName.trim(),
-      // dir_slug 仅创建时提交（创建后不可改）
       dirSlug: editingId.value ? undefined : form.value.dirSlug.trim(),
       sort: form.value.sort,
     }
@@ -157,23 +157,25 @@ watch(
 </script>
 
 <template>
-  <div class="card p-5">
-    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <p class="text-xs text-gray-400">{{ t('knowledge.taxManage.categoryHint') }}</p>
-      <div class="flex flex-wrap items-center gap-2">
-        <button type="button" class="btn-primary shrink-0" @click="openCreate()">
-          <Plus class="h-4 w-4" /> {{ t('knowledge.taxManage.addRootCategory') }}
-        </button>
-        <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadTree">
-          <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
-          <RefreshCw v-else class="h-4 w-4" />
-        </button>
-      </div>
+  <div class="card p-4">
+    <div class="flex flex-wrap items-center justify-end gap-2">
+      <button type="button" class="btn-primary shrink-0" @click="openCreate()">
+        <Plus class="h-4 w-4" /> {{ t('knowledge.taxManage.addRootCategory') }}
+      </button>
+      <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadTree">
+        <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
+        <RefreshCw v-else class="h-4 w-4" />
+      </button>
     </div>
+  </div>
 
-    <div v-if="loading" class="py-12 text-center text-sm text-gray-400">{{ t('common.loading') }}</div>
-    <div v-else-if="!tree.length" class="py-12 text-center text-sm text-gray-400">{{ t('knowledge.taxManage.categoryEmpty') }}</div>
-    <div v-else class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
+  <div class="card p-5">
+    <p class="mb-1 text-xs text-gray-400">
+      {{ t('knowledge.taxManage.categorySummary', { count: categoryCount }) }}
+    </p>
+    <p class="mb-4 text-xs text-gray-400">{{ t('knowledge.taxManage.categoryHint') }}</p>
+
+    <div class="data-table-scroll overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
       <table class="data-table w-full min-w-[640px] text-left text-sm">
         <thead>
           <tr>
@@ -181,11 +183,17 @@ watch(
             <th>目录</th>
             <th>文档数</th>
             <th>{{ t('knowledge.taxManage.colSort') }}</th>
-            <th class="text-right">{{ t('knowledge.docManage.colActions') }}</th>
+            <th class="data-table-sticky-end text-right">{{ t('knowledge.docManage.colActions') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in flatRows" :key="String(row.id)">
+          <tr v-if="loading">
+            <td colspan="5" class="px-4 py-12 text-center text-gray-400">{{ t('common.loading') }}</td>
+          </tr>
+          <tr v-else-if="!flatRows.length">
+            <td colspan="5" class="px-4 py-12 text-center text-gray-400">{{ t('knowledge.taxManage.categoryEmpty') }}</td>
+          </tr>
+          <tr v-for="row in flatRows" v-else :key="String(row.id)">
             <td>
               <div class="flex items-center gap-1" :style="{ paddingLeft: `${row.depth * 16}px` }">
                 <button
@@ -207,7 +215,7 @@ watch(
             </td>
             <td class="text-gray-500">{{ row.docCount ?? 0 }}</td>
             <td class="text-gray-500">{{ row.sort ?? 0 }}</td>
-            <td class="text-right">
+            <td class="data-table-sticky-end text-right">
               <div class="btn-action-group justify-end">
                 <button type="button" class="btn-action-edit" @click="openCreate(String(row.id))">
                   <FolderPlus class="h-3.5 w-3.5" />{{ t('knowledge.taxManage.addChild') }}
@@ -225,33 +233,44 @@ watch(
       </table>
     </div>
 
-    <AppModal :open="modalOpen" :title="modalTitle" @close="modalOpen = false">
-      <form class="space-y-4" @submit.prevent="submit">
-        <FormField v-if="!editingId" :label="t('knowledge.taxManage.colParent')">
-          <KbCategorySelect
-            v-model="form.parentId"
-            :options="parentOptions"
-            :empty-label="t('knowledge.taxManage.rootCategory')"
-          />
-        </FormField>
-        <FormField :label="t('knowledge.taxManage.colName')" required>
-          <input v-model="form.categoryName" type="text" class="field-input" />
-        </FormField>
-        <FormField label="目录 (dir_slug)" :required="!editingId">
-          <input
-            v-model="form.dirSlug"
-            type="text"
-            class="field-input"
-            :disabled="!!editingId"
-            placeholder="如 guides（仅英文/数字/-/_，创建后不可改）"
-          />
-          <p class="mt-1 text-xs text-gray-400">
-            {{ editingId ? '目录绑定后不可修改' : '创建分类会在该空间 wiki 下新建此子目录' }}
-          </p>
-        </FormField>
-        <FormField :label="t('knowledge.taxManage.colSort')">
-          <input v-model.number="form.sort" type="number" min="0" class="field-input" />
-        </FormField>
+    <AppModal :open="modalOpen" :title="modalTitle" wide @close="modalOpen = false">
+      <form class="form-modal" novalidate @submit.prevent="submit">
+        <div class="form-grid-pairs">
+          <div v-if="!editingId" class="form-grid-row">
+            <FormField :label="t('knowledge.taxManage.colParent')" horizontal class="form-field-span-2">
+              <KbCategorySelect
+                v-model="form.parentId"
+                :options="parentOptions"
+                :empty-label="t('knowledge.taxManage.rootCategory')"
+              />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('knowledge.taxManage.colName')" horizontal required>
+              <input v-model="form.categoryName" type="text" class="field-input" />
+            </FormField>
+            <FormField :label="t('knowledge.taxManage.colSort')" horizontal>
+              <input v-model.number="form.sort" type="number" min="0" class="field-input" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField
+              label="目录 (dir_slug)"
+              horizontal
+              class="form-field-span-2"
+              :required="!editingId"
+              :hint="editingId ? '目录绑定后不可修改' : '创建分类会在该空间 wiki 下新建此子目录'"
+            >
+              <input
+                v-model="form.dirSlug"
+                type="text"
+                class="field-input"
+                :disabled="!!editingId"
+                placeholder="如 guides（仅英文/数字/-/_，创建后不可改）"
+              />
+            </FormField>
+          </div>
+        </div>
       </form>
       <template #footer>
         <button type="button" class="btn-ghost" @click="modalOpen = false">{{ t('confirm.cancel') }}</button>

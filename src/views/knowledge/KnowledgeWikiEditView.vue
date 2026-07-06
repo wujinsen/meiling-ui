@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, ExternalLink, GitMerge, Loader2, Save, Sparkles, Upload } from 'lucide-vue-next'
+import { ArrowLeft, ExternalLink, GitMerge, Layers, Loader2, Save, Sparkles, Upload } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
@@ -195,6 +195,29 @@ function insertMarkdownAtCursor(markdown: string) {
 }
 
 const activeSpaceId = computed(() => querySpaceId.value ?? resolvedSpaceId.value)
+
+const activeSpaceMeta = computed(() => {
+  const sid = activeSpaceId.value
+  if (sid) {
+    const space = spaces.value.find((s) => toEntityId(s.id) === sid)
+    if (space) {
+      return {
+        spaceName: space.spaceName,
+        spaceCode: space.spaceCode,
+        canEdit: space.canEdit === true,
+      }
+    }
+  }
+  if (spaceCode.value) {
+    const space = spaces.value.find((s) => s.spaceCode === spaceCode.value)
+    return {
+      spaceName: space?.spaceName ?? spaceCode.value,
+      spaceCode: spaceCode.value,
+      canEdit: space?.canEdit === true,
+    }
+  }
+  return null
+})
 
 watch(mainTab, (tab) => {
   if (tab === 'preview') syncPreviewHtml()
@@ -661,7 +684,6 @@ watch(slug, () => {
             <h2 class="truncate text-base font-semibold text-gray-900 dark:text-white">
               {{ t('knowledge.wikiEdit.pageTitle') }}
             </h2>
-            <span v-if="spaceCode" class="badge bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">{{ spaceCode }}</span>
             <span v-if="fromCreate" class="badge bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
               {{ t('knowledge.wikiEdit.fromCreate') }}
             </span>
@@ -673,6 +695,20 @@ watch(slug, () => {
             </span>
             <span v-if="dirty" class="badge bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300">
               {{ t('knowledge.wikiEdit.unsaved') }}
+            </span>
+          </div>
+          <div v-if="activeSpaceMeta" class="kb-wiki-edit-space mt-2">
+            <span class="kb-wiki-edit-space-icon" aria-hidden="true">
+              <Layers class="h-4 w-4" />
+            </span>
+            <span class="kb-wiki-edit-space-label">{{ t('knowledge.wikiEdit.spaceLabel') }}</span>
+            <span class="kb-wiki-edit-space-name">{{ activeSpaceMeta.spaceName }}</span>
+            <code class="kb-wiki-edit-space-code">{{ activeSpaceMeta.spaceCode }}</code>
+            <span
+              v-if="activeSpaceMeta.canEdit === false"
+              class="badge bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
+            >
+              {{ t('knowledge.wikiEdit.spaceReadOnly') }}
             </span>
           </div>
           <p class="mt-1 truncate font-mono text-xs text-gray-400">{{ relativePath || slug }}</p>
@@ -725,6 +761,13 @@ watch(slug, () => {
       </header>
 
       <div
+        v-if="fromCreate && activeSpaceMeta && !loading"
+        class="mt-3 rounded-lg border border-brand-200 bg-brand-50/70 px-3 py-2.5 text-xs leading-relaxed text-brand-800 dark:border-brand-500/25 dark:bg-brand-500/10 dark:text-brand-200"
+      >
+        {{ t('knowledge.wikiEdit.spaceFromCreateHint', { name: activeSpaceMeta.spaceName, code: activeSpaceMeta.spaceCode }) }}
+      </div>
+
+      <div
         v-if="fromLintIssue && issueDetail"
         class="mt-3 rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"
       >
@@ -758,6 +801,12 @@ watch(slug, () => {
                 :page-exists="fileExists"
                 @insert="insertMarkdownAtCursor"
               />
+              <span
+                v-if="mainTab === 'write'"
+                class="text-xs text-amber-600 dark:text-amber-400"
+              >
+                {{ t('knowledge.wikiEdit.editorResizeHint') }}
+              </span>
             </div>
             <div class="flex items-center gap-3 text-xs text-gray-400">
               <span v-if="lintChecking">{{ t('knowledge.wikiEdit.lintChecking') }}</span>
@@ -775,7 +824,7 @@ watch(slug, () => {
             v-if="mainTab === 'write'"
             ref="contentTextareaRef"
             v-model="content"
-            class="field-input mt-3 min-h-[380px] flex-1 resize-y font-mono text-sm leading-relaxed"
+            class="field-input kb-wiki-edit-editor mt-3 font-mono text-sm leading-relaxed"
             :placeholder="t('knowledge.wikiEdit.contentPlaceholder')"
             spellcheck="false"
           />

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppModal from '@/components/ui/AppModal.vue'
+import FormField from '@/components/ui/FormField.vue'
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 import { showToast } from '@/composables/useToast'
 import { useKbMetaKbTypes } from '@/composables/useKbMetaKbTypes'
@@ -34,6 +35,7 @@ const { t } = useI18n()
 const { options: metaKbTypes, ensureLoaded: ensureMetaKbTypes } = useKbMetaKbTypes()
 
 const spaceId = ref('')
+const spaceError = ref('')
 const title = ref('')
 const kbType = ref<string>('article')
 const slugSegment = ref('')
@@ -66,6 +68,7 @@ watch(
     kbType.value = 'article'
     slugSegment.value = ''
     slugTouched.value = false
+    spaceError.value = ''
     spaceId.value = props.defaultSpaceId ?? ''
     void loadMetaKbTypes()
   },
@@ -79,15 +82,24 @@ watch(
   },
 )
 
+watch(spaceId, () => {
+  spaceError.value = ''
+})
+
 watch(title, (next) => {
   if (!slugTouched.value) slugSegment.value = sanitizeWikiSlugSegment(next)
 })
 
 const canSubmit = computed(
-  () => title.value.trim().length > 0 && pathSlug.value.length > 0 && spaceId.value !== '' && spaceId.value !== 'all',
+  () => title.value.trim().length > 0 && pathSlug.value.length > 0,
 )
 
 function submit() {
+  spaceError.value = ''
+  if (!spaceId.value || spaceId.value === 'all') {
+    spaceError.value = t('knowledge.docManage.createNeedSingleSpace')
+    return
+  }
   if (!canSubmit.value) return
   const trimmedTitle = title.value.trim()
   const slug = pathSlug.value
@@ -101,37 +113,47 @@ function submit() {
 </script>
 
 <template>
-  <AppModal :open="open" :title="t('knowledge.docManage.createTitle')" @close="emit('close')">
-    <form class="space-y-4" @submit.prevent="submit">
-      <label class="flex flex-col gap-1.5 text-sm">
-        <span class="text-gray-500 dark:text-gray-400">{{ t('knowledge.docManage.fieldSpace') }} *</span>
-        <KbSpaceDropdown v-model="spaceId" editable-only value-field="id" />
-      </label>
-      <label class="flex flex-col gap-1.5 text-sm">
-        <span class="text-gray-500 dark:text-gray-400">{{ t('knowledge.docManage.fieldTitle') }} *</span>
-        <input v-model="title" type="text" class="field-input" :placeholder="t('knowledge.docManage.titlePlaceholder')" />
-      </label>
-      <label class="flex flex-col gap-1.5 text-sm">
-        <span class="text-gray-500 dark:text-gray-400">{{ t('knowledge.docManage.fieldKbType') }} *</span>
-        <select v-model="kbType" class="field-input">
-          <option v-for="opt in kbTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
-      </label>
-      <label class="flex flex-col gap-1.5 text-sm">
-        <span class="text-gray-500 dark:text-gray-400">{{ t('knowledge.docManage.fieldSlug') }}</span>
-        <div class="flex items-center gap-1 font-mono text-xs text-gray-400">
-          <span>{{ kbType }}/</span>
-          <input
-            v-model="slugSegment"
-            type="text"
-            class="field-input flex-1 font-mono text-sm"
-            :placeholder="t('knowledge.docManage.slugPlaceholder')"
-            @input="slugTouched = true"
-          />
+  <AppModal :open="open" :title="t('knowledge.docManage.createTitle')" wide @close="emit('close')">
+    <form class="form-modal" novalidate @submit.prevent="submit">
+      <div class="form-grid-pairs">
+        <div class="form-grid-row">
+          <FormField :label="t('knowledge.docManage.fieldSpace')" horizontal required class="form-field-span-2">
+            <KbSpaceDropdown v-model="spaceId" editable-only value-field="id" />
+            <p class="form-hint mt-1">{{ t('knowledge.docManage.createSpaceHint') }}</p>
+            <p v-if="spaceError" class="mt-1 text-xs text-amber-600 dark:text-amber-400">{{ spaceError }}</p>
+          </FormField>
         </div>
-        <span class="text-xs text-gray-400">{{ t('knowledge.docManage.slugHint', { slug: pathSlug }) }}</span>
-      </label>
-      <p class="text-xs text-gray-400">{{ t('knowledge.docManage.createHint') }}</p>
+        <div class="form-grid-row">
+          <FormField :label="t('knowledge.docManage.fieldTitle')" horizontal required>
+            <input v-model="title" type="text" class="field-input" :placeholder="t('knowledge.docManage.titlePlaceholder')" />
+          </FormField>
+          <FormField :label="t('knowledge.docManage.fieldKbType')" horizontal required>
+            <select v-model="kbType" class="field-input">
+              <option v-for="opt in kbTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </FormField>
+        </div>
+        <div class="form-grid-row">
+          <FormField
+            :label="t('knowledge.docManage.fieldSlug')"
+            horizontal
+            class="form-field-span-2"
+            :hint="t('knowledge.docManage.slugHint', { slug: pathSlug })"
+          >
+            <div class="flex items-center gap-1 font-mono text-xs text-gray-400">
+              <span>{{ kbType }}/</span>
+              <input
+                v-model="slugSegment"
+                type="text"
+                class="field-input flex-1 font-mono text-sm"
+                :placeholder="t('knowledge.docManage.slugPlaceholder')"
+                @input="slugTouched = true"
+              />
+            </div>
+          </FormField>
+        </div>
+        <p class="text-xs text-gray-400">{{ t('knowledge.docManage.createHint') }}</p>
+      </div>
     </form>
     <template #footer>
       <button type="button" class="btn-ghost" @click="emit('close')">{{ t('confirm.cancel') }}</button>

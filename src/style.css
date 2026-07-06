@@ -972,6 +972,29 @@
     @apply flex shrink-0 flex-wrap items-start gap-3 border-b border-gray-100 px-4 py-3 dark:border-white/5;
   }
 
+  .kb-wiki-edit-space {
+    @apply inline-flex max-w-full flex-wrap items-center gap-2 rounded-lg border border-brand-200/80 bg-brand-50/50 px-2.5 py-1.5;
+    @apply dark:border-brand-500/30 dark:bg-brand-500/10;
+  }
+
+  .kb-wiki-edit-space-icon {
+    @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-100 text-brand-600;
+    @apply dark:bg-brand-500/20 dark:text-brand-300;
+  }
+
+  .kb-wiki-edit-space-label {
+    @apply shrink-0 text-[11px] font-medium uppercase tracking-wide text-brand-600/80 dark:text-brand-300/80;
+  }
+
+  .kb-wiki-edit-space-name {
+    @apply truncate text-sm font-semibold text-gray-900 dark:text-white;
+  }
+
+  .kb-wiki-edit-space-code {
+    @apply shrink-0 rounded bg-white/80 px-1.5 py-0.5 font-mono text-[11px] text-gray-500;
+    @apply dark:bg-white/10 dark:text-gray-400;
+  }
+
   .kb-doc-edit-page-body {
     @apply flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row;
   }
@@ -1311,6 +1334,16 @@
     @apply cursor-default;
   }
 
+  /** Wiki 编辑区：固定初始高度，允许纵向拖拽（flex-1 会阻止 resize） */
+  textarea.field-input.kb-wiki-edit-editor {
+    @apply block w-full;
+    min-height: 380px;
+    height: min(60vh, calc(100vh - 18rem));
+    max-height: calc(100vh - 10rem);
+    resize: vertical;
+    overflow-y: auto;
+  }
+
   .kb-ingest-express-progress-step {
     @apply flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400;
   }
@@ -1519,7 +1552,7 @@
   }
 
   .form-modal {
-    @apply space-y-4;
+    @apply min-w-0;
   }
 
   .form-modal-compact {
