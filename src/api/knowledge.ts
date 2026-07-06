@@ -69,8 +69,15 @@ import type {
   KbPlatformLlmConfigSaveRequest,
   KbPlatformLlmConfigTestRequest,
   KbPlatformLlmConfigTestResult,
+  KbWorkflowHintVo,
   MoliPage,
 } from '@/types/knowledge'
+import type {
+  RawUploadConflict,
+  RawUploadResultVo,
+  WikiImportForm,
+  WikiImportResultVo,
+} from '@/types/kbImport'
 import { getToken } from '@/utils/authSession'
 import { buildEntityQuery, jsonEntityBody, toEntityId } from '@/utils/id'
 
@@ -82,6 +89,9 @@ const KB_BASE = '/KnowledgeServer/kb'
 
 /** 后端未就绪时使用本地 Mock；联调时设 VITE_USE_MOCK_KNOWLEDGE=false */
 const USE_MOCK = import.meta.env.VITE_USE_MOCK_KNOWLEDGE === 'true'
+
+/** T20 Tab1/Tab3 专用 Mock（与 Tab2 Ingest 真联调独立）；Swagger 未就绪时设 true */
+const USE_MOCK_KB_IMPORT = import.meta.env.VITE_MOCK_KB_IMPORT === 'true'
 
 export function isMockKnowledgeEnabled() {
   return USE_MOCK
@@ -1878,6 +1888,108 @@ export async function saveKbIngestJobAsTemplateApi(id: number | string, payload:
     method: 'POST',
     body: jsonEntityBody(payload as Record<string, unknown>),
   })
+}
+
+function normalizeWorkflowHints(raw?: Array<Record<string, unknown>>) {
+  if (!raw?.length) return [] as KbWorkflowHintVo[]
+  return raw.map((item) => ({
+    key: String(item.key ?? item.code ?? ''),
+    label: String(item.label ?? ''),
+    description: item.description != null ? String(item.description) : undefined,
+    routePath: String(item.routePath ?? ''),
+    routeQuery: item.routeQuery as Record<string, string> | undefined,
+  }))
+}
+
+const RAW_UPLOAD_ALLOWED_EXT = new Set(['.md', '.markdown', '.txt'])
+const RAW_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
+const RAW_UPLOAD_MAX_FILES = 20
+
+/** POST /kb/ingest/raw-upload —— T20a Raw 投喂 */
+export async function uploadRawApi(
+  spaceId: number | string,
+  prefix: string,
+  files: File[],
+  onConflict: RawUploadConflict = 'SKIP',
+) {
+  const trimmedPrefix = prefix.trim().replace(/^\/+|\/+$/g, '')
+  if (USE_MOCK_KB_IMPORT) {
+    await delay(300)
+    const uploaded = files.map((f, i) => ({
+      path: `${trimmedPrefix}/${f.name.replace(/\.(md|markdown|txt)$/i, '')}${i > 0 ? `-${i}` : ''}.md`.replace(/\/+/g, '/'),
+      size: f.size,
+      overwritten: onConflict === 'OVERWRITE',
+    }))
+    return ok<RawUploadResultVo>({ uploaded, skipped: [], renamed: [] })
+  }
+  const form = new FormData()
+  form.append('spaceId', String(spaceId))
+  form.append('prefix', trimmedPrefix)
+  form.append('onConflict', onConflict)
+  files.forEach((f) => form.append('file', f))
+  return request<RawUploadResultVo>(`${KB_BASE}/ingest/raw-upload`, {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export function validateRawUploadFiles(files: File[]): string | null {
+  if (!files.length) return 'empty'
+  if (files.length > RAW_UPLOAD_MAX_FILES) return 'tooMany'
+  for (const f of files) {
+    const name = f.name.toLowerCase()
+    const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : ''
+    if (!RAW_UPLOAD_ALLOWED_EXT.has(ext)) return 'badExt'
+    if (f.size > RAW_UPLOAD_MAX_BYTES) return 'tooLarge'
+  }
+  return null
+}
+
+/** POST /kb/wiki/page/import —— T20b Wiki 成品导入 */
+export async function importWikiPageApi(payload: WikiImportForm) {
+  if (USE_MOCK_KB_IMPORT) {
+    await delay(300)
+    const stem = payload.slug?.trim() || payload.file.name.replace(/\.md$/i, '')
+    const slug = `ops/${stem}`
+    return ok<WikiImportResultVo>({
+      slug,
+      spaceId: payload.spaceId,
+      relativePath: `wiki-moli/${slug}.md`,
+      created: true,
+      contentHash: 'mock-hash',
+      lintWarnings: payload.lintPreview ? [] : [],
+      sync: { triggered: payload.sync !== false, success: true, documentId: '900123' },
+      nextSteps: normalizeWorkflowHints([
+        {
+          code: 'wiki_govern_lint',
+          label: '建议运行 Wiki 治理 Lint',
+          routePath: '/knowledge/wiki/govern',
+          routeQuery: {},
+        },
+      ]),
+    })
+  }
+  const form = new FormData()
+  form.append('spaceId', String(payload.spaceId))
+  form.append('categoryId', String(payload.categoryId))
+  form.append('file', payload.file)
+  if (payload.assetsZip) form.append('assetsZip', payload.assetsZip)
+  if (payload.slug?.trim()) form.append('slug', payload.slug.trim())
+  if (payload.title?.trim()) form.append('title', payload.title.trim())
+  form.append('onConflict', payload.onConflict ?? 'FAIL')
+  form.append('lintPreview', String(payload.lintPreview === true))
+  form.append('sync', String(payload.sync !== false))
+  const res = await request<WikiImportResultVo & { nextSteps?: Array<Record<string, unknown>> }>(
+    `${KB_BASE}/wiki/page/import`,
+    { method: 'POST', body: form },
+  )
+  if (res.code === API_SUCCESS_CODE && res.data) {
+    res.data = {
+      ...res.data,
+      nextSteps: normalizeWorkflowHints(res.data.nextSteps as Array<Record<string, unknown>> | undefined),
+    }
+  }
+  return res
 }
 
 // ---------------------------------------------------------------------------

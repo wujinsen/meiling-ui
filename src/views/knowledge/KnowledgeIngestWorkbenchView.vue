@@ -10,6 +10,9 @@ import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import IngestExpressProgressPanel, { type IngestExpressProgressStep } from '@/components/knowledge/IngestExpressProgressPanel.vue'
 import KbWorkflowNextSteps from '@/components/knowledge/KbWorkflowNextSteps.vue'
 import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
+import KbImportDecisionHint from '@/components/knowledge/KbImportDecisionHint.vue'
+import KbRawUploadPanel from '@/components/knowledge/KbRawUploadPanel.vue'
+import KbWikiImportPanel from '@/components/knowledge/KbWikiImportPanel.vue'
 import IngestPlanCreateTable from '@/components/knowledge/IngestPlanCreateTable.vue'
 import {
   commitKbIngestApi,
@@ -39,6 +42,7 @@ import {
 } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { useActionPermissions } from '@/composables/useActionPermissions'
+import { PERM } from '@/constants/permissions'
 import { confirm } from '@/composables/useConfirm'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -71,14 +75,26 @@ import type {
   KbAccessibleSpace,
   KbWorkflowHintVo,
 } from '@/types/knowledge'
+import type { IngestRawHighlightPayload } from '@/types/kbImport'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const { spaces, ensureSpacesLoaded } = useKbSpace()
-const { fullPermission } = useActionPermissions()
+const { fullPermission, assertAction } = useActionPermissions()
 
 const ingestSpaceCode = ref('')
+type ImportEntryTab = 'raw' | 'ingest' | 'wiki'
+const importEntryTab = ref<ImportEntryTab>('ingest')
+const highlightedRawPaths = ref<Set<string>>(new Set())
+
+const importTabOptions = computed(() => [
+  { value: 'raw' as const, label: t('knowledge.ingest.tabRawUpload') },
+  { value: 'ingest' as const, label: t('knowledge.ingest.tabIngest') },
+  { value: 'wiki' as const, label: t('knowledge.ingest.tabWikiImport') },
+])
+
+const canSyncTrigger = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
 
 const jobId = computed(() => {
   const raw = route.query.id
@@ -191,6 +207,15 @@ const selectedSpace = computed(
 )
 const selectedSpaceQueryId = computed(() => toEntityId(selectedSpace.value?.id))
 const canEdit = computed(() => spaceCanIngestEdit(selectedSpace.value))
+
+const rawUploadBlockedReason = computed(() => {
+  if (!editableSpaces.value.length) return t('knowledge.ingest.noEditableSpace')
+  if (!canEdit.value) return t('knowledge.ingest.readOnlyHint')
+  if (!assertAction(PERM.KB_INGEST_RAW_UPLOAD)) return t('knowledge.ingest.rawUpload.noPermission')
+  return ''
+})
+const canRawUpload = computed(() => !rawUploadBlockedReason.value)
+const canWikiImport = computed(() => canEdit.value)
 
 function initIngestSpace() {
   if (jobId.value || !spaces.value.length) return
@@ -360,6 +385,37 @@ function expandAllRawDirs() {
 
 function collapseAllRawDirs() {
   rawExpandedDirs.value = new Set()
+}
+
+function expandRawPathPrefixes(paths: string[]) {
+  const next = new Set(rawExpandedDirs.value)
+  for (const rawPath of paths) {
+    const dir = rawPath.includes('/') ? rawPath.slice(0, rawPath.lastIndexOf('/')) : ''
+    if (dir) {
+      const parts = dir.split('/').filter(Boolean)
+      for (let i = 1; i <= parts.length; i++) {
+        next.add(parts.slice(0, i).join('/'))
+      }
+    }
+  }
+  rawExpandedDirs.value = next
+}
+
+async function applyRawHighlight(payload: IngestRawHighlightPayload) {
+  importEntryTab.value = 'ingest'
+  highlightedRawPaths.value = new Set(payload.highlightRawPaths)
+  await reloadRawSources()
+  const expandKeys = [...payload.highlightRawPaths]
+  if (payload.expandPrefix?.trim()) expandKeys.push(payload.expandPrefix.trim())
+  expandRawPathPrefixes(expandKeys)
+  const nextSelected = new Set(selectedRaw.value)
+  for (const p of payload.highlightRawPaths) nextSelected.add(p)
+  selectedRaw.value = nextSelected
+  rawCoverageFilter.value = 'all'
+}
+
+function onRawUploadSwitchTab(_tab: 'ingest', payload: IngestRawHighlightPayload) {
+  void applyRawHighlight(payload)
 }
 
 function toggleRaw(path: string) {
@@ -1444,6 +1500,29 @@ onUnmounted(() => {
         </p>
       </div>
 
+      <KbImportDecisionHint />
+
+      <div class="card p-4">
+        <SegmentControl v-model="importEntryTab" :options="importTabOptions" />
+      </div>
+
+      <KbRawUploadPanel
+        v-if="importEntryTab === 'raw'"
+        :space-id="selectedSpaceQueryId"
+        :can-upload="canRawUpload"
+        :blocked-reason="rawUploadBlockedReason"
+        @switch-tab="onRawUploadSwitchTab"
+      />
+
+      <KbWikiImportPanel
+        v-else-if="importEntryTab === 'wiki'"
+        :space-id="selectedSpaceQueryId"
+        :space-code="ingestSpaceCode"
+        :can-import="canWikiImport"
+        :can-sync="canSyncTrigger"
+      />
+
+      <template v-else>
       <div class="grid gap-4 lg:grid-cols-2">
         <div class="card flex flex-col p-5">
           <h3 class="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('knowledge.ingest.newBatch') }}</h3>
@@ -1510,7 +1589,12 @@ onUnmounted(() => {
                 v-for="item in filteredRawFlatTree"
                 :key="item.node.path"
                 class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs hover:bg-gray-50 dark:hover:bg-white/5"
-                :class="item.node.type === 'file' ? 'no-tilt-drag cursor-pointer' : item.hasChildren ? 'no-tilt-drag cursor-pointer' : ''"
+                :class="[
+                  item.node.type === 'file' ? 'no-tilt-drag cursor-pointer' : item.hasChildren ? 'no-tilt-drag cursor-pointer' : '',
+                  item.node.type === 'file' && highlightedRawPaths.has(item.node.path)
+                    ? 'bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-500/10 dark:ring-brand-500/30'
+                    : '',
+                ]"
                 :style="{ paddingLeft: `${item.depth * 14 + 6}px` }"
                 @click="item.node.type === 'file' ? toggleRaw(item.node.path) : item.hasChildren && toggleRawDir(item.node.path)"
               >
@@ -1672,6 +1756,7 @@ onUnmounted(() => {
           </li>
         </ul>
       </div>
+      </template>
     </template>
 
     <!-- ===================== 批次详情 ===================== -->
