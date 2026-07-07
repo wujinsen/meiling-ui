@@ -81,4 +81,15 @@ export default defineConfig(({ command }) => ({
       '/KnowledgeServer': knowledgeProxy(),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/@codemirror') || id.includes('node_modules/codemirror/')) {
+            return 'codemirror'
+          }
+        },
+      },
+    },
+  },
 }))

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, ExternalLink, GitMerge, Layers, Loader2, Save, Sparkles, Upload } from 'lucide-vue-next'
@@ -7,6 +7,8 @@ import SegmentControl from '@/components/ui/SegmentControl.vue'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbAttachmentsPanel from '@/components/knowledge/KbAttachmentsPanel.vue'
 import KbWikiImageInsert from '@/components/knowledge/KbWikiImageInsert.vue'
+import KbWikiMarkdownEditor from '@/components/knowledge/KbWikiMarkdownEditor.vue'
+import KbLineDiffVirtualList from '@/components/knowledge/KbLineDiffVirtualList.vue'
 import {
   aiReviseKbWikiApi,
   getKbLlmConfigApi,
@@ -22,7 +24,6 @@ import { useKbSpace } from '@/composables/useKbSpace'
 import { confirm } from '@/composables/useConfirm'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { renderWikiPreviewMarkdown } from '@/utils/markdown'
 import { toEntityId } from '@/utils/id'
 import { diffLines, type DiffRow } from '@/utils/lineDiff'
 import { popWikiDraft } from '@/utils/kbWikiDraft'
@@ -30,6 +31,7 @@ import type { KbWikiEnrichResult, KbWikiLintPreviewItem } from '@/types/knowledg
 import { PERM } from '@/constants/permissions'
 import { assertAction } from '@/composables/useActionPermissions'
 import { useKbMarkdownRender } from '@/composables/useKbMarkdownRender'
+import { useWikiMarkdownPreviewWorker } from '@/composables/useWikiMarkdownPreviewWorker'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -92,7 +94,7 @@ const changeLog = ref('')
 const mainTab = ref<'write' | 'preview' | 'diff'>('write')
 const contentHtml = shallowRef('')
 const markdownRootRef = ref<HTMLElement | null>(null)
-const contentTextareaRef = ref<HTMLTextAreaElement | null>(null)
+const wikiEditorRef = ref<InstanceType<typeof KbWikiMarkdownEditor> | null>(null)
 
 const llmAvailable = ref(false)
 const aiPanelOpen = ref(false)
@@ -142,7 +144,7 @@ const aiPresetOptions = computed(() => [
 const dirty = computed(() => content.value !== baseline.value)
 
 const diffRows = computed<DiffRow[]>(() => {
-  if (!dirty.value) return []
+  if (!dirty.value || mainTab.value !== 'diff') return []
   return diffLines(baseline.value, content.value)
 })
 const diffStat = computed(() => {
@@ -172,26 +174,36 @@ const markdownAssetCtx = computed(() => ({
 
 useKbMarkdownRender(markdownRootRef, markdownAssetCtx, contentHtml)
 
+const { renderPreview: renderPreviewInWorker } = useWikiMarkdownPreviewWorker()
+const previewRendering = ref(false)
+let previewRenderGen = 0
+
 const fromLintIssue = computed(() => Boolean(issueId.value))
 
-function syncPreviewHtml() {
-  contentHtml.value = renderWikiPreviewMarkdown(content.value)
+async function syncPreviewHtml() {
+  const gen = ++previewRenderGen
+  previewRendering.value = true
+  try {
+    const html = await renderPreviewInWorker(content.value)
+    if (gen !== previewRenderGen) return
+    contentHtml.value = html
+  } finally {
+    if (gen === previewRenderGen) previewRendering.value = false
+  }
+}
+
+let previewSyncTimer: ReturnType<typeof setTimeout> | null = null
+
+function schedulePreviewHtml() {
+  if (previewSyncTimer) clearTimeout(previewSyncTimer)
+  previewSyncTimer = setTimeout(() => {
+    previewSyncTimer = null
+    syncPreviewHtml()
+  }, 320)
 }
 
 function insertMarkdownAtCursor(markdown: string) {
-  const el = contentTextareaRef.value
-  if (!el) {
-    content.value += markdown
-    return
-  }
-  const start = el.selectionStart ?? content.value.length
-  const end = el.selectionEnd ?? start
-  content.value = content.value.slice(0, start) + markdown + content.value.slice(end)
-  void nextTick(() => {
-    el.focus()
-    const pos = start + markdown.length
-    el.setSelectionRange(pos, pos)
-  })
+  wikiEditorRef.value?.insertAtCursor(markdown)
 }
 
 const activeSpaceId = computed(() => querySpaceId.value ?? resolvedSpaceId.value)
@@ -223,7 +235,7 @@ watch(mainTab, (tab) => {
   if (tab === 'preview') syncPreviewHtml()
 })
 watch(content, () => {
-  if (mainTab.value === 'preview') syncPreviewHtml()
+  if (mainTab.value === 'preview') schedulePreviewHtml()
 })
 
 watch(issueDetail, (detail) => {
@@ -661,6 +673,10 @@ onMounted(async () => {
   await load()
 })
 
+onUnmounted(() => {
+  if (previewSyncTimer) clearTimeout(previewSyncTimer)
+})
+
 watch(slug, () => {
   void load()
 })
@@ -813,65 +829,40 @@ watch(slug, () => {
               <span v-else-if="lintPreviewItems.length" class="text-amber-600 dark:text-amber-400">
                 {{ t('knowledge.wikiEdit.lintIssuesFound', { count: lintPreviewItems.length }) }}
               </span>
-              <span v-if="dirty">
+              <span v-if="dirty && mainTab === 'diff'">
                 <span class="text-emerald-600 dark:text-emerald-400">+{{ diffStat.added }}</span>
                 <span class="mx-1 text-rose-500">-{{ diffStat.removed }}</span>
               </span>
             </div>
           </div>
 
-          <textarea
-            v-if="mainTab === 'write'"
-            ref="contentTextareaRef"
+          <KbWikiMarkdownEditor
+            v-show="mainTab === 'write'"
+            ref="wikiEditorRef"
             v-model="content"
-            class="field-input kb-wiki-edit-editor mt-3 font-mono text-sm leading-relaxed"
+            class="mt-3"
+            :disabled="!canEditSpace"
             :placeholder="t('knowledge.wikiEdit.contentPlaceholder')"
-            spellcheck="false"
           />
 
-          <!-- eslint-disable-next-line vue/no-v-html -->
-          <div
-            v-else-if="mainTab === 'preview'"
-            ref="markdownRootRef"
-            class="kb-markdown mt-3 min-h-[380px] flex-1 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-white/5 dark:bg-white/[0.02]"
-            v-html="contentHtml"
-          />
+          <div v-if="mainTab === 'preview'" class="relative mt-3 flex min-h-[380px] flex-1 flex-col">
+            <p v-if="previewRendering" class="absolute right-3 top-2 z-10 text-xs text-gray-400">
+              {{ t('knowledge.wikiEdit.previewRendering') }}
+            </p>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div
+              ref="markdownRootRef"
+              class="kb-markdown min-h-[380px] flex-1 overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-white/5 dark:bg-white/[0.02]"
+              v-html="contentHtml"
+            />
+          </div>
 
           <div
-            v-else
-            class="mt-3 min-h-[380px] flex-1 overflow-auto rounded-lg border border-gray-100 bg-gray-50/50 font-mono text-xs leading-relaxed dark:border-white/5 dark:bg-white/[0.02]"
+            v-else-if="mainTab === 'diff'"
+            class="mt-3 flex min-h-[380px] flex-1 flex-col overflow-hidden rounded-lg border border-gray-100 bg-gray-50/50 font-mono text-xs leading-relaxed dark:border-white/5 dark:bg-white/[0.02]"
           >
             <p v-if="!dirty" class="p-4 text-gray-400">{{ t('knowledge.wikiEdit.noChange') }}</p>
-            <table v-else class="w-full border-collapse">
-              <tbody>
-                <tr
-                  v-for="(row, i) in diffRows"
-                  :key="i"
-                  :class="{
-                    'bg-emerald-50 dark:bg-emerald-500/10': row.type === 'add',
-                    'bg-rose-50 dark:bg-rose-500/10': row.type === 'del',
-                  }"
-                >
-                  <td class="select-none border-r border-gray-100 px-2 text-right align-top text-gray-300 dark:border-white/5">
-                    {{ row.type === 'add' ? '' : row.oldNo }}
-                  </td>
-                  <td class="select-none border-r border-gray-100 px-2 text-right align-top text-gray-300 dark:border-white/5">
-                    {{ row.type === 'del' ? '' : row.newNo }}
-                  </td>
-                  <td
-                    class="select-none px-2 align-top"
-                    :class="{
-                      'text-emerald-600 dark:text-emerald-400': row.type === 'add',
-                      'text-rose-500': row.type === 'del',
-                      'text-gray-300': row.type === 'ctx',
-                    }"
-                  >
-                    {{ row.type === 'add' ? '+' : row.type === 'del' ? '-' : ' ' }}
-                  </td>
-                  <td class="whitespace-pre-wrap break-all px-2 align-top text-gray-700 dark:text-gray-200">{{ row.text }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <KbLineDiffVirtualList v-else :rows="diffRows" class="min-h-0 flex-1" />
           </div>
 
           <label class="mt-3 flex flex-col gap-1">

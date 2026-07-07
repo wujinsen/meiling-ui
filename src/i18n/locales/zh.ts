@@ -535,6 +535,7 @@ export default {
       changeLog: '变更说明',
       changeLogPlaceholder: '例：修复断链、补充 summary（仅记录，不写入文件）',
       contentPlaceholder: '在此编辑 Markdown 源码（含 frontmatter）…',
+      previewRendering: '预览渲染中…',
       editorResizeHint: '编辑区右下角可上下拖动调整高度',
       syncHint: '保存写入服务器 wiki 文件（权威源），需再执行「Wiki 同步」才会更新数据库。',
       readOnlyHint: '当前空间为只读（无 editor 权限），无法保存。请联系空间管理员授予 editor 角色。',

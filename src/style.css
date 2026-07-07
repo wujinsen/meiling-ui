@@ -1335,13 +1335,33 @@
   }
 
   /** Wiki 编辑区：固定初始高度，允许纵向拖拽（flex-1 会阻止 resize） */
-  textarea.field-input.kb-wiki-edit-editor {
-    @apply block w-full;
+  textarea.field-input.kb-wiki-edit-editor,
+  .kb-wiki-cm-editor.field-input.kb-wiki-edit-editor {
+    @apply block w-full overflow-hidden p-0;
     min-height: 380px;
     height: min(60vh, calc(100vh - 18rem));
     max-height: calc(100vh - 10rem);
     resize: vertical;
+  }
+
+  textarea.field-input.kb-wiki-edit-editor {
     overflow-y: auto;
+  }
+
+  .kb-wiki-cm-editor .cm-editor {
+    @apply h-full rounded-lg;
+  }
+
+  .kb-wiki-cm-editor .cm-scroller {
+    overflow: auto;
+  }
+
+  .kb-wiki-cm-editor--disabled .cm-editor {
+    @apply cursor-not-allowed opacity-60;
+  }
+
+  html.dark .kb-wiki-cm-editor:not(.kb-wiki-cm-editor--disabled) .cm-gutters {
+    border-right-color: rgb(255 255 255 / 0.08);
   }
 
   .kb-ingest-express-progress-step {

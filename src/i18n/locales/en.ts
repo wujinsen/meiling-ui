@@ -516,6 +516,7 @@ export default {
       changeLog: 'Change log',
       changeLogPlaceholder: 'e.g. fix broken link, add summary (recorded only, not written to file)',
       contentPlaceholder: 'Edit Markdown source (incl. frontmatter)…',
+      previewRendering: 'Rendering preview…',
       editorResizeHint: 'Drag the bottom-right corner of the editor to resize vertically',
       syncHint: 'Saving writes the server wiki file (source of truth). Run "Wiki Sync" to update the database.',
       readOnlyHint: 'This space is read-only (no editor permission); cannot save. Ask a space admin for the editor role.',

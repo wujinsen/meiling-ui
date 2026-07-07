@@ -516,6 +516,7 @@ export default {
       changeLog: '変更内容',
       changeLogPlaceholder: '例：リンク切れ修正、summary 追記（記録のみ、ファイルには書き込まれません）',
       contentPlaceholder: 'Markdown ソース（frontmatter を含む）を編集…',
+      previewRendering: 'プレビュー描画中…',
       editorResizeHint: '編集区の右下をドラッグして高さを調整できます',
       syncHint: '保存はサーバーの wiki ファイル（正本）に書き込みます。DB 反映には「Wiki 同期」が必要です。',
       readOnlyHint: 'この空間は読み取り専用（editor 権限なし）のため保存できません。空間管理者に editor ロールを依頼してください。',
