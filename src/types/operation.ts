@@ -28,7 +28,40 @@ export type OperationServer = {
   port?: string
   environment?: Environment
   remark?: string
+  status?: number | null
+  lastCheckTime?: string | number | null
   createTime?: string | number
+}
+
+export type OperationTopologyProject = {
+  id?: number | string
+  serverId?: number | string
+  serverIp?: string
+  innerIp?: string
+  url?: string
+  projectName?: string
+  deployPath?: string
+  port?: string
+  environment?: Environment
+  remark?: string
+}
+
+export type OperationTopologyComponent = {
+  id?: number | string
+  componentName?: string
+  serverIp?: string
+  port?: string
+  version?: string
+  deployPath?: string
+  environment?: Environment
+  status?: number | null
+  lastCheckTime?: string | number | null
+}
+
+export type OperationServerTopology = {
+  server?: OperationServer
+  projects?: OperationTopologyProject[]
+  components?: OperationTopologyComponent[]
 }
 
 export type OperationPlatform = {
@@ -36,7 +69,10 @@ export type OperationPlatform = {
   platformName?: string
   url?: string
   account?: string
+  /** 仅提交时使用；GET 不返回明文 */
   password?: string
+  passwordConfigured?: boolean
+  passwordMask?: string | null
   environment?: Environment
   remark?: string
   createTime?: string | number
@@ -47,13 +83,20 @@ export type OperationComponent = {
   componentName?: string
   serverIp?: string
   account?: string
+  /** 仅提交时使用；GET 不返回明文 */
   password?: string
+  passwordConfigured?: boolean
+  passwordMask?: string | null
+  status?: number | null
+  lastCheckTime?: string | number | null
   deployPath?: string
   port?: string
   version?: string
   environment?: Environment
   remark?: string
   createTime?: string | number
+  expectedPort?: string | null
+  portMatchStatus?: number | null
 }
 
 export type ProjectQuery = PageQuery & {
@@ -99,4 +142,53 @@ export function createEmptyComponent(): OperationComponent {
     environment: 1,
     remark: '',
   }
+}
+
+export type OperationPortAuditItem = {
+  id?: number | string
+  recordType?: 'project' | 'component'
+  name?: string
+  actualPort?: string | null
+  expectedPort?: string | null
+  matrixKey?: string | null
+  portMatchStatus?: number | null
+  message?: string
+  environment?: Environment
+}
+
+export type OperationPortMatrixEntry = {
+  key?: string
+  expectedPort?: string
+  source?: string
+}
+
+export type OperationPortAudit = {
+  total?: number
+  matched?: number
+  mismatched?: number
+  unmapped?: number
+  skipped?: number
+  matrix?: OperationPortMatrixEntry[]
+  items?: OperationPortAuditItem[]
+}
+
+export type OperationStats = {
+  projects?: number
+  servers?: number
+  platforms?: number
+  components?: number
+  portMismatches?: number
+  healthDown?: number
+  envBreakdown?: { env: number; count: number }[]
+}
+
+export type DeployExecAction = 'start' | 'stop' | 'restart'
+
+export type OperationDeployStatus = {
+  serviceKey?: string
+  action?: string
+  available?: boolean
+  running?: boolean
+  output?: string
+  message?: string
 }

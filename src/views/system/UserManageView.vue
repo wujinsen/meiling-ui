@@ -563,6 +563,18 @@ function toggleRoleCheck(roleId: number | string, checked: boolean) {
   checkedRoleIds.value = next
 }
 
+function selectAllRoles() {
+  checkedRoleIds.value = new Set(
+    roleOptions.value
+      .filter((role) => role.id != null && !isBuiltinSuperAdminRole(role))
+      .map((role) => String(role.id)),
+  )
+}
+
+function clearAllRoles() {
+  checkedRoleIds.value = new Set()
+}
+
 function openAssignSystems(row: UserVo) {
   if (!row.id) return
   router.push({ name: 'SystemUserAssign', query: { userId: String(row.id) } })
@@ -998,30 +1010,44 @@ onMounted(async () => {
     <AppModal
       :open="roleAssignOpen"
       :title="t('system.user.assignRoleTitle', { name: roleAssignTarget?.userName ?? '' })"
-      wide
+      extra-wide
       @close="closeAssignRoles"
     >
-      <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+      <p class="user-role-assign-hint">
         {{ t('system.user.assignRoleHint', { name: roleAssignTarget?.userName ?? '' }) }}
       </p>
       <div
         v-if="!roleOptions.length"
-        class="rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400 dark:border-white/10"
+        class="user-role-assign-empty"
       >
         {{ t('system.user.rolesEmpty') }}
       </div>
-      <div v-else class="max-h-[360px] overflow-y-auto rounded-lg border border-gray-100 dark:border-white/5">
-        <AppCheckbox
-          v-for="role in roleOptions"
-          :key="String(role.id)"
-          class="flex w-full cursor-pointer items-center gap-3 border-t border-gray-50 px-4 py-3 first:border-t-0 dark:border-white/5"
-          :model-value="checkedRoleIds.has(String(role.id))"
-          @update:model-value="(v) => toggleRoleCheck(role.id!, v)"
-        >
-          <span class="font-medium text-gray-900 dark:text-white">{{ role.roleName }}</span>
-          <span v-if="role.remark" class="truncate text-sm text-gray-500 dark:text-gray-400">{{ role.remark }}</span>
-        </AppCheckbox>
-      </div>
+      <template v-else>
+        <div class="user-role-assign-toolbar">
+          <button type="button" class="role-perm-quick-btn role-perm-quick-btn--primary" @click="selectAllRoles">
+            {{ t('system.user.assignRoleSelectAll') }}
+          </button>
+          <button type="button" class="role-perm-quick-btn role-perm-quick-btn--ghost" @click="clearAllRoles">
+            {{ t('system.user.assignRoleClearAll') }}
+          </button>
+          <span class="user-role-assign-count">
+            {{ t('system.user.assignRoleSelected', { count: checkedRoleIds.size, total: roleOptions.length }) }}
+          </span>
+        </div>
+        <div class="user-role-assign-grid">
+          <AppCheckbox
+            v-for="role in roleOptions"
+            :key="String(role.id)"
+            variant="option"
+            class="user-role-assign-card"
+            :model-value="checkedRoleIds.has(String(role.id))"
+            @update:model-value="(v) => toggleRoleCheck(role.id!, v)"
+          >
+            <span class="user-role-assign-name">{{ role.roleName }}</span>
+            <span v-if="role.remark" class="user-role-assign-remark">{{ role.remark }}</span>
+          </AppCheckbox>
+        </div>
+      </template>
       <template #footer>
         <button type="button" class="btn-ghost" @click="closeAssignRoles">{{ t('system.user.cancel') }}</button>
         <button type="button" class="btn-primary" :disabled="roleAssignSaving" @click="submitAssignRoles">

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { addServerApi, deleteServerApi, getServerApi, listServerApi, updateServerApi } from '@/api/operation'
+import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerTopologyApi, listServerApi, updateServerApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
@@ -13,9 +14,9 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { createEmptyServer, type OperationServer } from '@/types/operation'
+import { createEmptyServer, type OperationServer, type OperationServerTopology } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
-import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { Activity, GitBranch, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -27,6 +28,11 @@ const modalOpen = ref(false)
 const modalTitle = ref('')
 const form = ref<OperationServer>(createEmptyServer())
 const isEdit = computed(() => form.value.id != null)
+const checkingId = ref<string | number | null>(null)
+const topologyOpen = ref(false)
+const topologyLoading = ref(false)
+const topologyTitle = ref('')
+const topology = ref<OperationServerTopology | null>(null)
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, serverName: '', ip: '', environment: '' as number | '' })
 
@@ -133,6 +139,45 @@ async function removeRow(row: OperationServer) {
   }
 }
 
+async function checkRow(row: OperationServer) {
+  if (row.id == null) return
+  checkingId.value = row.id
+  try {
+    const result = await checkServerApi(row.id)
+    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.health.checkFailed'))
+    const idx = list.value.findIndex((item) => String(item.id) === String(row.id))
+    if (idx >= 0) list.value[idx] = { ...list.value[idx], ...result.data }
+    showToast('success', t('operation.health.checkOk'))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.health.checkFailed'))
+  } finally {
+    checkingId.value = null
+  }
+}
+
+async function openTopology(row: OperationServer) {
+  if (row.id == null) return
+  topologyOpen.value = true
+  topologyLoading.value = true
+  topologyTitle.value = row.serverName || String(row.id)
+  topology.value = null
+  try {
+    const result = await getServerTopologyApi(row.id)
+    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.topologyFailed'))
+    topology.value = result.data
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.server.topologyFailed'))
+    topologyOpen.value = false
+  } finally {
+    topologyLoading.value = false
+  }
+}
+
+function closeTopology() {
+  topologyOpen.value = false
+  topology.value = null
+}
+
 watch(() => [query.pageNum, query.pageSize], loadList)
 onMounted(loadList)
 </script>
@@ -165,13 +210,14 @@ onMounted(loadList)
 
     <div class="card p-5">
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-        <table class="w-full min-w-[880px] text-left text-sm">
+        <table class="w-full min-w-[1040px] text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">
             <tr>
               <th class="px-4 py-3">{{ t('operation.server.serverName') }}</th>
               <th class="px-4 py-3">IP</th>
               <th class="px-4 py-3">{{ t('operation.server.innerIp') }}</th>
               <th class="px-4 py-3">{{ t('operation.server.port') }}</th>
+              <th class="px-4 py-3">{{ t('operation.health.status') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.environment') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.remark') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.createTime') }}</th>
@@ -179,18 +225,25 @@ onMounted(loadList)
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="8" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
-            <tr v-else-if="!list.length"><td colspan="8" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
+            <tr v-if="loading"><td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
+            <tr v-else-if="!list.length"><td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
             <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
               <td class="px-4 py-3 font-medium">{{ row.serverName }}</td>
               <td class="px-4 py-3">{{ row.ip || '-' }}</td>
               <td class="px-4 py-3">{{ row.innerIp || '-' }}</td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
+              <td class="px-4 py-3">
+                <HealthStatusBadge :status="row.status" :last-check-time="formatDateTime(row.lastCheckTime ?? undefined)" show-time />
+              </td>
               <td class="px-4 py-3"><span class="badge bg-gray-100 dark:bg-white/10">{{ envLabel(row.environment) }}</span></td>
               <td class="max-w-[160px] truncate px-4 py-3">{{ row.remark || '-' }}</td>
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
               <td class="px-4 py-3">
-                <div class="btn-action-group">
+                <div class="btn-action-group flex-wrap justify-end">
+                  <button type="button" class="btn-action-edit" :disabled="checkingId === row.id" @click="checkRow(row)">
+                    <Activity class="h-3.5 w-3.5" />{{ checkingId === row.id ? t('operation.health.checking') : t('operation.health.check') }}
+                  </button>
+                  <button type="button" class="btn-action-edit" @click="openTopology(row)"><GitBranch class="h-3.5 w-3.5" />{{ t('operation.server.topology') }}</button>
                   <button type="button" class="btn-action-edit" @click="openEdit(row)"><Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}</button>
                   <button type="button" class="btn-action-danger" @click="removeRow(row)"><Trash2 class="h-3.5 w-3.5" />{{ t('operation.common.delete') }}</button>
                 </div>
@@ -235,6 +288,39 @@ onMounted(loadList)
       <template #footer>
         <button type="button" class="btn-ghost" @click="closeModal">{{ t('operation.common.cancel') }}</button>
         <button type="button" class="btn-primary" :disabled="saving" @click="submitForm">{{ saving ? t('operation.common.saving') : t('operation.common.save') }}</button>
+      </template>
+    </AppModal>
+
+    <AppModal :open="topologyOpen" :title="t('operation.server.topologyTitle', { name: topologyTitle })" wide @close="closeTopology">
+      <div v-if="topologyLoading" class="py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</div>
+      <div v-else-if="topology" class="space-y-6">
+        <div class="rounded-lg border border-gray-100 p-4 dark:border-white/10">
+          <HealthStatusBadge :status="topology.server?.status" />
+          <p class="mt-2 text-sm text-gray-500">{{ topology.server?.ip }} · {{ topology.server?.port || '-' }}</p>
+        </div>
+        <section>
+          <h3 class="mb-2 text-sm font-semibold">{{ t('operation.server.topologyProjects') }} ({{ topology.projects?.length ?? 0 }})</h3>
+          <div v-if="!topology.projects?.length" class="text-sm text-gray-400">{{ t('operation.common.empty') }}</div>
+          <ul v-else class="space-y-2 text-sm">
+            <li v-for="p in topology.projects" :key="String(p.id)" class="rounded border border-gray-100 px-3 py-2 dark:border-white/10">
+              <span class="font-medium">{{ p.projectName }}</span>
+              <span class="text-gray-400"> · {{ p.port || '-' }} · {{ p.deployPath || '-' }}</span>
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h3 class="mb-2 text-sm font-semibold">{{ t('operation.server.topologyComponents') }} ({{ topology.components?.length ?? 0 }})</h3>
+          <div v-if="!topology.components?.length" class="text-sm text-gray-400">{{ t('operation.common.empty') }}</div>
+          <ul v-else class="space-y-2 text-sm">
+            <li v-for="c in topology.components" :key="String(c.id)" class="flex items-center justify-between rounded border border-gray-100 px-3 py-2 dark:border-white/10">
+              <span><span class="font-medium">{{ c.componentName }}</span> · {{ c.port || '-' }} · v{{ c.version || '-' }}</span>
+              <HealthStatusBadge :status="c.status" />
+            </li>
+          </ul>
+        </section>
+      </div>
+      <template #footer>
+        <button type="button" class="btn-ghost" @click="closeTopology">{{ t('operation.common.cancel') }}</button>
       </template>
     </AppModal>
   </div>

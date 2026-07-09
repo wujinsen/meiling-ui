@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowRight, Loader2, RefreshCw } from 'lucide-vue-next'
 import type { KbWikiSpaceLintResult } from '@/types/knowledge'
 import { countLintErrors } from '@/utils/kbWikiGovern'
+import { kbLintRoute } from '@/utils/kbWorkflowRoutes'
 
 const props = defineProps<{
   baseline: KbWikiSpaceLintResult | null
   current: KbWikiSpaceLintResult | null
   relinting: boolean
   canEdit: boolean
+  spaceId?: string | number | null
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +20,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 
 const baselineErrors = computed(() => countLintErrors(props.baseline))
 const currentErrors = computed(() => countLintErrors(props.current))
@@ -29,6 +33,14 @@ const improved = computed(() => {
   if (!hasRelint.value) return false
   return currentIssues.value < baselineIssues.value
 })
+
+function openHealthScan() {
+  void router.push(kbLintRoute({ spaceId: props.spaceId }))
+}
+
+function openHealthSync() {
+  void router.push(kbLintRoute({ tab: 'sync', spaceId: props.spaceId }))
+}
 </script>
 
 <template>
@@ -73,6 +85,16 @@ const improved = computed(() => {
       >
         {{ t('knowledge.wikiGovern.relintClean') }}
       </span>
+      <div v-if="hasRelint && improved" class="mt-2 flex flex-wrap gap-2">
+        <button type="button" class="btn-ghost text-xs" @click="openHealthScan">
+          {{ t('knowledge.wikiGovern.openHealthScan') }}
+          <ArrowRight class="ml-1 inline h-3 w-3" />
+        </button>
+        <button type="button" class="btn-ghost text-xs" @click="openHealthSync">
+          {{ t('knowledge.wikiGovern.openHealthSync') }}
+          <ArrowRight class="ml-1 inline h-3 w-3" />
+        </button>
+      </div>
     </div>
   </section>
 </template>

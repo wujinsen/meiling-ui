@@ -7,6 +7,7 @@ import { LAYOUT_ROUTE_NAME } from '@/router/constants'
 import { STATIC_ROUTE_NAMES } from '@/router/staticRoutes'
 import { generateRoutesFromMenus, filterSidebarMenus } from '@/router/routeGenerator'
 import { mergeKnowledgeSupplementRoutes, mergeKnowledgeSupplementMenus } from '@/router/knowledgeSupplementRoutes'
+import { mergeSystemSupplementRoutes } from '@/router/systemSupplementRoutes'
 import { sortMenuTree } from '@/utils/tree'
 import { clearMenus, getToken, saveMenus } from '@/utils/authSession'
 
@@ -96,7 +97,7 @@ async function applyMenusToRouter(menuSource: MenuVo[], options: { fromBackend: 
   const generatedRoutes = isFallback
     ? generateRoutesFromMenus(excludeStaticMenuRoutes(getDefaultMenus()))
     : filterBackendOnlyRoutes(generateRoutesFromMenus(supplementedSource))
-  const dynamicRoutes = mergeKnowledgeSupplementRoutes(generatedRoutes)
+  const dynamicRoutes = mergeSystemSupplementRoutes(mergeKnowledgeSupplementRoutes(generatedRoutes))
 
   const names = collectRouteNames(dynamicRoutes)
 

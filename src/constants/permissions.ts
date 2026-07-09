@@ -108,6 +108,13 @@ export const PERM = {
 
   OP_COMPONENT_REMOVE: 'operation:component:remove',
 
+  /** 查看平台/组件密码明文 */
+  OP_SECRET_VIEW: 'operation:secret:view',
+  /** 列表行密码管理（设置/修改凭据） */
+  OP_SECRET_EDIT: 'operation:secret:edit',
+  /** 执行部署脚本 start/stop/restart */
+  OP_DEPLOY_EXEC: 'operation:deploy:exec',
+
   KB_SPACE_ADMIN: 'kb:space:admin',
   KB_SPACE_ADD: 'kb:space:add',
   KB_SPACE_EDIT: 'kb:space:edit',

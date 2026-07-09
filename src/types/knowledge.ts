@@ -537,13 +537,26 @@ export type KbSyncStatus = {
   total?: number
   actionCounts?: Record<string, number>
   failCount?: number
+  /** KBOPS-2 后由后端返回；未返回时用本地 triggering 推断 */
+  running?: boolean
+  lastBatchNo?: string
+  lastStatus?: 'success' | 'fail' | 'running'
+  lastMessage?: string
+  lastFinishTime?: string
+  successCount?: number
 }
 
 export type KbSyncTrigger = {
   success: boolean
   exitCode: number
+  spaceId?: number | string
   spaceCode?: string
+  batchNo?: string
+  status?: string
+  message?: string
   outputTail?: string
+  stdoutTail?: string
+  nextSteps?: KbWorkflowHintVo[]
 }
 
 export type KbSyncLog = {

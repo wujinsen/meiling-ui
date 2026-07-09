@@ -141,6 +141,18 @@ export function countLintErrors(result: KbWikiSpaceLintResult | null): number {
   return result?.stats?.errors ?? result?.issues.filter((i) => i.level === 'error').length ?? 0
 }
 
+/** W7：复检通过后是否允许单独 Sync（与 GovernSyncPanel 一致） */
+export function isGovernSyncReady(
+  result: KbWikiSpaceLintResult | null,
+  strict: boolean,
+): boolean {
+  if (!result) return false
+  const errors = countLintErrors(result)
+  const issues = countLintIssues(result)
+  if (strict) return issues === 0
+  return errors === 0
+}
+
 export function defaultGovernBatchNo(): string {
   const d = new Date()
   const pad = (n: number) => String(n).padStart(2, '0')

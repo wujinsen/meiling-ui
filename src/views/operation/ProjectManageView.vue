@@ -1,21 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { addProjectApi, deleteProjectApi, getProjectApi, listProjectApi, updateProjectApi } from '@/api/operation'
+import { addProjectApi, deleteProjectApi, execDeployApi, getDeployStatusApi, getProjectApi, listProjectApi, updateProjectApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
-import { guardAction } from '@/composables/useActionPermissions'
+import { assertAction, guardAction, guardActionWithRefresh } from '@/composables/useActionPermissions'
 import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { createEmptyProject, type OperationProject } from '@/types/operation'
+import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
-import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { resolveDeployServiceKey } from '@/utils/operationPort'
+import { ClipboardList, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Server, Square, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -27,6 +29,16 @@ const modalOpen = ref(false)
 const modalTitle = ref('')
 const form = ref<OperationProject>(createEmptyProject())
 const isEdit = computed(() => form.value.id != null)
+const auditOpen = ref(false)
+const deployOpen = ref(false)
+const deployLoading = ref(false)
+const deployExecuting = ref(false)
+const deployTitle = ref('')
+const deployServiceKey = ref<string | null>(null)
+const deployStatus = ref<OperationDeployStatus | null>(null)
+
+const canDeployExec = computed(() => assertAction(PERM.OP_DEPLOY_EXEC))
+const deployExecAvailable = computed(() => deployStatus.value?.available !== false)
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, projectName: '', serverIp: '', environment: '' as number | '' })
 
@@ -135,6 +147,85 @@ async function removeRow(row: OperationProject) {
   }
 }
 
+function openPortAudit() {
+  auditOpen.value = true
+}
+
+async function loadDeployStatus(serviceKey: string) {
+  const result = await getDeployStatusApi(serviceKey)
+  if (result.code !== API_SUCCESS_CODE || !result.data) {
+    throw new Error(result.msg || t('operation.deploy.statusFailed'))
+  }
+  deployStatus.value = result.data
+}
+
+async function openDeployStatus(row: OperationProject) {
+  const serviceKey = resolveDeployServiceKey(row.projectName)
+  if (!serviceKey) return
+  deployOpen.value = true
+  deployLoading.value = true
+  deployTitle.value = row.projectName || serviceKey
+  deployServiceKey.value = serviceKey
+  deployStatus.value = null
+  try {
+    await loadDeployStatus(serviceKey)
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.deploy.statusFailed'))
+    deployOpen.value = false
+    deployServiceKey.value = null
+  } finally {
+    deployLoading.value = false
+  }
+}
+
+function closeDeployModal() {
+  deployOpen.value = false
+  deployServiceKey.value = null
+  deployStatus.value = null
+}
+
+async function refreshDeployStatus() {
+  if (!deployServiceKey.value) return
+  deployLoading.value = true
+  try {
+    await loadDeployStatus(deployServiceKey.value)
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.deploy.statusFailed'))
+  } finally {
+    deployLoading.value = false
+  }
+}
+
+function deployActionLabel(action: DeployExecAction) {
+  return t(`operation.deploy.action.${action}`)
+}
+
+async function execDeploy(action: DeployExecAction) {
+  if (!deployServiceKey.value || !deployExecAvailable.value) return
+  if (!assertAction(PERM.OP_DEPLOY_EXEC) && !(await guardActionWithRefresh(PERM.OP_DEPLOY_EXEC))) return
+  if (!(await confirm({
+    message: t('operation.deploy.execConfirm', {
+      name: deployTitle.value,
+      action: deployActionLabel(action),
+    }),
+    danger: action !== 'start',
+  }))) return
+
+  deployExecuting.value = true
+  try {
+    const result = await execDeployApi(deployServiceKey.value, action)
+    if (result.code !== API_SUCCESS_CODE || !result.data) {
+      throw new Error(result.msg || t('operation.deploy.execFailed'))
+    }
+    deployStatus.value = result.data
+    showToast('success', t('operation.deploy.execOk'))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.deploy.execFailed'))
+  } finally {
+    deployExecuting.value = false
+  }
+}
+
 watch(() => [query.pageNum, query.pageSize], loadList)
 onMounted(loadList)
 </script>
@@ -160,6 +251,7 @@ onMounted(loadList)
           <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
         </form>
         <div class="toolbar-actions">
+          <button type="button" class="btn-ghost shrink-0" @click="openPortAudit"><ClipboardList class="h-4 w-4" /> {{ t('operation.port.audit') }}</button>
           <button type="button" class="btn-primary shrink-0" @click="openCreate"><Plus class="h-4 w-4" /> {{ t('operation.common.add') }}</button>
         </div>
       </template>
@@ -194,7 +286,10 @@ onMounted(loadList)
               <td class="px-4 py-3"><span class="badge bg-gray-100 dark:bg-white/10">{{ envLabel(row.environment) }}</span></td>
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
               <td class="px-4 py-3">
-                <div class="btn-action-group">
+                <div class="btn-action-group flex-wrap justify-end">
+                  <button v-if="resolveDeployServiceKey(row.projectName)" type="button" class="btn-action-edit" @click="openDeployStatus(row)">
+                    <Server class="h-3.5 w-3.5" />{{ t('operation.deploy.status') }}
+                  </button>
                   <button type="button" class="btn-action-edit" @click="openEdit(row)"><Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}</button>
                   <button type="button" class="btn-action-danger" @click="removeRow(row)"><Trash2 class="h-3.5 w-3.5" />{{ t('operation.common.delete') }}</button>
                 </div>
@@ -249,6 +344,84 @@ onMounted(loadList)
       <template #footer>
         <button type="button" class="btn-ghost" @click="closeModal">{{ t('operation.common.cancel') }}</button>
         <button type="button" class="btn-primary" :disabled="saving" @click="submitForm">{{ saving ? t('operation.common.saving') : t('operation.common.save') }}</button>
+      </template>
+    </AppModal>
+
+    <PortAuditModal :open="auditOpen" @close="auditOpen = false" />
+
+    <AppModal :open="deployOpen" :title="t('operation.deploy.statusTitle', { name: deployTitle })" wide @close="closeDeployModal">
+      <div v-if="deployLoading" class="py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</div>
+      <div v-else-if="deployStatus" class="space-y-4 text-sm">
+        <div class="flex flex-wrap items-center gap-2">
+          <p>
+            <span class="text-gray-400">{{ t('operation.deploy.service') }}:</span>
+            {{ deployStatus.serviceKey }}
+          </p>
+          <span
+            class="badge"
+            :class="deployStatus.running
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'
+              : 'border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300'"
+          >
+            {{ deployStatus.running ? t('operation.deploy.running') : t('operation.deploy.stopped') }}
+          </span>
+        </div>
+
+        <p v-if="deployStatus.available === false" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+          {{ deployStatus.message || t('operation.deploy.execDisabled') }}
+        </p>
+        <p v-else-if="deployStatus.message" class="text-gray-500">{{ deployStatus.message }}</p>
+
+        <div
+          v-if="canDeployExec && deployExecAvailable"
+          class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 bg-gray-50/80 p-3 dark:border-white/10 dark:bg-white/5"
+        >
+          <span class="mr-1 text-xs text-gray-500">{{ t('operation.deploy.exec') }}:</span>
+          <button
+            type="button"
+            class="btn-primary text-xs"
+            :disabled="deployExecuting"
+            @click="execDeploy('start')"
+          >
+            <Play class="h-3.5 w-3.5" />
+            {{ t('operation.deploy.action.start') }}
+          </button>
+          <button
+            type="button"
+            class="btn-ghost text-xs text-red-600 hover:text-red-700 dark:text-red-400"
+            :disabled="deployExecuting"
+            @click="execDeploy('stop')"
+          >
+            <Square class="h-3.5 w-3.5" />
+            {{ t('operation.deploy.action.stop') }}
+          </button>
+          <button
+            type="button"
+            class="btn-ghost text-xs"
+            :disabled="deployExecuting"
+            @click="execDeploy('restart')"
+          >
+            <RotateCcw class="h-3.5 w-3.5" />
+            {{ t('operation.deploy.action.restart') }}
+          </button>
+        </div>
+        <p v-else-if="!canDeployExec && deployExecAvailable" class="text-xs text-gray-400">
+          {{ t('operation.deploy.noExecPermission') }}
+        </p>
+
+        <pre v-if="deployStatus.output" class="max-h-64 overflow-auto rounded bg-gray-50 p-3 text-xs dark:bg-white/5">{{ deployStatus.output }}</pre>
+      </div>
+      <template #footer>
+        <button
+          type="button"
+          class="btn-ghost"
+          :disabled="deployLoading || deployExecuting"
+          @click="refreshDeployStatus"
+        >
+          <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': deployLoading }" />
+          {{ t('operation.deploy.refresh') }}
+        </button>
+        <button type="button" class="btn-ghost" @click="closeDeployModal">{{ t('operation.common.cancel') }}</button>
       </template>
     </AppModal>
   </div>

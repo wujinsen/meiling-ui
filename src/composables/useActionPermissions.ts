@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { getCapabilitiesApi } from '@/api/auth'
+import { PERM } from '@/constants/permissions'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { showToast } from '@/composables/useToast'
 import { getStoredCurrentSystem, getToken } from '@/utils/authSession'
@@ -111,6 +112,17 @@ export function assertAction(code: string): boolean {
     return true
   }
   return false
+}
+
+/** 运营管理凭据：密码管理（新 perm）或页面 edit 权限（兼容未跑 20_* SQL 的角色） */
+export function assertOperationSecretEdit(pageEditPerm: string): boolean {
+  return assertAction(PERM.OP_SECRET_EDIT) || assertAction(pageEditPerm)
+}
+
+export async function guardOperationSecretEdit(pageEditPerm: string): Promise<boolean> {
+  if (assertOperationSecretEdit(pageEditPerm)) return true
+  if (await guardActionWithRefresh(PERM.OP_SECRET_EDIT)) return true
+  return guardActionWithRefresh(pageEditPerm)
 }
 
 export function guardAction(code: string): boolean {

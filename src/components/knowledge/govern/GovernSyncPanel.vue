@@ -61,8 +61,7 @@ async function triggerSync() {
       emit('synced')
       await syncPanelRef.value?.refreshAll()
     } else {
-      const code = res.data?.exitCode ?? '?'
-      showToast('error', t('knowledge.sync.triggerFailed', { code }))
+      showToast('error', t('knowledge.sync.failCheckLogs'))
     }
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.sync.triggerFailed', { code: '?' }))

@@ -383,7 +383,7 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 | merge-hint 展示 manualSteps / 冲突 slug | ✅ | `GovernMergeHintPanel` |
 | Fix 结果 `pages[]` 明细表 | ✅ | Fix 面板表格 |
 | script-fix 后自动复检 | ✅ | `runScriptFix` → `runRelint(true)` |
-| 旁路跳转 Ingest / 健康体检 | ❌ | 待前端加链接 |
+| 旁路跳转 Ingest / 健康体检 | ✅ | `KbGovernWorkflowLinks` + 复检后 CTA |
 
 ---
 
@@ -395,7 +395,7 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 | 子组件 | `GovernLintPanel` / `GovernFixPanel` / `GovernRelintBar` |
 | 工具 | `src/utils/kbWikiGovern.ts` |
 | API | `src/api/knowledge.ts`（`lintWikiSpaceApi`、`wikiGovern*Api`、`getKbWikiGovernOptionsApi`） |
-| 未接入 | `GovernSyncPanel.vue`（§10 已说明 Sync 用 auto-fix checkbox 即可，组件保留未挂载） |
+| 未接入 | ~~`GovernSyncPanel.vue`~~ | **已挂载**（④ Sync 入库，复检通过后可用） |
 
 ### 14.1 与本文档的差异
 

@@ -56,8 +56,9 @@ export default defineConfig(({ command }) => ({
   server: {
     /** 同时支持 localhost 与 127.0.0.1；避免仅绑定 127.0.0.1 时部分环境无法访问 */
     host: true,
-    port: 5173,
-    /** 端口被占用时直接报错，避免静默切到 5174/5175 导致仍访问 5173 失败 */
+    /** Windows Hyper-V/WSL 常保留 5162–5261，5173 会 EACCES；5141 在保留段外 */
+    port: 5141,
+    /** 端口被占用时直接报错，避免静默切到其它端口导致书签/代理仍指向旧端口 */
     strictPort: true,
     proxy: {
       '^/login$': apiProxy(),

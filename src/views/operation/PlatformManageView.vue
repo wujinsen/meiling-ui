@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { addPlatformApi, deletePlatformApi, getPlatformApi, listPlatformApi, updatePlatformApi } from '@/api/operation'
+import { addPlatformApi, deletePlatformApi, getPlatformApi, listPlatformApi, revealPlatformSecretApi, updatePlatformApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import SecretManageModal from '@/components/operation/SecretManageModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
-import { guardAction } from '@/composables/useActionPermissions'
+import { assertOperationSecretEdit, guardAction, guardOperationSecretEdit } from '@/composables/useActionPermissions'
 import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
@@ -15,7 +16,7 @@ import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyPlatform, type OperationPlatform } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
-import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { Pencil, Plus, RefreshCw, Search, Trash2, KeyRound } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -26,7 +27,13 @@ const total = ref(0)
 const modalOpen = ref(false)
 const modalTitle = ref('')
 const form = ref<OperationPlatform>(createEmptyPlatform())
+const passwordInput = ref('')
 const isEdit = computed(() => form.value.id != null)
+const secretOpen = ref(false)
+const secretSaving = ref(false)
+const secretRow = ref<OperationPlatform | null>(null)
+
+const canManagePassword = computed(() => assertOperationSecretEdit(PERM.OP_PLATFORM_EDIT))
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, platformName: '', environment: '' as number | '' })
 
@@ -67,6 +74,7 @@ async function loadList() {
 function openCreate() {
   if (!guardAction(PERM.OP_PLATFORM_ADD)) return
   form.value = createEmptyPlatform()
+  passwordInput.value = ''
   modalTitle.value = t('operation.common.add')
   modalOpen.value = true
 }
@@ -77,6 +85,7 @@ async function openEdit(row: OperationPlatform) {
     const result = await getPlatformApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.platform.loadFailed'))
     form.value = { ...result.data }
+    passwordInput.value = ''
     modalTitle.value = t('operation.common.edit')
     modalOpen.value = true
   } catch (e) {
@@ -87,6 +96,7 @@ async function openEdit(row: OperationPlatform) {
 function closeModal() {
   modalOpen.value = false
   form.value = createEmptyPlatform()
+  passwordInput.value = ''
 }
 
 async function submitForm() {
@@ -102,9 +112,11 @@ async function submitForm() {
       platformName: form.value.platformName.trim(),
       url: form.value.url?.trim() || undefined,
       account: form.value.account?.trim() || undefined,
-      password: form.value.password || undefined,
       environment: Number(form.value.environment ?? 1) as 1 | 2 | 3 | 4,
       remark: form.value.remark?.trim() || undefined,
+    }
+    if (!isEdit.value && passwordInput.value.trim()) {
+      payload.password = passwordInput.value.trim()
     }
     const result = isEdit.value ? await updatePlatformApi(payload) : await addPlatformApi(payload)
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.saveFailed'))
@@ -128,6 +140,34 @@ async function removeRow(row: OperationPlatform) {
     await loadList()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.common.deleteFailed'))
+  }
+}
+
+function openPasswordManage(row: OperationPlatform) {
+  if (!canManagePassword.value) return
+  secretRow.value = row
+  secretOpen.value = true
+}
+
+function closePasswordManage() {
+  secretOpen.value = false
+  secretRow.value = null
+}
+
+async function savePassword(password: string) {
+  if (!secretRow.value?.id) return
+  if (!(await guardOperationSecretEdit(PERM.OP_PLATFORM_EDIT))) return
+  secretSaving.value = true
+  try {
+    const result = await updatePlatformApi({ ...secretRow.value, password })
+    if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.saveFailed'))
+    showToast('success', t('operation.common.passwordSaveOk'))
+    closePasswordManage()
+    await loadList()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.common.saveFailed'))
+  } finally {
+    secretSaving.value = false
   }
 }
 
@@ -182,7 +222,15 @@ onMounted(loadList)
               <td class="max-w-[160px] truncate px-4 py-3">{{ row.remark || '-' }}</td>
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
               <td class="px-4 py-3">
-                <div class="btn-action-group">
+                <div class="btn-action-group flex-wrap justify-end">
+                  <button
+                    v-if="canManagePassword"
+                    type="button"
+                    class="btn-action-edit"
+                    @click="openPasswordManage(row)"
+                  >
+                    <KeyRound class="h-3.5 w-3.5" />{{ t('operation.common.passwordManage') }}
+                  </button>
                   <button type="button" class="btn-action-edit" @click="openEdit(row)"><Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}</button>
                   <button type="button" class="btn-action-danger" @click="removeRow(row)"><Trash2 class="h-3.5 w-3.5" />{{ t('operation.common.delete') }}</button>
                 </div>
@@ -207,11 +255,20 @@ onMounted(loadList)
             </FormField>
           </div>
           <div class="form-grid-row">
-            <FormField :label="t('operation.platform.account')" horizontal>
+            <FormField :label="t('operation.platform.account')" horizontal class="form-field-span-2">
               <input v-model="form.account" class="field-input" />
             </FormField>
-            <FormField :label="t('operation.platform.password')" horizontal>
-              <input v-model="form.password" type="password" class="field-input" autocomplete="new-password" />
+          </div>
+          <div v-if="!isEdit" class="form-grid-row">
+            <FormField :label="t('operation.platform.password')" horizontal class="form-field-span-2">
+              <input
+                v-model="passwordInput"
+                type="password"
+                class="field-input"
+                :placeholder="t('operation.common.passwordPlaceholderEmpty')"
+                autocomplete="new-password"
+              />
+              <p class="mt-1.5 text-xs text-gray-400">{{ t('operation.common.passwordCreateHint') }}</p>
             </FormField>
           </div>
           <div class="form-grid-row">
@@ -231,5 +288,17 @@ onMounted(loadList)
         <button type="button" class="btn-primary" :disabled="saving" @click="submitForm">{{ saving ? t('operation.common.saving') : t('operation.common.save') }}</button>
       </template>
     </AppModal>
+
+    <SecretManageModal
+      :open="secretOpen"
+      :saving="secretSaving"
+      :password-configured="secretRow?.passwordConfigured"
+      :password-mask="secretRow?.passwordMask"
+      :record-id="secretRow?.id"
+      :entity-name="secretRow?.platformName"
+      :reveal-api="revealPlatformSecretApi"
+      @save="savePassword"
+      @close="closePasswordManage"
+    />
   </div>
 </template>

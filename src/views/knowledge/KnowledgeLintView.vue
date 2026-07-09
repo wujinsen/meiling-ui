@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { CheckCircle2, FileWarning, Link2Off, Loader2, Play, RefreshCw, ScanLine, Wrench } from 'lucide-vue-next'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
@@ -20,7 +20,8 @@ import { resolveKbSyncParams } from '@/utils/kbSyncScope'
 
 const { t } = useI18n()
 const router = useRouter()
-const { selectedSpaceId, selectedSpace, selectedSpaceCode, spaces, setSelectedSpaceCode, ensureSpacesLoaded, kbQuerySpaceId, kbSpaceQuery } = useKbSpace()
+const route = useRoute()
+const { selectedSpaceId, selectedSpace, selectedSpaceCode, spaces, setSelectedSpaceId, setSelectedSpaceCode, ensureSpacesLoaded, kbQuerySpaceId, kbSpaceQuery } = useKbSpace()
 
 const canScan = computed(() => assertAction(PERM.KB_LINT_SCAN))
 const canSync = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
@@ -173,8 +174,19 @@ function statusLabel(status: KbLintIssueStatus) {
   return t(`knowledge.lint.issueStatus.${status}`)
 }
 
+function applyRouteQuery() {
+  const qSpace = route.query.spaceId
+  if (typeof qSpace === 'string' && qSpace.trim()) {
+    setSelectedSpaceId(qSpace.trim())
+  }
+  if (route.query.tab === 'sync' && canSync.value) {
+    activeTab.value = 'sync'
+  }
+}
+
 onMounted(async () => {
   await ensureSpacesLoaded()
+  applyRouteQuery()
   await loadReport()
   await loadIssues()
 })
@@ -187,6 +199,7 @@ watch(selectedSpaceId, async () => {
 
 watch(canSync, (allowed) => {
   if (!allowed && activeTab.value === 'sync') activeTab.value = 'lint'
+  else if (allowed && route.query.tab === 'sync') activeTab.value = 'sync'
 })
 
 watch(activeTab, async (tab) => {
@@ -229,11 +242,11 @@ watch(activeTab, async (tab) => {
           v-if="canSync"
           type="button"
           class="btn-primary shrink-0"
-          :disabled="!canTriggerSync || syncPanelRef?.triggering"
-          :title="!canTriggerSync ? t('knowledge.sync.needSpace') : undefined"
+          :disabled="!canTriggerSync || syncPanelRef?.syncRunning"
+          :title="!canTriggerSync ? t('knowledge.sync.needSpace') : syncPanelRef?.syncRunning ? t('knowledge.sync.statusRunning') : undefined"
           @click="syncPanelRef?.trigger()"
         >
-          <Loader2 v-if="syncPanelRef?.triggering" class="h-4 w-4 animate-spin" />
+          <Loader2 v-if="syncPanelRef?.syncRunning" class="h-4 w-4 animate-spin" />
           <Play v-else class="h-4 w-4" />
           {{ t('knowledge.sync.trigger') }}
         </button>

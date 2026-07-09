@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Loader2, Sparkles, Wand2, Wrench } from 'lucide-vue-next'
 import AppCheckbox from '@/components/ui/AppCheckbox.vue'
@@ -19,6 +20,7 @@ import {
   resolveScriptKinds,
   summarizeFixPages,
 } from '@/utils/kbWikiGovern'
+import { kbLintRoute, kbLlmSettingsRoute } from '@/utils/kbWorkflowRoutes'
 
 const props = defineProps<{
   issues: KbWikiLintIssue[]
@@ -28,6 +30,7 @@ const props = defineProps<{
   llmOptions: KbWikiGovernOptions | null
   optionsLoading: boolean
   lastResult: KbWikiGovernAutoFixResult | null
+  spaceId?: string | number | null
 }>()
 
 const emit = defineEmits<{
@@ -37,6 +40,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 
 const model = ref('')
 const syncAfter = ref(false)
@@ -123,6 +127,19 @@ const syncSummary = computed(() => {
 const scriptKindsLabel = computed(() => scriptKinds.value.join(', '))
 const aiKindsLabel = computed(() => aiKinds.value.join(', '))
 
+const syncFailed = computed(() => {
+  const s = props.lastResult?.sync
+  return s != null && !s.success
+})
+
+function openLlmSettings() {
+  void router.push(kbLlmSettingsRoute())
+}
+
+function openHealthSync() {
+  void router.push(kbLintRoute({ tab: 'sync', spaceId: props.spaceId }))
+}
+
 function applyModelDefault() {
   const o = props.llmOptions
   if (!o) return
@@ -154,6 +171,9 @@ onMounted(applyModelDefault)
         class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
       >
         {{ t('knowledge.wikiGovern.llmUnavailable') }}
+        <button type="button" class="ml-2 text-brand-600 underline dark:text-brand-400" @click="openLlmSettings">
+          {{ t('knowledge.wikiGovern.openLlmSettings') }}
+        </button>
       </p>
 
       <div v-if="!selectedIssues.length" class="py-6 text-center text-sm text-gray-400">
@@ -251,7 +271,7 @@ onMounted(applyModelDefault)
             }}
             <span v-if="lastResult.aiFix.model" class="text-gray-400">({{ lastResult.aiFix.model }})</span>
           </p>
-          <p v-if="lastResult.sync" class="text-emerald-700 dark:text-emerald-300">
+          <p v-if="lastResult.sync" class="text-emerald-700 dark:text-emerald-300" :class="syncFailed && '!text-rose-600 dark:!text-rose-400'">
             Sync：
             {{
               syncSummary?.success
@@ -259,6 +279,14 @@ onMounted(applyModelDefault)
                 : syncSummary?.outputTail ?? t('knowledge.wikiGovern.syncFailed', { code: syncSummary?.exitCode ?? '?' })
             }}
             <span v-if="syncSummary?.spaceCode" class="text-gray-400">({{ syncSummary.spaceCode }})</span>
+            <button
+              v-if="syncFailed"
+              type="button"
+              class="ml-2 text-brand-600 underline dark:text-brand-400"
+              @click="openHealthSync"
+            >
+              {{ t('knowledge.wikiGovern.openHealthSync') }}
+            </button>
           </p>
           <div v-if="allFixPages.length" class="overflow-x-auto rounded border border-gray-200 dark:border-white/10">
             <table class="w-full min-w-[28rem] text-left text-[11px]">

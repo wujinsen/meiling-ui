@@ -1,8 +1,8 @@
 # 知识库工作台 · 前端开发总览（meiling-ui）
 
 > **读者**：meiling-ui 前端。后端 API **已就绪**；本文是联调入口，细节见各子文档。  
-> **产品需求**：[knowledge-workbench-requirements.md](../product/knowledge-workbench-requirements.md)  
-> **HTTP 契约总表**：[KNOWLEDGE_API.md](KNOWLEDGE_API.md)
+> **产品需求**：[knowledge-ops-prd.md](../product/knowledge-ops-prd.md)（KBOPS）· 工作台需求见 distribute `knowledge-workbench-requirements.md`  
+> **HTTP 契约总表**：[KNOWLEDGE_API.md](../../moli-project-distribute/docs/api/KNOWLEDGE_API.md)
 
 ---
 
@@ -10,10 +10,10 @@
 
 | 优先级 | 页面 | 路由 | 后端 | 前端 | 对接文档 |
 |--------|------|------|------|------|----------|
-| **P0** | Ingest 工作台 | `knowledge/ingest/index` | ✅ T15+T18+T19 | 🟡 **主流程已有，T19 增量未接完** | [ingest-workbench-frontend.md](ingest-workbench-frontend.md) · 见 §12–§13 |
+| **P0** | Ingest 工作台 | `knowledge/ingest/index` | ✅ T15+T18+T19+T20 | ✅ **三 Tab + Tab1/3 UI** | [ingest-workbench-frontend.md](ingest-workbench-frontend.md) · [kb-import-entry-frontend.md](kb-import-entry-frontend.md) |
 | **P0** | Wiki 治理 | `knowledge/wiki-govern/index` | ✅ T16a/e/g · T16f 待开发 | 🟡 **§8 主流程已有， polish 未接完** | [wiki-govern-frontend.md](wiki-govern-frontend.md) · 见 §14–§15 |
 | P1 | Wiki 编辑 | `knowledge/wiki/edit` | ✅ T14 | ✅ 已有 | KNOWLEDGE_API §8 |
-| P1 | 健康体检 | `knowledge/lint/index` | ✅ | ✅ 已有 | KNOWLEDGE_API §4 |
+| P1 | 健康体检 | `knowledge/lint/index` | ✅ | ✅ Sync **O1–O4** | [knowledge-ops-frontend.md §3](knowledge-ops-frontend.md#3-p0--健康体检页-sync-增强o1o4) · KNOWLEDGE_API §4 |
 
 **网关前缀**：`{VITE_API_BASE_URL}/KnowledgeServer` + 下表路径（如 `/kb/wiki/lint-space`）。
 

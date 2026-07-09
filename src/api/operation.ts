@@ -6,10 +6,19 @@ import type {
   OperationPlatform,
   OperationProject,
   OperationServer,
+  OperationServerTopology,
+  OperationPortAudit,
+  OperationStats,
+  DeployExecAction,
+  OperationDeployStatus,
   PlatformQuery,
   ProjectQuery,
   ServerQuery,
 } from '@/types/operation'
+
+export type OperationSecretReveal = {
+  password?: string
+}
 
 function buildQuery(params?: Record<string, string | number | undefined>) {
   if (!params) return ''
@@ -58,15 +67,37 @@ export const getServerApi = server.get
 export const addServerApi = server.add
 export const updateServerApi = server.update
 export const deleteServerApi = server.remove
+export const getServerTopologyApi = (id: number | string) =>
+  request<OperationServerTopology>(`/operation/server/${id}/topology`, { method: 'GET' })
+export const checkServerApi = (id: number | string) =>
+  request<OperationServer>(`/operation/server/${id}/check`, { method: 'POST' })
 
 export const listPlatformApi = (params?: PlatformQuery) => platform.list(params as Record<string, string | number | undefined>)
 export const getPlatformApi = platform.get
 export const addPlatformApi = platform.add
 export const updatePlatformApi = platform.update
 export const deletePlatformApi = platform.remove
+export const revealPlatformSecretApi = (id: number | string) =>
+  request<OperationSecretReveal>(`/operation/platform/${id}/secret`, { method: 'GET' })
 
 export const listComponentApi = (params?: ComponentQuery) => component.list(params as Record<string, string | number | undefined>)
 export const getComponentApi = component.get
 export const addComponentApi = component.add
 export const updateComponentApi = component.update
 export const deleteComponentApi = component.remove
+export const revealComponentSecretApi = (id: number | string) =>
+  request<OperationSecretReveal>(`/operation/component/${id}/secret`, { method: 'GET' })
+export const checkComponentApi = (id: number | string) =>
+  request<OperationComponent>(`/operation/component/${id}/check`, { method: 'POST' })
+
+export const getPortAuditApi = () =>
+  request<OperationPortAudit>('/operation/audit/port-matrix', { method: 'GET' })
+
+export const getOperationStatsApi = () =>
+  request<OperationStats>('/operation/stats', { method: 'GET' })
+
+export const getDeployStatusApi = (serviceKey: string) =>
+  request<OperationDeployStatus>(`/operation/deploy/${serviceKey}/status`, { method: 'GET' })
+
+export const execDeployApi = (serviceKey: string, action: DeployExecAction) =>
+  request<OperationDeployStatus>(`/operation/deploy/${serviceKey}/${action}`, { method: 'POST' })

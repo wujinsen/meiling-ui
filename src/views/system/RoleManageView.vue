@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { listActionsByMenuApi, type ActionVo } from '@/api/action'
-import { getMenuTreeAllApi } from '@/api/menu'
+import { useRouter } from 'vue-router'
 import {
   addRoleApi,
   changeRoleStatusApi,
   deleteRoleApi,
   getRoleApi,
-  getRoleAuthApi,
-  getRoleAuthMenuTreeApi,
   listRoleApi,
   updateRoleApi,
 } from '@/api/role'
@@ -20,36 +17,26 @@ import {
   unauthorizedUsersApi,
 } from '@/api/user'
 import AppModal from '@/components/ui/AppModal.vue'
-import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import FormField from '@/components/ui/FormField.vue'
 import AppStatusPill from '@/components/ui/AppStatusPill.vue'
+import RolePermAssignPanel from '@/components/system/RolePermAssignPanel.vue'
 import UserAssignPanel from '@/components/system/UserAssignPanel.vue'
 import { confirm } from '@/composables/useConfirm'
 import { guardAction, guardActionWithRefresh } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
 import { PERM } from '@/constants/permissions'
-import { useTreeExpand } from '@/composables/useTreeExpand'
-import { useTreeCheck } from '@/composables/useTreeCheck'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
-import { API_SUCCESS_CODE, type MenuVo } from '@/types/api'
+import { rolePermAssignPath } from '@/router/systemSupplementRoutes'
+import { API_SUCCESS_CODE } from '@/types/api'
 import { normalizePageRes } from '@/types/page'
 import { createEmptyRole, type RoleQuery, type RoleVo, type SysRole } from '@/types/role'
 import type { UserVo } from '@/types/user'
 import { hasFullPermission } from '@/utils/privilege'
-import { collectTreeIds, flattenVisibleTree } from '@/utils/tree'
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, CheckSquare, FoldVertical, Pencil, Plus, RefreshCw, Search, Shield, Square, Trash2, UnfoldVertical, UserPlus, Users } from 'lucide-vue-next'
-
-type MenuTreeNode = MenuVo & { children?: MenuTreeNode[] }
-
-function normalizeMenuTree(nodes: MenuVo[]): MenuTreeNode[] {
-  return nodes.map((node) => ({
-    ...node,
-    children: node.children?.length ? normalizeMenuTree(node.children) : undefined,
-  }))
-}
+import { ArrowLeft, ArrowRight, Pencil, Plus, RefreshCw, Search, Shield, Trash2, UserPlus, Users } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -62,163 +49,33 @@ const modalTitle = ref('')
 const form = ref<RoleVo>(createEmptyRole())
 const isEdit = computed(() => form.value.id != null)
 
-const menuTree = ref<MenuTreeNode[]>([])
-const {
-  expanded: menuExpanded,
-  isFullyCollapsed,
-  treeExpandLabel,
-  toggleExpand: toggleMenuExpand,
-  expandAll: expandAllMenus,
-  toggleTreeExpand,
-} = useTreeExpand()
-const {
-  checked: checkedMenuIds,
-  isFullyUnchecked,
-  treeCheckLabel,
-  toggleTreeCheck,
-} = useTreeCheck()
+const permRoleId = ref<number | string | null>(null)
+const permRoleName = ref('')
 
-function isPageMenu(node: MenuTreeNode) {
-  return String(node.menuType ?? '').toUpperCase() === 'C'
+function isNarrowPermViewport() {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches
 }
 
-const hasCheckedCPage = computed(() => {
-  let found = false
-  const walk = (nodes: MenuTreeNode[]) => {
-    for (const node of nodes) {
-      if (isPageMenu(node) && checkedMenuIds.value.has(String(node.id))) found = true
-      if (node.children?.length) walk(node.children)
-    }
-  }
-  walk(menuTree.value)
-  return found
-})
-
-const checkedCPageNames = computed(() => {
-  const names: string[] = []
-  const walk = (nodes: MenuTreeNode[]) => {
-    for (const node of nodes) {
-      if (isPageMenu(node) && checkedMenuIds.value.has(String(node.id))) {
-        names.push(node.menuName ?? String(node.id))
-      }
-      if (node.children?.length) walk(node.children)
-    }
-  }
-  walk(menuTree.value)
-  return names
-})
-
-const actionPanelsLoading = ref(false)
-const checkedActionCodes = ref(new Set<string>())
-const actionPanels = ref<{ menuId: string; menuName: string; actions: ActionVo[] }[]>([])
-/** 右侧正在配置按钮的 C 页面 */
-const activePermMenuId = ref<string | null>(null)
-
-const activeActionPanel = computed(() =>
-  actionPanels.value.find((p) => p.menuId === activePermMenuId.value) ?? null,
-)
-
-function countSelectedActionsForMenu(menuId: string) {
-  const panel = actionPanels.value.find((p) => p.menuId === menuId)
-  if (!panel) return 0
-  return panel.actions.filter((a) => checkedActionCodes.value.has(a.permCode)).length
-}
-
-function ensureActivePermMenu() {
-  if (activePermMenuId.value && actionPanels.value.some((p) => p.menuId === activePermMenuId.value)) {
+async function openPermissions(row: SysRole) {
+  if (!(await guardActionWithRefresh(PERM.ROLE_ASSIGN_PERM))) return
+  const roleId = row.id
+  if (roleId == null || roleId === '') {
+    showToast('error', t('system.role.loadFailed'))
     return
   }
-  activePermMenuId.value = actionPanels.value[0]?.menuId ?? null
-}
-
-function selectPermMenu(row: MenuTreeNode) {
-  if (!isPageMenu(row)) return
-  const id = String(row.id)
-  if (!checkedMenuIds.value.has(id)) return
-  if (!actionPanels.value.some((p) => p.menuId === id)) return
-  activePermMenuId.value = id
-}
-
-function toggleAllActionsForActivePage(select: boolean) {
-  const panel = activeActionPanel.value
-  if (!panel) return
-  const next = new Set(checkedActionCodes.value)
-  for (const action of panel.actions) {
-    if (select) next.add(action.permCode)
-    else next.delete(action.permCode)
+  if (isNarrowPermViewport()) {
+    router.push(rolePermAssignPath(roleId))
+    return
   }
-  checkedActionCodes.value = next
+  permRoleId.value = roleId
+  permRoleName.value = row.roleName ?? ''
+  permOpen.value = true
 }
 
-/** 勾选页面时自动勾选该页全部按钮（默认开，可关） */
-const autoGrantActionsOnCheck = ref(
-  sessionStorage.getItem('meiling_role_auto_grant_actions') !== '0',
-)
-
-function persistAutoGrantPreference() {
-  sessionStorage.setItem('meiling_role_auto_grant_actions', autoGrantActionsOnCheck.value ? '1' : '0')
-}
-
-function syncActionsWithPageCheck() {
-  const next = new Set(checkedActionCodes.value)
-  for (const panel of actionPanels.value) {
-    if (checkedMenuIds.value.has(panel.menuId)) {
-      for (const action of panel.actions) next.add(action.permCode)
-    } else {
-      for (const action of panel.actions) next.delete(action.permCode)
-    }
-  }
-  checkedActionCodes.value = next
-}
-
-function removeActionsForUncheckedPages() {
-  const next = new Set(checkedActionCodes.value)
-  for (const panel of actionPanels.value) {
-    if (!checkedMenuIds.value.has(panel.menuId)) {
-      for (const action of panel.actions) next.delete(action.permCode)
-    }
-  }
-  checkedActionCodes.value = next
-}
-
-function grantAllActionsForCheckedPages() {
-  const next = new Set(checkedActionCodes.value)
-  for (const panel of actionPanels.value) {
-    for (const action of panel.actions) next.add(action.permCode)
-  }
-  checkedActionCodes.value = next
-}
-
-function clearAllActionsForCheckedPages() {
-  const remove = new Set(actionPanels.value.flatMap((p) => p.actions.map((a) => a.permCode)))
-  checkedActionCodes.value = new Set([...checkedActionCodes.value].filter((c) => !remove.has(c)))
-}
-
-async function onToggleTreeCheckAll() {
-  const selectAll = isFullyUnchecked.value
-  toggleTreeCheck(menuTree.value)
-  await loadActionPanels()
-  if (selectAll && autoGrantActionsOnCheck.value) {
-    grantAllActionsForCheckedPages()
-  } else if (!selectAll) {
-    clearAllActionsForCheckedPages()
-  } else {
-    removeActionsForUncheckedPages()
-  }
-}
-
-async function applyActionSyncAfterMenuChange(focusMenuId?: string) {
-  await loadActionPanels()
-  if (autoGrantActionsOnCheck.value) {
-    syncActionsWithPageCheck()
-  } else {
-    removeActionsForUncheckedPages()
-  }
-  if (focusMenuId && checkedMenuIds.value.has(focusMenuId)) {
-    activePermMenuId.value = focusMenuId
-  } else {
-    ensureActivePermMenu()
-  }
+function closePermModal() {
+  permOpen.value = false
+  permRoleId.value = null
+  permRoleName.value = ''
 }
 
 const query = reactive({
@@ -227,8 +84,6 @@ const query = reactive({
   roleName: '',
   status: '' as RoleQuery['status'],
 })
-
-const flatMenuRows = computed(() => flattenVisibleTree(menuTree.value, menuExpanded.value))
 
 const assignRoleId = ref<number | string | null>(null)
 const assignRoleName = ref('')
@@ -406,169 +261,6 @@ async function toggleStatus(row: SysRole) {
     showToast('success', t('system.role.statusOk'))
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('system.role.statusFailed'))
-  }
-}
-
-async function toggleMenuCheck(row: MenuTreeNode, checked: boolean) {
-  const next = new Set(checkedMenuIds.value)
-  const id = String(row.id)
-  if (checked) next.add(id)
-  else next.delete(id)
-
-  const descendants = collectTreeIds(row.children ?? [])
-  for (const desc of descendants) {
-    if (checked) next.add(desc)
-    else next.delete(desc)
-  }
-  checkedMenuIds.value = next
-  await applyActionSyncAfterMenuChange(checked && isPageMenu(row) ? id : undefined)
-}
-
-function toggleActionCheck(code: string, checked: boolean) {
-  const next = new Set(checkedActionCodes.value)
-  if (checked) next.add(code)
-  else next.delete(code)
-  checkedActionCodes.value = next
-}
-
-async function loadActionPanels() {
-  actionPanelsLoading.value = true
-  const panels: { menuId: string; menuName: string; actions: ActionVo[] }[] = []
-  try {
-    const walk = async (nodes: MenuTreeNode[]) => {
-      for (const node of nodes) {
-        const id = String(node.id)
-        if (isPageMenu(node) && checkedMenuIds.value.has(id)) {
-          try {
-            const result = await listActionsByMenuApi(node.id!)
-            if (result.code === API_SUCCESS_CODE && result.data?.length) {
-              panels.push({
-                menuId: id,
-                menuName: node.menuName ?? id,
-                actions: result.data,
-              })
-            }
-          } catch {
-            // 单个页面动作列表失败不阻断弹窗（如 dev 未代理 /action）
-          }
-        }
-        if (node.children?.length) await walk(node.children)
-      }
-    }
-    await walk(menuTree.value)
-    actionPanels.value = panels
-    const validCodes = new Set(panels.flatMap((p) => p.actions.map((a) => a.permCode)))
-    checkedActionCodes.value = new Set([...checkedActionCodes.value].filter((c) => validCodes.has(c)))
-    ensureActivePermMenu()
-  } finally {
-    actionPanelsLoading.value = false
-  }
-}
-
-function collectMenuIdsForSave(): (number | string)[] {
-  const ids = new Set(checkedMenuIds.value)
-
-  const walk = (nodes: MenuTreeNode[], ancestors: string[]) => {
-    for (const node of nodes) {
-      const id = String(node.id)
-      const children = node.children ?? []
-      if (children.length) walk(children, [...ancestors, id])
-
-      const hasCheckedDescendant = collectTreeIds(children).some((cid) => ids.has(cid))
-      if (ids.has(id) || hasCheckedDescendant) {
-        ids.add(id)
-        ancestors.forEach((aid) => ids.add(aid))
-      }
-    }
-  }
-  walk(menuTree.value, [])
-
-  // 雪花 ID 超出 JS 安全整数，必须保持字符串，否则后端校验「动作须先勾选页面」会误报
-  return [...ids]
-}
-
-async function loadRoleAuthMenuTree() {
-  const fromRole = await getRoleAuthMenuTreeApi()
-  if (fromRole.code === API_SUCCESS_CODE && fromRole.data) {
-    return fromRole
-  }
-  return getMenuTreeAllApi()
-}
-
-async function openPermissions(row: SysRole) {
-  if (!(await guardActionWithRefresh(PERM.ROLE_ASSIGN_PERM))) return
-  try {
-    const roleId = row.id
-    if (roleId == null || roleId === '') {
-      throw new Error(t('system.role.loadFailed'))
-    }
-    const roleIdStr = String(roleId)
-    const [treeResult, authResult, roleResult] = await Promise.all([
-      loadRoleAuthMenuTree(),
-      getRoleAuthApi(roleIdStr),
-      getRoleApi(roleIdStr),
-    ])
-    if (treeResult.code !== API_SUCCESS_CODE || treeResult.data == null) {
-      throw new Error(treeResult.msg || t('system.role.menuTreeFailed'))
-    }
-    if (authResult.code !== API_SUCCESS_CODE || !authResult.data) {
-      throw new Error(authResult.msg || t('system.role.authLoadFailed'))
-    }
-    if (roleResult.code !== API_SUCCESS_CODE || !roleResult.data) {
-      throw new Error(roleResult.msg || t('system.role.loadFailed'))
-    }
-
-    menuTree.value = normalizeMenuTree(treeResult.data)
-    checkedMenuIds.value = new Set((authResult.data.menuIds ?? []).map(String))
-    checkedActionCodes.value = new Set(authResult.data.actionCodes ?? [])
-    expandAllMenus(menuTree.value)
-    form.value = { ...roleResult.data }
-    modalTitle.value = t('system.role.assignPerm')
-    permOpen.value = true
-    await loadActionPanels()
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('system.role.loadFailed'))
-  }
-}
-
-async function loadMenuTreeFallback() {
-  const result = await loadRoleAuthMenuTree()
-  if (result.code === API_SUCCESS_CODE && result.data) {
-    menuTree.value = normalizeMenuTree(result.data)
-    expandAllMenus(menuTree.value)
-  }
-}
-
-function closePermModal() {
-  permOpen.value = false
-  checkedMenuIds.value = new Set()
-  checkedActionCodes.value = new Set()
-  actionPanels.value = []
-  activePermMenuId.value = null
-  form.value = createEmptyRole()
-}
-
-async function submitPermissions() {
-  if (!(await guardActionWithRefresh(PERM.ROLE_ASSIGN_PERM))) return
-  if (!form.value.id) return
-
-  saving.value = true
-  try {
-    const payload: RoleVo = {
-      ...form.value,
-      menuIds: collectMenuIdsForSave(),
-      actionCodes: [...checkedActionCodes.value],
-    }
-    const result = await updateRoleApi(payload)
-    if (result.code !== API_SUCCESS_CODE) {
-      throw new Error(result.msg || t('system.role.saveFailed'))
-    }
-    showToast('success', t('system.role.permOk'))
-    closePermModal()
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('system.role.saveFailed'))
-  } finally {
-    saving.value = false
   }
 }
 
@@ -1011,157 +703,19 @@ onMounted(loadRoles)
       </template>
     </AppModal>
 
-    <AppModal :open="permOpen" :title="modalTitle" wide @close="closePermModal">
-      <div
-        v-if="!menuTree.length"
-        class="rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400 dark:border-white/10"
-      >
-        {{ t('system.role.menuEmpty') }}
-        <button type="button" class="btn-ghost ml-2 text-xs" @click="loadMenuTreeFallback">{{ t('system.role.retry') }}</button>
-      </div>
-      <div v-else class="role-perm-layout">
-        <section class="role-perm-pane">
-          <div class="role-perm-pane-head">
-            <p class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ t('system.role.pageAccess') }}</p>
-            <div class="toolbar-actions">
-              <button type="button" class="btn-tree-toggle" @click="toggleTreeExpand(menuTree)">
-                <UnfoldVertical v-if="isFullyCollapsed" class="h-4 w-4 text-gray-400" />
-                <FoldVertical v-else class="h-4 w-4 text-gray-400" />
-                {{ treeExpandLabel }}
-              </button>
-              <button type="button" class="btn-tree-toggle" @click="onToggleTreeCheckAll">
-                <CheckSquare v-if="isFullyUnchecked" class="h-4 w-4 text-gray-400" />
-                <Square v-else class="h-4 w-4 text-gray-400" />
-                {{ treeCheckLabel }}
-              </button>
-            </div>
-            <AppCheckbox
-              v-model="autoGrantActionsOnCheck"
-              size="sm"
-              @change="persistAutoGrantPreference"
-            >
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('system.role.autoGrantActionsOnCheck') }}</span>
-            </AppCheckbox>
-          </div>
-          <div class="role-perm-tree">
-            <div
-              v-for="row in flatMenuRows"
-              :key="String(row.id)"
-              class="role-perm-tree-row"
-              :class="{
-                'role-perm-tree-row-active': isPageMenu(row) && activePermMenuId === String(row.id),
-                'role-perm-tree-row-clickable': isPageMenu(row) && checkedMenuIds.has(String(row.id)) && actionPanels.some((p) => p.menuId === String(row.id)),
-              }"
-              :style="{ paddingLeft: `${12 + row.depth * 20}px` }"
-              @click="selectPermMenu(row)"
-            >
-              <button
-                v-if="row.hasChildren"
-                type="button"
-                class="rounded p-0.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"
-                @click.stop="toggleMenuExpand(String(row.id))"
-              >
-                <ChevronDown v-if="menuExpanded.has(String(row.id))" class="h-4 w-4" />
-                <ChevronRight v-else class="h-4 w-4" />
-              </button>
-              <span v-else class="w-5" />
-              <div class="inline-flex flex-1 items-center gap-2 text-sm" @click.stop>
-                <AppCheckbox
-                  standalone
-                  size="sm"
-                  :model-value="checkedMenuIds.has(String(row.id))"
-                  @update:model-value="(v) => toggleMenuCheck(row, v)"
-                />
-                <span class="text-gray-800 dark:text-gray-200">{{ row.menuName }}</span>
-                <span
-                  v-if="isPageMenu(row) && checkedMenuIds.has(String(row.id)) && actionPanels.some((p) => p.menuId === String(row.id))"
-                  class="text-xs text-gray-400"
-                >
-                  {{ countSelectedActionsForMenu(String(row.id)) }}/{{ actionPanels.find((p) => p.menuId === String(row.id))?.actions.length ?? 0 }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="role-perm-pane">
-          <div class="role-perm-pane-head">
-            <p class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ t('system.role.actionPerm') }}</p>
-            <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('system.role.actionPermFocusHint') }}</p>
-          </div>
-
-          <p v-if="actionPanelsLoading" class="text-sm text-gray-400">{{ t('system.role.actionPermLoading') }}</p>
-          <p
-            v-else-if="!hasCheckedCPage"
-            class="role-perm-empty"
-          >
-            {{ t('system.role.actionPermSelectPage') }}
-          </p>
-          <div
-            v-else-if="!actionPanels.length"
-            class="role-perm-empty role-perm-empty-warn"
-          >
-            <p>{{ t('system.role.actionPermEmpty', { pages: checkedCPageNames.join('、') }) }}</p>
-            <p class="mt-1 text-xs opacity-90">{{ t('system.role.actionPermEmptyHint') }}</p>
-          </div>
-          <template v-else>
-            <div class="role-perm-bulk-actions">
-              <button type="button" class="btn-tree-toggle text-xs" @click="grantAllActionsForCheckedPages">
-                {{ t('system.role.grantAllActions') }}
-              </button>
-              <button type="button" class="btn-tree-toggle text-xs" @click="clearAllActionsForCheckedPages">
-                {{ t('system.role.clearAllActions') }}
-              </button>
-            </div>
-            <div class="role-perm-chips">
-              <button
-                v-for="panel in actionPanels"
-                :key="panel.menuId"
-                type="button"
-                class="role-perm-chip"
-                :class="{ 'role-perm-chip-active': activePermMenuId === panel.menuId }"
-                @click="activePermMenuId = panel.menuId"
-              >
-                {{ panel.menuName }}
-                <span class="role-perm-chip-count">{{ countSelectedActionsForMenu(panel.menuId) }}/{{ panel.actions.length }}</span>
-              </button>
-            </div>
-
-            <div v-if="activeActionPanel" class="role-perm-action-card">
-              <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ activeActionPanel.menuName }}</p>
-                <div class="flex gap-2">
-                  <button type="button" class="btn-tree-toggle text-xs" @click="toggleAllActionsForActivePage(true)">
-                    {{ t('system.role.actionPermSelectAll') }}
-                  </button>
-                  <button type="button" class="btn-tree-toggle text-xs" @click="toggleAllActionsForActivePage(false)">
-                    {{ t('system.role.actionPermClearAll') }}
-                  </button>
-                </div>
-              </div>
-              <div class="role-perm-action-grid">
-                <AppCheckbox
-                  v-for="action in activeActionPanel.actions"
-                  :key="action.permCode"
-                  class="role-perm-action-item"
-                  :title="action.permCode"
-                  :model-value="checkedActionCodes.has(action.permCode)"
-                  @update:model-value="(v) => toggleActionCheck(action.permCode, v)"
-                >
-                  <span>{{ action.name }}</span>
-                </AppCheckbox>
-              </div>
-            </div>
-          </template>
-        </section>
-      </div>
-
-      <template #footer>
-        <button type="button" class="btn-ghost" @click="closePermModal">{{ t('system.role.cancel') }}</button>
-        <button type="button" class="btn-primary" :disabled="saving" @click="submitPermissions">
-          {{ saving ? t('system.role.saving') : t('system.role.save') }}
-        </button>
-      </template>
+    <AppModal
+      :open="permOpen"
+      :title="t('system.role.permModalTitle', { name: permRoleName })"
+      extra-wide
+      @close="closePermModal"
+    >
+      <RolePermAssignPanel
+        v-if="permRoleId != null"
+        :role-id="permRoleId"
+        mode="modal"
+        @saved="closePermModal"
+        @cancel="closePermModal"
+      />
     </AppModal>
 
     <AppModal

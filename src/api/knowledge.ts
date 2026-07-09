@@ -1963,8 +1963,8 @@ export async function importWikiPageApi(payload: WikiImportForm) {
         {
           code: 'wiki_govern_lint',
           label: '建议运行 Wiki 治理 Lint',
-          routePath: '/knowledge/wiki/govern',
-          routeQuery: {},
+          routePath: 'knowledge/wiki-govern/index',
+          routeQuery: { spaceId: String(payload.spaceId) },
         },
       ]),
     })
@@ -1979,13 +1979,20 @@ export async function importWikiPageApi(payload: WikiImportForm) {
   form.append('onConflict', payload.onConflict ?? 'FAIL')
   form.append('lintPreview', String(payload.lintPreview === true))
   form.append('sync', String(payload.sync !== false))
+  const syncRequested = payload.sync !== false
   const res = await request<WikiImportResultVo & { nextSteps?: Array<Record<string, unknown>> }>(
     `${KB_BASE}/wiki/page/import`,
-    { method: 'POST', body: form },
+    {
+      method: 'POST',
+      body: form,
+      timeoutMs: syncRequested ? 320_000 : 60_000,
+    },
   )
   if (res.code === API_SUCCESS_CODE && res.data) {
     res.data = {
       ...res.data,
+      lintWarnings: res.data.lintWarnings ?? [],
+      sync: res.data.sync ?? { triggered: syncRequested, success: false },
       nextSteps: normalizeWorkflowHints(res.data.nextSteps as Array<Record<string, unknown>> | undefined),
     }
   }

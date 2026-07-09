@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Loader2, ScanLine } from 'lucide-vue-next'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
@@ -8,6 +8,8 @@ import GovernLintPanel from '@/components/knowledge/govern/GovernLintPanel.vue'
 import GovernFixPanel from '@/components/knowledge/govern/GovernFixPanel.vue'
 import GovernRelintBar from '@/components/knowledge/govern/GovernRelintBar.vue'
 import GovernMergeHintPanel from '@/components/knowledge/govern/GovernMergeHintPanel.vue'
+import GovernSyncPanel from '@/components/knowledge/govern/GovernSyncPanel.vue'
+import KbGovernWorkflowLinks from '@/components/knowledge/govern/KbGovernWorkflowLinks.vue'
 import {
   getKbWikiGovernOptionsApi,
   lintWikiSpaceApi,
@@ -31,6 +33,7 @@ import {
   buildDefaultSelectedKeys,
   buildSelectedIssues,
   isAiFixable,
+  isGovernSyncReady,
   isManualOnlyKind,
   isScriptFixable,
   isSelectableForBatch,
@@ -42,8 +45,9 @@ import {
 type GovernPhase = 'idle' | 'linted' | 'fixing' | 'relinted' | 'synced'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
-const { selectedSpaceId, ensureSpacesLoaded, kbSpaceQuery, resolveSelectedSpace } = useKbSpace()
+const { selectedSpaceId, ensureSpacesLoaded, kbSpaceQuery, resolveSelectedSpace, setSelectedSpaceId } = useKbSpace()
 
 const phase = ref<GovernPhase>('idle')
 const strictLint = ref(false)
@@ -67,6 +71,20 @@ const canEdit = computed(() => {
 const spaceRequired = computed(() => selectedSpaceId.value == null)
 
 const llmReady = computed(() => llmOptions.value?.llmAvailable === true)
+
+const relintDone = computed(
+  () =>
+    relintResult.value != null
+    || lastFixResult.value?.relint != null
+    || phase.value === 'relinted'
+    || phase.value === 'synced',
+)
+
+const latestLintSnapshot = computed(
+  () => relintResult.value ?? lastFixResult.value?.relint ?? lintResult.value,
+)
+
+const governSyncReady = computed(() => isGovernSyncReady(latestLintSnapshot.value, strictLint.value))
 
 function selectedIssues(): KbWikiLintIssue[] {
   return buildSelectedIssues(lintResult.value?.issues ?? [], selectedKeys.value)
@@ -254,6 +272,9 @@ async function runAutoFix(payload: { syncAfter: boolean; strict: boolean; model:
     lastFixResult.value = res.data
     if (res.data.relint) applyRelint(res.data.relint)
     if (payload.syncAfter && res.data.sync?.success) phase.value = 'synced'
+    else if (payload.syncAfter && res.data.sync && !res.data.sync.success) {
+      showToast('error', t('knowledge.sync.failCheckLogs'))
+    }
 
     if (res.data.issuesAfter != null) {
       showToast(
@@ -300,6 +321,13 @@ function openWikiEdit(issue: KbWikiLintIssue) {
   )
 }
 
+function applyRouteQuery() {
+  const qSpace = route.query.spaceId
+  if (typeof qSpace === 'string' && qSpace.trim()) {
+    setSelectedSpaceId(qSpace.trim())
+  }
+}
+
 watch(selectedSpaceId, () => {
   phase.value = 'idle'
   lintResult.value = null
@@ -309,8 +337,9 @@ watch(selectedSpaceId, () => {
   lastFixResult.value = null
 })
 
-onMounted(() => {
-  void ensureSpacesLoaded()
+onMounted(async () => {
+  await ensureSpacesLoaded()
+  applyRouteQuery()
   void loadGovernOptions()
 })
 </script>
@@ -359,6 +388,8 @@ onMounted(() => {
       </span>
     </div>
 
+    <KbGovernWorkflowLinks :space-id="selectedSpaceId" />
+
     <GovernLintPanel
       :result="lintResult"
       :loading="lintLoading"
@@ -377,6 +408,7 @@ onMounted(() => {
       :llm-options="llmOptions"
       :options-loading="optionsLoading"
       :last-result="lastFixResult"
+      :space-id="selectedSpaceId"
       @script-fix="runScriptFix"
       @ai-fix="runAiFix"
       @auto-fix="runAutoFix"
@@ -387,7 +419,17 @@ onMounted(() => {
       :current="relintResult ?? (lastFixResult?.relint ?? null)"
       :relinting="lintLoading"
       :can-edit="canEdit"
+      :space-id="selectedSpaceId"
       @relint="runRelint()"
+    />
+
+    <GovernSyncPanel
+      v-if="lintBaseline"
+      :sync-ready="governSyncReady"
+      :relint-done="relintDone"
+      :strict="strictLint"
+      :can-edit="canEdit"
+      @synced="phase = 'synced'"
     />
 
     <GovernMergeHintPanel

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Loader2, Upload } from 'lucide-vue-next'
+import { FileArchive, FileText, Loader2, Upload, X } from 'lucide-vue-next'
 import FormField from '@/components/ui/FormField.vue'
 import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import KbCategorySelect from '@/components/knowledge/KbCategorySelect.vue'
@@ -11,6 +11,7 @@ import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { KbCategoryTree, KbWorkflowHintVo } from '@/types/knowledge'
 import type { WikiImportConflict, WikiImportResultVo } from '@/types/kbImport'
+import { isWikiImportConflictMessage } from '@/utils/kbImport'
 import { flattenKbCategoryTree } from '@/utils/kbCategoryTree'
 import { buildCategoryIndex, wikiDirForSpace } from '@/utils/ingestPlanPath'
 
@@ -50,6 +51,11 @@ const previewPath = computed(() => {
 })
 
 const imageWarn = ref(false)
+
+const conflictOptions = computed(() => [
+  { value: 'FAIL' as const, label: t('knowledge.ingest.wikiImport.conflictFail') },
+  { value: 'OVERWRITE' as const, label: t('knowledge.ingest.wikiImport.conflictOverwrite') },
+])
 
 function stemFromFile(name: string) {
   return name.replace(/\.md$/i, '')
@@ -137,17 +143,27 @@ async function submitImport() {
       sync: syncAfter.value && props.canSync !== false,
     })
     if (res.code !== API_SUCCESS_CODE || !res.data) {
-      showToast('error', res.msg || t('knowledge.ingest.opFailed'))
+      const msg = res.msg || t('knowledge.ingest.opFailed')
+      if (onConflict.value === 'FAIL' && isWikiImportConflictMessage(msg)) {
+        showToast('error', t('knowledge.ingest.wikiImport.conflictExists'))
+      } else {
+        showToast('error', msg)
+      }
       return
     }
     result.value = res.data
     nextSteps.value = res.data.nextSteps ?? []
     showToast('success', t('knowledge.ingest.wikiImport.success', { slug: res.data.slug }))
-    if (res.data.sync.triggered && !res.data.sync.success) {
+    if (res.data.sync?.triggered && !res.data.sync.success) {
       showToast('error', res.data.sync.message || t('knowledge.ingest.wikiImport.syncFailed'))
     }
   } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
+    const msg = e instanceof Error ? e.message : t('knowledge.ingest.opFailed')
+    if (onConflict.value === 'FAIL' && isWikiImportConflictMessage(msg)) {
+      showToast('error', t('knowledge.ingest.wikiImport.conflictExists'))
+    } else {
+      showToast('error', msg)
+    }
   } finally {
     importing.value = false
   }
@@ -176,129 +192,179 @@ function onAssetsZipChange(event: Event) {
 function clearAssetsZip() {
   assetsZip.value = null
 }
+
+function clearMarkdownFile() {
+  file.value = null
+  slugTouched.value = false
+}
 </script>
 
 <template>
   <div class="card p-5">
-    <p v-if="!canImport" class="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+    <p
+      v-if="!canImport"
+      class="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+    >
       {{ t('knowledge.ingest.wikiImport.noPermission') }}
     </p>
 
-    <div class="grid gap-4 lg:grid-cols-2">
-      <div class="grid gap-3">
-        <FormField :label="t('knowledge.ingest.planCategory')" horizontal>
-          <KbCategorySelect
-            v-model="categoryId"
-            :options="flatCategories"
-            :loading="categoriesLoading"
-            :disabled="!canImport"
-            :allow-empty="false"
-            :empty-label="t('knowledge.ingest.wikiImport.pickCategory')"
-          />
-        </FormField>
-
-        <FormField :label="t('knowledge.ingest.wikiImport.file')" horizontal>
-          <label class="btn-ghost inline-flex cursor-pointer text-sm" :class="!canImport && 'pointer-events-none opacity-50'">
-            <Upload class="h-4 w-4" />
-            {{ file ? file.name : t('knowledge.ingest.wikiImport.pickFile') }}
-            <input type="file" class="sr-only" accept=".md" :disabled="!canImport" @change="onFileChange" />
-          </label>
-        </FormField>
-
-        <FormField :label="t('knowledge.ingest.wikiImport.assetsZip')" horizontal>
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="btn-ghost inline-flex cursor-pointer text-sm" :class="!canImport && 'pointer-events-none opacity-50'">
-              <Upload class="h-4 w-4" />
-              {{ assetsZip ? assetsZip.name : t('knowledge.ingest.wikiImport.pickAssetsZip') }}
-              <input
-                type="file"
-                class="sr-only"
-                accept=".zip,application/zip"
+    <div class="kb-wiki-import-layout">
+      <form class="kb-wiki-import-form" @submit.prevent="submitImport">
+        <div class="kb-wiki-import-sheet">
+          <div class="kb-wiki-import-group">
+            <FormField :label="t('knowledge.ingest.planCategory')" horizontal>
+              <KbCategorySelect
+                v-model="categoryId"
+                :options="flatCategories"
+                :loading="categoriesLoading"
                 :disabled="!canImport"
-                @change="onAssetsZipChange"
+                :allow-empty="false"
+                :empty-label="t('knowledge.ingest.wikiImport.pickCategory')"
               />
-            </label>
-            <button
-              v-if="assetsZip"
-              type="button"
-              class="btn-ghost px-2 py-0.5 text-xs text-rose-600"
-              :disabled="!canImport"
-              @click="clearAssetsZip"
+            </FormField>
+
+            <div class="kb-wiki-import-file-grid">
+              <label
+                class="kb-wiki-import-file-card"
+                :class="{ 'kb-wiki-import-file-card--filled': file, 'pointer-events-none opacity-50': !canImport }"
+              >
+                <input type="file" class="sr-only" accept=".md" :disabled="!canImport" @change="onFileChange" />
+                <span class="kb-wiki-import-file-card-icon">
+                  <FileText class="h-5 w-5" />
+                </span>
+                <span class="kb-wiki-import-file-card-label">{{ t('knowledge.ingest.wikiImport.file') }}</span>
+                <span class="kb-wiki-import-file-card-name">
+                  {{ file ? file.name : t('knowledge.ingest.wikiImport.pickFile') }}
+                </span>
+                <button
+                  v-if="file"
+                  type="button"
+                  class="kb-wiki-import-file-clear"
+                  :disabled="!canImport"
+                  @click.stop.prevent="clearMarkdownFile"
+                >
+                  <X class="h-3.5 w-3.5" />
+                </button>
+              </label>
+
+              <label
+                class="kb-wiki-import-file-card"
+                :class="{ 'kb-wiki-import-file-card--filled': assetsZip, 'pointer-events-none opacity-50': !canImport }"
+              >
+                <input
+                  type="file"
+                  class="sr-only"
+                  accept=".zip,application/zip"
+                  :disabled="!canImport"
+                  @change="onAssetsZipChange"
+                />
+                <span class="kb-wiki-import-file-card-icon">
+                  <FileArchive class="h-5 w-5" />
+                </span>
+                <span class="kb-wiki-import-file-card-label">{{ t('knowledge.ingest.wikiImport.assetsZip') }}</span>
+                <span class="kb-wiki-import-file-card-name">
+                  {{ assetsZip ? assetsZip.name : t('knowledge.ingest.wikiImport.pickAssetsZip') }}
+                </span>
+                <button
+                  v-if="assetsZip"
+                  type="button"
+                  class="kb-wiki-import-file-clear"
+                  :disabled="!canImport"
+                  @click.stop.prevent="clearAssetsZip"
+                >
+                  <X class="h-3.5 w-3.5" />
+                </button>
+              </label>
+            </div>
+            <p class="kb-wiki-import-hint">{{ t('knowledge.ingest.wikiImport.assetsZipHint') }}</p>
+          </div>
+
+          <div class="kb-wiki-import-group">
+            <FormField :label="t('knowledge.ingest.planSlug')" horizontal>
+              <input
+                v-model="slug"
+                type="text"
+                class="field-input"
+                :placeholder="t('knowledge.ingest.planSlugPlaceholder')"
+                :disabled="!canImport"
+                @input="slugTouched = true"
+              />
+            </FormField>
+            <p class="kb-wiki-import-slug-hint">{{ t('knowledge.ingest.planSlugHint') }}</p>
+            <FormField :label="t('knowledge.ingest.planTitle')" horizontal>
+              <input v-model="title" type="text" class="field-input" :disabled="!canImport" />
+            </FormField>
+
+            <p v-if="previewPath" class="kb-wiki-import-path">
+              {{ t('knowledge.ingest.wikiImport.previewPath', { path: previewPath }) }}
+            </p>
+
+            <p
+              v-if="imageWarn && !assetsZip"
+              class="kb-wiki-import-warn"
             >
-              ×
+              {{ t('knowledge.ingest.wikiImport.imageWarn') }}
+            </p>
+          </div>
+
+          <div class="kb-wiki-import-group">
+            <p class="kb-wiki-import-group-label">{{ t('knowledge.ingest.wikiImport.onConflict') }}</p>
+            <div class="kb-wiki-import-options-grid">
+              <label
+                v-for="opt in conflictOptions"
+                :key="opt.value"
+                class="kb-wiki-import-conflict-tile"
+                :class="onConflict === opt.value && 'kb-wiki-import-conflict-tile--active'"
+              >
+                <input
+                  v-model="onConflict"
+                  type="radio"
+                  class="sr-only"
+                  :value="opt.value"
+                  :disabled="!canImport"
+                />
+                <span class="kb-wiki-import-conflict-tile__label">{{ opt.label }}</span>
+              </label>
+              <AppCheckbox v-model="syncAfter" variant="option" :disabled="!canImport || canSync === false">
+                {{ t('knowledge.ingest.wikiImport.syncDefault') }}
+              </AppCheckbox>
+              <AppCheckbox v-model="lintPreview" variant="option" :disabled="!canImport">
+                {{ t('knowledge.ingest.wikiImport.lintPreview') }}
+              </AppCheckbox>
+            </div>
+            <p v-if="canImport && canSync === false" class="kb-wiki-import-hint">
+              {{ t('knowledge.ingest.wikiImport.syncNoPermission') }}
+            </p>
+          </div>
+
+          <div class="kb-wiki-import-footer">
+            <button type="submit" class="btn-primary text-sm" :disabled="!canSubmit">
+              <Loader2 v-if="importing" class="h-4 w-4 animate-spin" />
+              <Upload v-else class="h-4 w-4" />
+              {{ importing ? t('knowledge.ingest.wikiImport.importing') : t('knowledge.ingest.wikiImport.import') }}
             </button>
           </div>
-          <p class="mt-1 text-xs text-gray-400">{{ t('knowledge.ingest.wikiImport.assetsZipHint') }}</p>
-        </FormField>
-
-        <FormField :label="t('knowledge.ingest.planSlug')" horizontal>
-          <input
-            v-model="slug"
-            type="text"
-            class="field-input"
-            :placeholder="t('knowledge.ingest.planSlugPlaceholder')"
-            :disabled="!canImport"
-            @input="slugTouched = true"
-          />
-        </FormField>
-
-        <FormField :label="t('knowledge.ingest.planTitle')" horizontal>
-          <input v-model="title" type="text" class="field-input" :disabled="!canImport" />
-        </FormField>
-
-        <p v-if="previewPath" class="text-xs text-gray-500 dark:text-gray-400">
-          {{ t('knowledge.ingest.wikiImport.previewPath', { path: previewPath }) }}
-        </p>
-
-        <p v-if="imageWarn && !assetsZip" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-          {{ t('knowledge.ingest.wikiImport.imageWarn') }}
-        </p>
-
-        <FormField :label="t('knowledge.ingest.wikiImport.onConflict')" horizontal>
-          <div class="flex flex-wrap gap-2">
-            <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs dark:border-white/10">
-              <input v-model="onConflict" type="radio" value="FAIL" :disabled="!canImport" />
-              {{ t('knowledge.ingest.wikiImport.conflictFail') }}
-            </label>
-            <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs dark:border-white/10">
-              <input v-model="onConflict" type="radio" value="OVERWRITE" :disabled="!canImport" />
-              {{ t('knowledge.ingest.wikiImport.conflictOverwrite') }}
-            </label>
-          </div>
-        </FormField>
-
-        <div class="flex flex-wrap gap-3">
-          <AppCheckbox v-model="syncAfter" variant="option" :disabled="!canImport || canSync === false">
-            {{ t('knowledge.ingest.wikiImport.syncDefault') }}
-          </AppCheckbox>
-          <AppCheckbox v-model="lintPreview" variant="option" :disabled="!canImport">
-            {{ t('knowledge.ingest.wikiImport.lintPreview') }}
-          </AppCheckbox>
         </div>
-        <p v-if="canImport && canSync === false" class="text-xs text-gray-400">
-          {{ t('knowledge.ingest.wikiImport.syncNoPermission') }}
-        </p>
+      </form>
 
-        <button type="button" class="btn-primary text-sm" :disabled="!canSubmit" @click="submitImport">
-          <Loader2 v-if="importing" class="h-4 w-4 animate-spin" />
-          {{ importing ? t('knowledge.ingest.wikiImport.importing') : t('knowledge.ingest.wikiImport.import') }}
-        </button>
-      </div>
-
-      <div class="space-y-4">
-        <div v-if="result" class="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3 text-xs dark:border-emerald-500/20 dark:bg-emerald-500/10">
+      <aside class="kb-wiki-import-aside">
+        <div
+          v-if="result"
+          class="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3 text-xs dark:border-emerald-500/20 dark:bg-emerald-500/10"
+        >
           <p class="font-semibold text-emerald-800 dark:text-emerald-200">{{ t('knowledge.ingest.wikiImport.resultTitle') }}</p>
           <p class="mt-1 text-gray-700 dark:text-gray-200">slug: {{ result.slug }}</p>
           <p class="text-gray-600 dark:text-gray-300">{{ result.relativePath }}</p>
-          <p v-if="result.lintWarnings.length" class="mt-2 text-amber-700 dark:text-amber-300">
-            {{ t('knowledge.ingest.wikiImport.lintWarnings', { count: result.lintWarnings.length }) }}
+          <p v-if="(result.lintWarnings ?? []).length" class="mt-2 text-amber-700 dark:text-amber-300">
+            {{ t('knowledge.ingest.wikiImport.lintWarnings', { count: (result.lintWarnings ?? []).length }) }}
           </p>
           <p v-if="result.assetsImported?.length" class="mt-2 text-gray-600 dark:text-gray-300">
             {{ t('knowledge.ingest.wikiImport.assetsImported', { count: result.assetsImported.length }) }}
           </p>
         </div>
+        <p v-else class="kb-wiki-import-aside-empty">{{ t('knowledge.ingest.wikiImport.resultEmpty') }}</p>
         <KbWorkflowNextSteps v-if="nextSteps.length" :steps="nextSteps" />
-      </div>
+      </aside>
     </div>
   </div>
 </template>

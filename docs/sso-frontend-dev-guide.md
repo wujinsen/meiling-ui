@@ -36,7 +36,7 @@ npm install
 npm run dev
 ```
 
-浏览器访问 `http://127.0.0.1:5173`。
+浏览器访问 `http://127.0.0.1:5141`。
 
 `vite.config.ts` 已代理：`/login`、`/logout`、`/system`、`/sso`、`/menu`、`/user` 等 → `8888`。
 

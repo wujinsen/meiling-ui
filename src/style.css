@@ -1394,6 +1394,158 @@
     @apply bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300;
   }
 
+  .kb-wiki-import-layout {
+    @apply grid items-start gap-6 lg:grid-cols-[minmax(24rem,2fr)_minmax(16rem,1fr)];
+  }
+
+  .kb-wiki-import-form {
+    @apply min-w-0;
+  }
+
+  .kb-wiki-import-sheet {
+    @apply w-full divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100 bg-gray-50/35 dark:divide-white/5 dark:border-white/5 dark:bg-white/[0.02];
+  }
+
+  .kb-wiki-import-group {
+    @apply space-y-3 px-4 py-3.5;
+  }
+
+  .kb-wiki-import-group-label {
+    @apply text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400;
+  }
+
+  .kb-wiki-import-file-grid {
+    @apply grid grid-cols-2 gap-2;
+    margin-left: calc(5.5rem + 0.75rem);
+  }
+
+  .kb-wiki-import-group > .kb-wiki-import-hint,
+  .kb-wiki-import-slug-hint,
+  .kb-wiki-import-path,
+  .kb-wiki-import-warn {
+    margin-left: calc(5.5rem + 0.75rem);
+  }
+
+  .kb-wiki-import-file-card {
+    @apply relative flex min-h-[5.5rem] w-full cursor-pointer flex-col gap-1 rounded-lg border border-dashed border-gray-200 bg-white px-3 py-2.5 transition;
+    @apply hover:border-brand-300 hover:bg-brand-50/40 hover:shadow-sm;
+    @apply dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/35 dark:hover:bg-brand-500/10;
+  }
+
+  .kb-wiki-import-file-card--filled {
+    @apply border-solid border-brand-200 bg-brand-50/60 dark:border-brand-500/35 dark:bg-brand-500/10;
+  }
+
+  .kb-wiki-import-file-card-icon {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-300;
+  }
+
+  .kb-wiki-import-file-card--filled .kb-wiki-import-file-card-icon {
+    @apply bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-200;
+  }
+
+  .kb-wiki-import-file-card-label {
+    @apply text-xs font-medium text-gray-500 dark:text-gray-400;
+  }
+
+  .kb-wiki-import-file-card-name {
+    @apply line-clamp-2 pr-6 text-sm font-medium leading-snug text-gray-800 dark:text-gray-100;
+  }
+
+  .kb-wiki-import-file-clear {
+    @apply absolute right-1.5 top-1.5 rounded-md p-0.5 text-gray-400 transition hover:bg-white hover:text-rose-600 dark:hover:bg-white/10;
+  }
+
+  .kb-wiki-import-hint {
+    @apply text-xs leading-relaxed text-gray-400 dark:text-gray-500;
+  }
+
+  .kb-wiki-import-slug-hint {
+    @apply text-xs leading-relaxed text-amber-800 dark:text-amber-200;
+  }
+
+  .kb-wiki-import-path {
+    @apply rounded-md bg-gray-100/80 px-2.5 py-1.5 font-mono text-[10px] leading-relaxed text-gray-600 dark:bg-white/5 dark:text-gray-300;
+  }
+
+  .kb-wiki-import-warn {
+    @apply rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-200;
+  }
+
+  .kb-wiki-import-options-grid {
+    @apply grid grid-cols-2 gap-2;
+  }
+
+  .kb-wiki-import-conflict-tile {
+    @apply flex min-h-[2.75rem] w-full cursor-pointer items-center justify-center rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 text-center transition-colors duration-150;
+    @apply hover:border-brand-200 hover:bg-brand-50/40;
+    @apply dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/30 dark:hover:bg-brand-500/10;
+  }
+
+  .kb-wiki-import-conflict-tile--active {
+    @apply border-brand-200 bg-brand-50/70 ring-1 ring-brand-200/80;
+    @apply dark:border-brand-500/35 dark:bg-brand-500/10 dark:ring-brand-500/25;
+  }
+
+  .kb-wiki-import-conflict-tile__label {
+    @apply text-xs font-medium leading-snug text-gray-600 dark:text-gray-300;
+  }
+
+  .kb-wiki-import-conflict-tile--active .kb-wiki-import-conflict-tile__label {
+    @apply text-gray-800 dark:text-gray-100;
+  }
+
+  .kb-wiki-import-options-grid .app-checkbox--option {
+    @apply min-h-[2.75rem];
+  }
+
+  .kb-wiki-import-footer {
+    @apply flex justify-end px-4 py-3.5;
+  }
+
+  .kb-wiki-import-footer .btn-primary {
+    @apply min-w-[8.5rem];
+  }
+
+  .kb-raw-upload-conflict-block {
+    @apply space-y-2;
+  }
+
+  .kb-raw-upload-conflict-label {
+    @apply text-sm font-medium text-gray-700 dark:text-gray-200;
+  }
+
+  .kb-raw-upload-conflict-grid {
+    @apply grid grid-cols-3 gap-2;
+  }
+
+  .kb-raw-upload-conflict-tile {
+    @apply flex min-h-[3rem] w-full cursor-pointer items-center justify-center rounded-lg border border-gray-200 bg-gray-50/80 px-2 py-2 text-center transition-colors duration-150;
+    @apply hover:border-brand-200 hover:bg-brand-50/40;
+    @apply dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/30 dark:hover:bg-brand-500/10;
+  }
+
+  .kb-raw-upload-conflict-tile--active {
+    @apply border-brand-200 bg-brand-50/70 ring-1 ring-brand-200/80;
+    @apply dark:border-brand-500/35 dark:bg-brand-500/10 dark:ring-brand-500/25;
+  }
+
+  .kb-raw-upload-conflict-tile__label {
+    @apply text-xs font-medium leading-snug text-gray-600 dark:text-gray-300;
+  }
+
+  .kb-raw-upload-conflict-tile--active .kb-raw-upload-conflict-tile__label {
+    @apply text-gray-800 dark:text-gray-100;
+  }
+
+  .kb-wiki-import-aside {
+    @apply flex min-w-0 flex-col gap-3 lg:sticky lg:top-4 lg:self-start;
+  }
+
+  .kb-wiki-import-aside-empty {
+    @apply rounded-lg border border-dashed border-gray-200 bg-gray-50/40 px-3 py-5 text-center text-xs leading-relaxed text-gray-400 dark:border-white/10 dark:bg-white/[0.02];
+  }
+
   .date-picker {
     @apply relative w-full;
   }
@@ -1584,19 +1736,63 @@
   }
 
   .role-perm-layout {
-    @apply grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start;
+    @apply grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start;
   }
 
   .role-perm-pane {
-    @apply flex min-w-0 flex-col rounded-lg border border-gray-100 dark:border-white/5;
+    @apply flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-100 dark:border-white/5;
   }
 
   .role-perm-pane-head {
-    @apply space-y-1 border-b border-gray-100 px-3 py-2.5 dark:border-white/5;
+    @apply shrink-0 space-y-2 border-b border-gray-100 bg-gray-50/40 px-4 py-3 dark:border-white/5 dark:bg-white/[0.02];
+  }
+
+  .role-perm-pane-head .toolbar-actions {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .role-perm-pane-body {
+    @apply flex min-h-0 max-h-[min(56vh,520px)] flex-col overflow-hidden;
+  }
+
+  .role-perm-pane-body--modal {
+    @apply max-h-[min(68vh,600px)] flex-1;
+  }
+
+  .role-perm-pane-body--modal .role-perm-page-grid {
+    @apply min-h-[11rem] max-h-[min(42vh,340px)] flex-1 overflow-y-auto overscroll-contain;
+  }
+
+  .role-perm-pane-body--modal .role-perm-action-card {
+    @apply max-h-[10.5rem] shrink-0 overflow-y-auto border-t border-gray-100 bg-gray-50/40 px-3 py-2.5 dark:border-white/5 dark:bg-white/[0.02];
+  }
+
+  .role-perm-pane-body--modal .role-perm-action-head {
+    @apply mb-2 gap-2;
+  }
+
+  .role-perm-pane-body--modal .role-perm-action-title {
+    @apply text-xs;
+  }
+
+  .role-perm-pane-body--modal .role-perm-action-item.app-checkbox--option {
+    @apply gap-1.5 px-2 py-1.5;
+  }
+
+  .role-perm-pane-body--modal .role-perm-action-label {
+    @apply line-clamp-1 text-[11px];
+  }
+
+  .role-perm-pane-body--modal .role-perm-action-code {
+    @apply text-[9px];
+  }
+
+  .role-perm-layout:not(.role-perm-layout--page) .role-perm-pane:last-child {
+    @apply flex min-h-0 flex-col;
   }
 
   .role-perm-tree {
-    @apply max-h-[min(52vh,480px)] overflow-y-auto;
+    @apply max-h-[min(56vh,520px)] overflow-y-auto;
   }
 
   .role-perm-tree-row {
@@ -1604,11 +1800,19 @@
   }
 
   .role-perm-tree-row-clickable {
-    @apply cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5;
+    @apply cursor-pointer border-l-2 border-l-transparent transition;
+    @apply hover:border-l-violet-400 hover:bg-violet-50/70 dark:hover:border-l-violet-500/60 dark:hover:bg-violet-500/10;
   }
 
   .role-perm-tree-row-active {
-    @apply bg-violet-50 dark:bg-violet-500/10;
+    @apply border-l-2 border-l-violet-500 bg-violet-50 font-medium dark:border-l-violet-400 dark:bg-violet-500/10;
+  }
+
+  .role-perm-tree-expand-btn {
+    @apply cursor-pointer rounded-md border border-transparent p-0.5 text-gray-400 transition;
+    @apply hover:border-gray-200 hover:bg-white hover:text-gray-700 hover:shadow-sm;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40;
+    @apply dark:hover:border-white/15 dark:hover:bg-white/10 dark:hover:text-gray-200;
   }
 
   .role-perm-pane .role-perm-empty {
@@ -1624,6 +1828,114 @@
   }
 
   .role-perm-bulk-actions {
+    @apply flex shrink-0 flex-wrap gap-2 border-b border-gray-100 bg-gray-50/50 px-4 py-3 dark:border-white/5 dark:bg-white/[0.02];
+  }
+
+  .role-perm-quick-btn {
+    @apply inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition;
+    @apply hover:-translate-y-px hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800 hover:shadow;
+    @apply active:translate-y-0 active:shadow-sm;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/45 focus-visible:ring-offset-1;
+    @apply dark:border-white/15 dark:bg-white/5 dark:text-gray-200 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/15 dark:hover:text-violet-100;
+  }
+
+  .role-perm-quick-btn--primary {
+    @apply border-violet-200 bg-violet-50 text-violet-800;
+    @apply hover:border-violet-300 hover:bg-violet-100 hover:text-violet-900;
+    @apply dark:border-violet-500/35 dark:bg-violet-500/15 dark:text-violet-100 dark:hover:border-violet-500/50 dark:hover:bg-violet-500/25;
+  }
+
+  .role-perm-quick-btn--ghost {
+    @apply border-gray-200 bg-white text-gray-600;
+    @apply hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900;
+    @apply dark:border-white/10 dark:bg-transparent dark:text-gray-400 dark:hover:border-white/20 dark:hover:bg-white/5 dark:hover:text-gray-200;
+  }
+
+  .role-perm-quick-btn svg {
+    @apply shrink-0 transition-colors;
+  }
+
+  .role-perm-quick-btn:hover svg {
+    @apply text-violet-500 dark:text-violet-300;
+  }
+
+  .role-perm-page-grid {
+    @apply grid shrink-0 grid-cols-2 gap-2 border-b border-gray-100 px-3 py-3 sm:grid-cols-3 dark:border-white/5;
+  }
+
+  .role-perm-page-tile {
+    @apply flex min-h-[4.5rem] cursor-pointer flex-col items-start justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-sm shadow-sm transition;
+    @apply hover:-translate-y-0.5 hover:border-violet-300 hover:bg-violet-50/70 hover:text-violet-900 hover:shadow-md;
+    @apply active:translate-y-0 active:shadow-sm;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50 focus-visible:ring-offset-1;
+    @apply dark:border-white/15 dark:bg-white/[0.03] dark:text-gray-200 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/15 dark:hover:text-violet-100;
+  }
+
+  .role-perm-page-tile-active {
+    @apply -translate-y-0.5 border-violet-400 bg-violet-50 font-semibold text-violet-900 shadow-md ring-2 ring-violet-200/80;
+    @apply dark:border-violet-500/50 dark:bg-violet-500/20 dark:text-violet-50 dark:ring-violet-500/30;
+  }
+
+  .role-perm-page-tile-name {
+    @apply line-clamp-2 min-w-0 flex-1 leading-snug;
+  }
+
+  .role-perm-page-tile-count {
+    @apply shrink-0 rounded-full bg-gray-100 px-2 py-0.5 tabular-nums text-[10px] font-semibold text-gray-500;
+    @apply dark:bg-white/10 dark:text-gray-400;
+  }
+
+  .role-perm-page-tile-active .role-perm-page-tile-count {
+    @apply bg-violet-200/90 text-violet-800 dark:bg-violet-500/30 dark:text-violet-100;
+  }
+
+  .role-perm-layout--page {
+    @apply grid-cols-1 gap-6;
+  }
+
+  .role-perm-pane-body--page {
+    @apply max-h-none overflow-visible;
+  }
+
+  .role-perm-panels-flat {
+    @apply flex flex-col gap-6 overflow-visible px-4 py-4;
+  }
+
+  .role-perm-panel-block {
+    @apply rounded-lg border border-gray-100 p-4 dark:border-white/5;
+  }
+
+  .role-perm-action-grid--tiled {
+    @apply grid grid-cols-2 gap-2;
+  }
+
+  @media (min-width: 900px) {
+    .role-perm-action-grid--tiled {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .role-perm-pane-body--page .role-perm-action-grid--tiled,
+  .role-perm-panels-flat .role-perm-action-grid--tiled {
+    @apply grid-cols-2;
+  }
+
+  @media (min-width: 768px) {
+    .role-perm-pane-body--page .role-perm-action-grid--tiled,
+    .role-perm-panels-flat .role-perm-action-grid--tiled {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  .role-perm-footer {
+    @apply mt-4 flex justify-end gap-2 border-t border-gray-100 pt-4 dark:border-white/5;
+  }
+
+  .role-perm-footer--page {
+    @apply sticky bottom-0 -mx-4 border-t border-gray-100 bg-white/95 px-4 py-4 backdrop-blur sm:-mx-5 sm:px-5 dark:border-white/5 dark:bg-gray-900/95;
+  }
+
+  .role-perm-chips {
     @apply flex flex-wrap gap-2 border-b border-gray-100 px-3 py-2 dark:border-white/5;
   }
 
@@ -1640,15 +1952,59 @@
   }
 
   .role-perm-action-card {
-    @apply p-3;
+    @apply min-h-0 flex-1 overflow-y-auto px-4 py-4;
   }
 
-  .role-perm-action-grid {
-    @apply grid grid-cols-1 gap-2 sm:grid-cols-2;
+  .role-perm-action-head {
+    @apply mb-4 flex flex-wrap items-start justify-between gap-3;
+  }
+
+  .role-perm-action-title {
+    @apply min-w-0 flex-1 text-sm font-medium leading-snug text-gray-800 dark:text-gray-200;
+  }
+
+  .role-perm-action-head-actions {
+    @apply flex shrink-0 flex-wrap gap-2 rounded-lg bg-gray-50/80 p-1 dark:bg-white/[0.03];
+  }
+
+  .role-perm-action-grid:not(.role-perm-action-grid--tiled) {
+    @apply flex flex-col gap-2.5;
   }
 
   .role-perm-action-item {
-    @apply inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 text-sm dark:border-white/5;
+    @apply min-w-0 cursor-pointer items-start;
+  }
+
+  .role-perm-action-item.app-checkbox--option {
+    @apply gap-2 rounded-lg border-gray-200 bg-white px-2.5 py-2 shadow-sm;
+    @apply hover:-translate-y-px hover:border-brand-300 hover:bg-brand-50/80 hover:shadow;
+    @apply active:translate-y-0;
+    @apply dark:border-white/15 dark:bg-white/[0.03] dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10;
+  }
+
+  .role-perm-action-item.app-checkbox--option.app-checkbox--checked {
+    @apply border-brand-300 bg-brand-50 shadow ring-1 ring-brand-200/70;
+    @apply dark:border-brand-500/45 dark:bg-brand-500/15 dark:ring-brand-500/25;
+  }
+
+  .role-perm-action-item .app-checkbox__label {
+    @apply flex min-w-0 flex-1 flex-col gap-0.5;
+  }
+
+  .role-perm-action-label {
+    @apply line-clamp-2 text-xs font-medium leading-snug text-gray-800 dark:text-gray-100;
+  }
+
+  .role-perm-action-item.app-checkbox--checked .role-perm-action-label {
+    @apply text-brand-800 dark:text-brand-100;
+  }
+
+  .role-perm-action-code {
+    @apply truncate font-mono text-[10px] leading-snug text-gray-400 dark:text-gray-500;
+  }
+
+  .role-perm-action-item.app-checkbox--option .app-checkbox__label {
+    @apply text-xs;
   }
 
   .assign-panel {
@@ -1657,6 +2013,58 @@
 
   .assign-panel-head {
     @apply mb-3 space-y-2;
+  }
+
+  .user-role-assign-hint {
+    @apply mb-4 text-sm text-gray-500 dark:text-gray-400;
+  }
+
+  .user-role-assign-empty {
+    @apply rounded-lg border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400 dark:border-white/10;
+  }
+
+  .user-role-assign-toolbar {
+    @apply mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2.5 dark:border-white/5 dark:bg-white/[0.02];
+  }
+
+  .user-role-assign-count {
+    @apply ml-auto tabular-nums text-xs font-medium text-gray-500 dark:text-gray-400;
+  }
+
+  .user-role-assign-grid {
+    @apply grid max-h-[min(52vh,420px)] grid-cols-2 gap-2 overflow-y-auto overscroll-contain sm:grid-cols-3;
+  }
+
+  .user-role-assign-card {
+    @apply min-h-[4.25rem] w-full min-w-0 cursor-pointer items-start;
+  }
+
+  .user-role-assign-card.app-checkbox--option {
+    @apply gap-2 rounded-xl border-gray-200 bg-white px-3 py-2.5 shadow-sm;
+    @apply hover:-translate-y-px hover:border-violet-300 hover:bg-violet-50/70 hover:shadow;
+    @apply active:translate-y-0;
+    @apply dark:border-white/15 dark:bg-white/[0.03] dark:hover:border-violet-500/40 dark:hover:bg-violet-500/15;
+  }
+
+  .user-role-assign-card.app-checkbox--option.app-checkbox--checked {
+    @apply border-violet-400 bg-violet-50 font-medium shadow ring-2 ring-violet-200/80;
+    @apply dark:border-violet-500/50 dark:bg-violet-500/20 dark:ring-violet-500/30;
+  }
+
+  .user-role-assign-card .app-checkbox__label {
+    @apply flex min-w-0 flex-1 flex-col gap-0.5;
+  }
+
+  .user-role-assign-name {
+    @apply line-clamp-2 text-sm font-semibold leading-snug text-gray-900 dark:text-white;
+  }
+
+  .user-role-assign-card.app-checkbox--checked .user-role-assign-name {
+    @apply text-violet-900 dark:text-violet-50;
+  }
+
+  .user-role-assign-remark {
+    @apply line-clamp-2 text-xs leading-snug text-gray-500 dark:text-gray-400;
   }
 
   .profile-page {
@@ -1843,6 +2251,10 @@
   .form-field.form-field-horizontal {
     @apply grid items-start gap-x-3 gap-y-1;
     grid-template-columns: 5.5rem minmax(0, 11.5rem);
+  }
+
+  .kb-wiki-import-sheet .form-field.form-field-horizontal {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
   }
 
   .form-grid-row .form-field.form-field-horizontal {

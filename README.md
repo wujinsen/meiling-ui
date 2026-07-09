@@ -47,7 +47,7 @@ npm ci
 npm run dev
 ```
 
-浏览器访问 `http://localhost:5173`。
+浏览器访问 `http://localhost:5141`。
 
 ### 生产构建
 

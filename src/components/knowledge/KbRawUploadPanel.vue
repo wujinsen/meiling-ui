@@ -6,6 +6,10 @@ import FormField from '@/components/ui/FormField.vue'
 import { uploadRawApi, validateRawUploadFiles } from '@/api/knowledge'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
+import {
+  collectRawHighlightPaths,
+  validateRawUploadPrefix,
+} from '@/utils/kbImport'
 import type { IngestRawHighlightPayload, RawUploadConflict, RawUploadResultVo } from '@/types/kbImport'
 
 const props = defineProps<{
@@ -37,7 +41,7 @@ const canSubmit = computed(
   () => props.canUpload && Boolean(props.spaceId) && prefix.value.trim().length > 0 && files.value.length > 0 && !uploading.value,
 )
 
-const uploadedPaths = computed(() => result.value?.uploaded.map((u) => u.path) ?? [])
+const highlightPaths = computed(() => (result.value ? collectRawHighlightPaths(result.value) : []))
 
 function addFiles(list: FileList | File[]) {
   const next = [...files.value]
@@ -68,6 +72,11 @@ function removeFile(index: number) {
 
 async function submitUpload() {
   if (!canSubmit.value || !props.spaceId) return
+  const prefixErr = validateRawUploadPrefix(prefix.value)
+  if (prefixErr) {
+    showToast('error', t(`knowledge.ingest.rawUpload.error.${prefixErr}`))
+    return
+  }
   const err = validateRawUploadFiles(files.value)
   if (err) {
     showToast('error', t(`knowledge.ingest.rawUpload.error.${err}`))
@@ -93,10 +102,10 @@ async function submitUpload() {
 }
 
 function goIngest() {
-  if (!uploadedPaths.value.length) return
+  if (!highlightPaths.value.length) return
   const expandPrefix = prefix.value.trim().replace(/^\/+|\/+$/g, '')
   emit('switch-tab', 'ingest', {
-    highlightRawPaths: uploadedPaths.value,
+    highlightRawPaths: highlightPaths.value,
     expandPrefix: expandPrefix || undefined,
   })
 }
@@ -121,19 +130,20 @@ function goIngest() {
         </FormField>
         <p class="text-xs text-gray-400">{{ t('knowledge.ingest.rawUpload.prefixHint') }}</p>
 
-        <FormField :label="t('knowledge.ingest.rawUpload.conflict')" horizontal>
-          <div class="flex flex-wrap gap-2">
+        <div class="kb-raw-upload-conflict-block">
+          <p class="kb-raw-upload-conflict-label">{{ t('knowledge.ingest.rawUpload.conflict') }}</p>
+          <div class="kb-raw-upload-conflict-grid">
             <label
               v-for="opt in conflictOptions"
               :key="opt.value"
-              class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs dark:border-white/10"
-              :class="onConflict === opt.value && 'border-brand-300 bg-brand-50 dark:border-brand-500/40 dark:bg-brand-500/10'"
+              class="kb-raw-upload-conflict-tile"
+              :class="onConflict === opt.value && 'kb-raw-upload-conflict-tile--active'"
             >
               <input v-model="onConflict" type="radio" class="sr-only" :value="opt.value" :disabled="!canUpload" />
-              {{ opt.label }}
+              <span class="kb-raw-upload-conflict-tile__label">{{ opt.label }}</span>
             </label>
           </div>
-        </FormField>
+        </div>
 
         <div
           class="rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors"
@@ -190,7 +200,7 @@ function goIngest() {
             </ul>
           </div>
           <button
-            v-if="uploadedPaths.length"
+            v-if="highlightPaths.length"
             type="button"
             class="btn-primary mt-2 inline-flex items-center gap-1.5 text-sm"
             @click="goIngest"
