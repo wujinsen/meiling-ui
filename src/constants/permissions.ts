@@ -114,6 +114,10 @@ export const PERM = {
   OP_SECRET_EDIT: 'operation:secret:edit',
   /** 执行部署脚本 start/stop/restart */
   OP_DEPLOY_EXEC: 'operation:deploy:exec',
+  /** 配置服务器 SSH 凭据 */
+  OP_SSH_MANAGE: 'operation:ssh:manage',
+  /** 上传文件到远程服务器发布 */
+  OP_FILE_UPLOAD: 'operation:file:upload',
 
   KB_SPACE_ADMIN: 'kb:space:admin',
   KB_SPACE_ADD: 'kb:space:add',

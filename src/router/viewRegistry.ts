@@ -41,6 +41,7 @@ const CRM_VIEWS: Record<string, () => Promise<Component>> = {
   'operation/server/index': () => import('@/views/operation/ServerManageView.vue'),
   'operation/platform/index': () => import('@/views/operation/PlatformManageView.vue'),
   'operation/component/index': () => import('@/views/operation/ComponentManageView.vue'),
+  'operation/deploy/index': () => import('@/views/operation/DeployCenterView.vue'),
   // 企业知识库：作为茉莉后台菜单模块，菜单在「菜单管理」维护、由 getRouters 下发到左侧菜单树
   'knowledge/browse/index': () => import('@/views/knowledge/KnowledgeBrowseView.vue'),
   'knowledge/ask/index': () => import('@/views/knowledge/KnowledgeAskView.vue'),

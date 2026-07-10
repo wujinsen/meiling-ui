@@ -5,6 +5,7 @@ import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerL
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import ServerSshModal from '@/components/operation/ServerSshModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
@@ -16,7 +17,7 @@ import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyServer, type OperationComponent, type OperationProject, type OperationServer, type OperationServerTopology } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
-import { Activity, GitBranch, Link2, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { Activity, GitBranch, KeyRound, Link2, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -44,8 +45,12 @@ const allComponents = ref<OperationComponent[]>([])
 const linkProjectSearch = ref('')
 const linkComponentSearch = ref('')
 const probingAll = ref(false)
+const sshModalOpen = ref(false)
+const sshServerId = ref<string | number | null>(null)
+const sshServerName = ref('')
 
 const canEditLinks = computed(() => assertAction(PERM.OP_SERVER_EDIT))
+const canSshManage = computed(() => assertAction(PERM.OP_SSH_MANAGE))
 
 function matchesLinkSearch(keyword: string, ...fields: Array<string | undefined | null>) {
   const q = keyword.trim().toLowerCase()
@@ -75,6 +80,23 @@ const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, serverName: ''
 
 function envLabel(env?: number) {
   return t(environmentI18nKey(env))
+}
+
+function openSsh(row: OperationServer) {
+  if (!guardAction(PERM.OP_SSH_MANAGE)) return
+  sshServerId.value = row.id ?? null
+  sshServerName.value = row.serverName ?? ''
+  sshModalOpen.value = true
+}
+
+function closeSshModal() {
+  sshModalOpen.value = false
+  sshServerId.value = null
+  sshServerName.value = ''
+}
+
+async function onSshSaved() {
+  await loadList()
 }
 
 function search() {
@@ -397,6 +419,9 @@ onMounted(loadList)
                     <Activity class="h-3.5 w-3.5" />{{ checkingId === row.id ? t('operation.health.checking') : t('operation.health.check') }}
                   </button>
                   <button type="button" class="btn-action-edit" @click="openTopology(row)"><GitBranch class="h-3.5 w-3.5" />{{ t('operation.server.topology') }}</button>
+                  <button v-if="canSshManage" type="button" class="btn-action-edit" @click="openSsh(row)">
+                    <KeyRound class="h-3.5 w-3.5" />{{ t('operation.ssh.configure') }}
+                  </button>
                   <button type="button" class="btn-action-edit" @click="openEdit(row)"><Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}</button>
                   <button type="button" class="btn-action-danger" @click="removeRow(row)"><Trash2 class="h-3.5 w-3.5" />{{ t('operation.common.delete') }}</button>
                 </div>
@@ -547,5 +572,13 @@ onMounted(loadList)
         </template>
       </template>
     </AppModal>
+
+    <ServerSshModal
+      :open="sshModalOpen"
+      :server-id="sshServerId"
+      :server-name="sshServerName"
+      @close="closeSshModal"
+      @saved="onSshSaved"
+    />
   </div>
 </template>

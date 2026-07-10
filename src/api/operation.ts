@@ -6,6 +6,7 @@ import type {
   OperationPlatform,
   OperationProject,
   OperationServer,
+  OperationServerSsh,
   OperationServerTopology,
   OperationServerLinks,
   OperationPortAudit,
@@ -13,6 +14,9 @@ import type {
   DeployExecAction,
   OperationDeployStatus,
   OperationHealthProbeResult,
+  OperationSshTest,
+  OperationTask,
+  TaskQuery,
   PlatformQuery,
   ProjectQuery,
   ServerQuery,
@@ -77,6 +81,10 @@ export const getServerLinksApi = (id: number | string) =>
   request<OperationServerLinks>(`/operation/server/${id}/links`, { method: 'GET' })
 export const saveServerLinksApi = (id: number | string, body: OperationServerLinks) =>
   request<boolean>(`/operation/server/${id}/links`, { method: 'PUT', body: JSON.stringify(body) })
+export const saveServerSshApi = (id: number | string, body: OperationServerSsh) =>
+  request<boolean>(`/operation/server/${id}/ssh`, { method: 'PUT', body: JSON.stringify(body) })
+export const testServerSshApi = (id: number | string) =>
+  request<OperationSshTest>(`/operation/server/${id}/ssh/test`, { method: 'POST', timeoutMs: 30_000 })
 export const probeAllHealthApi = () =>
   request<OperationHealthProbeResult>('/operation/health/probe-all', { method: 'POST' })
 
@@ -104,8 +112,32 @@ export const getPortAuditApi = () =>
 export const getOperationStatsApi = () =>
   request<OperationStats>('/operation/stats', { method: 'GET' })
 
-export const getDeployStatusApi = (serviceKey: string) =>
-  request<OperationDeployStatus>(`/operation/deploy/${serviceKey}/status`, { method: 'GET' })
+export const getDeployStatusApi = (serviceKey: string, serverId?: number | string | null) => {
+  const qs = serverId != null && serverId !== '' ? `?serverId=${serverId}` : ''
+  return request<OperationDeployStatus>(`/operation/deploy/${serviceKey}/status${qs}`, { method: 'GET', timeoutMs: 30_000 })
+}
 
-export const execDeployApi = (serviceKey: string, action: DeployExecAction) =>
-  request<OperationDeployStatus>(`/operation/deploy/${serviceKey}/${action}`, { method: 'POST' })
+export const execDeployApi = (serviceKey: string, action: DeployExecAction, serverId?: number | string | null) => {
+  const qs = serverId != null && serverId !== '' ? `?serverId=${serverId}` : ''
+  return request<OperationDeployStatus>(`/operation/deploy/${serviceKey}/${action}${qs}`, { method: 'POST', timeoutMs: 60_000 })
+}
+
+export const createDeployTaskApi = (
+  serviceKey: string,
+  action: DeployExecAction,
+  serverId?: number | string | null,
+) => {
+  const qs = serverId != null && serverId !== '' ? `?serverId=${serverId}` : ''
+  return request<number>(`/operation/deploy/${serviceKey}/${action}/task${qs}`, { method: 'POST', timeoutMs: 15_000 })
+}
+
+export const getTaskApi = (id: number | string, logOffset = 0) =>
+  request<OperationTask>(`/operation/task/${id}?logOffset=${logOffset}`, { method: 'GET', timeoutMs: 15_000 })
+
+export const listTaskApi = (params?: TaskQuery) =>
+  request<PageRes<OperationTask>>(`/operation/task/list${buildQuery(params as Record<string, string | number | undefined>)}`, {
+    method: 'GET',
+  })
+
+export const uploadFileApi = (formData: FormData) =>
+  request<number>('/operation/file/upload', { method: 'POST', body: formData, timeoutMs: 600_000 })

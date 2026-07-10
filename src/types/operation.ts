@@ -35,6 +35,11 @@ export type OperationServer = {
   status?: number | null
   lastCheckTime?: string | number | null
   createTime?: string | number
+  sshPort?: number | null
+  sshUser?: string | null
+  sshAuthType?: number | null
+  connPref?: string | null
+  sshConfigured?: boolean | null
 }
 
 export type OperationTopologyProject = {
@@ -209,3 +214,62 @@ export type OperationDeployStatus = {
   output?: string
   message?: string
 }
+
+export type OperationServerSsh = {
+  sshPort?: number
+  sshUser?: string
+  sshAuthType?: number
+  privateKey?: string
+  passphrase?: string
+  connPref?: string
+}
+
+export type OperationSshTest = {
+  success?: boolean
+  host?: string
+  output?: string
+  elapsedMs?: number
+  message?: string
+}
+
+export type OperationTask = {
+  id?: number | string
+  taskType?: string
+  serverId?: number | string | null
+  serviceKey?: string | null
+  action?: string
+  targetName?: string | null
+  status?: string
+  progress?: number
+  message?: string | null
+  logChunk?: string
+  nextLogOffset?: number
+  finished?: boolean
+  createTime?: string | number
+  finishTime?: string | number | null
+}
+
+export type TaskQuery = PageQuery & {
+  taskType?: string
+  serverId?: number | string
+}
+
+/** moli 三件套 serviceKey */
+export const MOLI_DEPLOY_SERVICES = ['user-center', 'gateway', 'knowledge'] as const
+export type MoliDeployServiceKey = (typeof MOLI_DEPLOY_SERVICES)[number]
+
+/** 上传目标路径白名单（与后端 ops.upload.allowed-paths 默认一致） */
+export const UPLOAD_TARGET_PATHS = [
+  '/opt/moli/frontend/dist/',
+  '/opt/moli-project-distribute/moli-user-center/',
+  '/opt/moli-project-distribute/moli-gateway/',
+  '/opt/moli-project-distribute/moli-knowledge/',
+] as const
+
+export type UploadPostAction =
+  | 'none'
+  | 'nginxReload'
+  | 'unzipToDist'
+  | 'restartService:user-center'
+  | 'restartService:gateway'
+  | 'restartService:knowledge'
