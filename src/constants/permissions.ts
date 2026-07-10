@@ -118,6 +118,8 @@ export const PERM = {
   OP_SSH_MANAGE: 'operation:ssh:manage',
   /** 上传文件到远程服务器发布 */
   OP_FILE_UPLOAD: 'operation:file:upload',
+  /** 远程执行受控 shell 命令 */
+  OP_COMMAND_EXEC: 'operation:command:exec',
 
   KB_SPACE_ADMIN: 'kb:space:admin',
   KB_SPACE_ADD: 'kb:space:add',

@@ -40,6 +40,7 @@ export type OperationServer = {
   sshAuthType?: number | null
   connPref?: string | null
   sshConfigured?: boolean | null
+  uploadAllowedRoots?: string | null
 }
 
 export type OperationTopologyProject = {
@@ -222,6 +223,7 @@ export type OperationServerSsh = {
   privateKey?: string
   passphrase?: string
   connPref?: string
+  uploadAllowedRoots?: string | null
 }
 
 export type OperationSshTest = {
@@ -266,6 +268,7 @@ export const UPLOAD_TARGET_PATHS = [
   '/opt/moli-project-distribute/moli-knowledge/',
 ] as const
 
+/** 上传后置：快捷预设值或 custom */
 export type UploadPostAction =
   | 'none'
   | 'nginxReload'
@@ -273,3 +276,22 @@ export type UploadPostAction =
   | 'restartService:user-center'
   | 'restartService:gateway'
   | 'restartService:knowledge'
+  | 'custom'
+
+export type UploadPostMode = 'none' | 'preset' | 'custom'
+
+export type OperationDeployPresetItem = {
+  value: string
+  label: string
+}
+
+export type OperationDeployPresets = {
+  pathPresets: string[]
+  actionPresets: OperationDeployPresetItem[]
+}
+
+export type OperationCommandExec = {
+  serverId: number | string
+  command: string
+  workDir?: string
+}

@@ -214,10 +214,10 @@ onMounted(loadList)
             <span>{{ t('operation.component.serverIp') }}</span>
             <input v-model="query.serverIp" type="text" class="field-input" />
           </label>
-          <label class="operation-filter-field">
+          <div class="operation-filter-field">
             <span>{{ t('operation.common.environment') }}</span>
             <EnvironmentSelect v-model="query.environment" include-all />
-          </label>
+          </div>
           <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
           <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
         </form>

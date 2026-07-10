@@ -12,6 +12,8 @@ import type {
   OperationPortAudit,
   OperationStats,
   DeployExecAction,
+  OperationCommandExec,
+  OperationDeployPresets,
   OperationDeployStatus,
   OperationHealthProbeResult,
   OperationSshTest,
@@ -141,3 +143,15 @@ export const listTaskApi = (params?: TaskQuery) =>
 
 export const uploadFileApi = (formData: FormData) =>
   request<number>('/operation/file/upload', { method: 'POST', body: formData, timeoutMs: 600_000 })
+
+export const getDeployPresetsApi = (serverId?: number | string | null) => {
+  const qs = serverId != null && serverId !== '' ? `?serverId=${serverId}` : ''
+  return request<OperationDeployPresets>(`/operation/deploy/presets${qs}`, { method: 'GET' })
+}
+
+export const createCommandTaskApi = (body: OperationCommandExec) =>
+  request<number>('/operation/command/exec/task', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    timeoutMs: 15_000,
+  })

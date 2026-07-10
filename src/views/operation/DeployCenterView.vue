@@ -2,13 +2,16 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
+  createCommandTaskApi,
   createDeployTaskApi,
+  getDeployPresetsApi,
   getDeployStatusApi,
   listServerApi,
   uploadFileApi,
 } from '@/api/operation'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import AppSelect from '@/components/ui/AppSelect.vue'
 import { useOperationTaskPoll } from '@/composables/useOperationTaskPoll'
 import { confirm } from '@/composables/useConfirm'
 import { assertAction, guardAction } from '@/composables/useActionPermissions'
@@ -17,14 +20,15 @@ import { PERM } from '@/constants/permissions'
 import { API_SUCCESS_CODE } from '@/types/api'
 import {
   MOLI_DEPLOY_SERVICES,
-  UPLOAD_TARGET_PATHS,
   type DeployExecAction,
   type MoliDeployServiceKey,
+  type OperationDeployPresetItem,
   type OperationDeployStatus,
   type OperationServer,
   type UploadPostAction,
+  type UploadPostMode,
 } from '@/types/operation'
-import { Loader2, Play, RefreshCw, RotateCcw, Square, Upload } from 'lucide-vue-next'
+import { Loader2, Play, RefreshCw, RotateCcw, Square, Terminal, Upload } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const { drawerOpen, task, logText, polling, openTask, closeDrawer } = useOperationTaskPoll()
@@ -36,26 +40,45 @@ const statusMap = ref<Record<string, OperationDeployStatus | null>>({})
 const statusLoading = ref(false)
 const actionLoading = ref<string | null>(null)
 
+const pathPresets = ref<string[]>([])
+const actionPresets = ref<OperationDeployPresetItem[]>([])
+const presetsLoading = ref(false)
+
 const uploadFile = ref<File | null>(null)
-const uploadTarget = ref<string>(UPLOAD_TARGET_PATHS[0])
-const uploadPostAction = ref<UploadPostAction>('none')
+const uploadTarget = ref('')
+const pathPresetPick = ref('')
+const postMode = ref<UploadPostMode>('none')
+const presetPostAction = ref<UploadPostAction>('none')
+const customPostCommand = ref('')
 const uploading = ref(false)
 const uploadDragOver = ref(false)
 
+const remoteWorkDir = ref('')
+const remoteCommand = ref('')
+const commandLoading = ref(false)
+
 const canDeployExec = computed(() => assertAction(PERM.OP_DEPLOY_EXEC))
 const canFileUpload = computed(() => assertAction(PERM.OP_FILE_UPLOAD))
+const canCommandExec = computed(() => assertAction(PERM.OP_COMMAND_EXEC))
 
 const selectedServer = computed(() =>
   servers.value.find((s) => String(s.id) === selectedServerId.value) ?? null,
 )
 
-const postActionOptions = computed(() => [
-  { value: 'none' as UploadPostAction, label: t('operation.deployCenter.postNone') },
-  { value: 'nginxReload' as UploadPostAction, label: t('operation.deployCenter.postNginx') },
-  { value: 'unzipToDist' as UploadPostAction, label: t('operation.deployCenter.postUnzip') },
-  { value: 'restartService:user-center' as UploadPostAction, label: t('operation.deployCenter.postRestartUc') },
-  { value: 'restartService:gateway' as UploadPostAction, label: t('operation.deployCenter.postRestartGw') },
-  { value: 'restartService:knowledge' as UploadPostAction, label: t('operation.deployCenter.postRestartKb') },
+const pathPresetOptions = computed(() =>
+  pathPresets.value.map((p) => ({ value: p, label: p })),
+)
+
+const presetPostOptions = computed(() =>
+  actionPresets.value
+    .filter((a) => a.value !== 'custom')
+    .map((a) => ({ value: a.value as UploadPostAction, label: a.label })),
+)
+
+const postModeOptions = computed(() => [
+  { value: 'none' as UploadPostMode, label: t('operation.deployCenter.postModeNone') },
+  { value: 'preset' as UploadPostMode, label: t('operation.deployCenter.postModePreset') },
+  { value: 'custom' as UploadPostMode, label: t('operation.deployCenter.postModeCustom') },
 ])
 
 async function loadServers() {
@@ -72,6 +95,27 @@ async function loadServers() {
     showToast('error', e instanceof Error ? e.message : t('operation.server.loadFailed'))
   } finally {
     serversLoading.value = false
+  }
+}
+
+async function loadPresets() {
+  presetsLoading.value = true
+  try {
+    const sid = selectedServerId.value || undefined
+    const result = await getDeployPresetsApi(sid)
+    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.deployCenter.presetsFailed'))
+    pathPresets.value = result.data.pathPresets ?? []
+    actionPresets.value = result.data.actionPresets ?? []
+    if (!uploadTarget.value && pathPresets.value.length) {
+      uploadTarget.value = pathPresets.value[0]
+    }
+    if (presetPostAction.value === 'none' && presetPostOptions.value.length) {
+      presetPostAction.value = presetPostOptions.value[0].value
+    }
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.deployCenter.presetsFailed'))
+  } finally {
+    presetsLoading.value = false
   }
 }
 
@@ -96,12 +140,22 @@ async function refreshAllStatus() {
 
 watch(selectedServerId, () => {
   statusMap.value = {}
-  if (selectedServerId.value) void refreshAllStatus()
+  if (selectedServerId.value) {
+    void refreshAllStatus()
+    void loadPresets()
+  }
+})
+
+watch(pathPresetPick, (p) => {
+  if (p) uploadTarget.value = p
 })
 
 onMounted(async () => {
   await loadServers()
-  if (selectedServerId.value) await refreshAllStatus()
+  if (selectedServerId.value) {
+    await loadPresets()
+    await refreshAllStatus()
+  }
 })
 
 function serviceLabel(key: MoliDeployServiceKey) {
@@ -119,7 +173,10 @@ async function runDeployAction(key: MoliDeployServiceKey, action: DeployExecActi
   if (!guardAction(PERM.OP_DEPLOY_EXEC)) return
   if (
     !(await confirm({
-      message: t('operation.deploy.execConfirm', { name: serviceLabel(key), action: t(`operation.deploy.action.${action}`) }),
+      message: t('operation.deploy.execConfirm', {
+        name: serviceLabel(key),
+        action: t(`operation.deploy.action.${action}`),
+      }),
     }))
   ) {
     return
@@ -153,6 +210,12 @@ function onUploadDrop(event: DragEvent) {
   if (f) uploadFile.value = f
 }
 
+function resolveUploadPost(): { postAction: UploadPostAction; postCommand?: string } {
+  if (postMode.value === 'none') return { postAction: 'none' }
+  if (postMode.value === 'preset') return { postAction: presetPostAction.value }
+  return { postAction: 'custom', postCommand: customPostCommand.value.trim() }
+}
+
 async function submitUpload() {
   if (!guardAction(PERM.OP_FILE_UPLOAD)) return
   if (!selectedServerId.value) {
@@ -163,13 +226,36 @@ async function submitUpload() {
     showToast('error', t('operation.deployCenter.fileRequired'))
     return
   }
+  if (!uploadTarget.value.trim()) {
+    showToast('error', t('operation.deployCenter.pathRequired'))
+    return
+  }
+  const { postAction, postCommand } = resolveUploadPost()
+  if (postAction === 'custom') {
+    if (!guardAction(PERM.OP_COMMAND_EXEC)) return
+    if (!postCommand) {
+      showToast('error', t('operation.deployCenter.commandRequired'))
+      return
+    }
+    if (
+      !(await confirm({
+        message: t('operation.deployCenter.uploadCommandConfirm', {
+          server: selectedServer.value?.serverName ?? '',
+          command: postCommand,
+        }),
+      }))
+    ) {
+      return
+    }
+  }
   uploading.value = true
   try {
     const fd = new FormData()
     fd.append('file', uploadFile.value)
     fd.append('serverId', selectedServerId.value)
-    fd.append('targetPath', uploadTarget.value)
-    fd.append('postAction', uploadPostAction.value)
+    fd.append('targetPath', uploadTarget.value.trim())
+    fd.append('postAction', postAction)
+    if (postCommand) fd.append('postCommand', postCommand)
     const result = await uploadFileApi(fd)
     if (result.code !== API_SUCCESS_CODE || result.data == null) {
       throw new Error(result.msg || t('operation.deployCenter.uploadFailed'))
@@ -181,6 +267,46 @@ async function submitUpload() {
     showToast('error', e instanceof Error ? e.message : t('operation.deployCenter.uploadFailed'))
   } finally {
     uploading.value = false
+  }
+}
+
+async function submitRemoteCommand() {
+  if (!guardAction(PERM.OP_COMMAND_EXEC)) return
+  if (!selectedServerId.value) {
+    showToast('error', t('operation.deployCenter.selectServer'))
+    return
+  }
+  const cmd = remoteCommand.value.trim()
+  if (!cmd) {
+    showToast('error', t('operation.deployCenter.commandRequired'))
+    return
+  }
+  if (
+    !(await confirm({
+      message: t('operation.deployCenter.commandConfirm', {
+        server: selectedServer.value?.serverName ?? '',
+        command: cmd,
+      }),
+    }))
+  ) {
+    return
+  }
+  commandLoading.value = true
+  try {
+    const result = await createCommandTaskApi({
+      serverId: selectedServerId.value,
+      command: cmd,
+      workDir: remoteWorkDir.value.trim() || undefined,
+    })
+    if (result.code !== API_SUCCESS_CODE || result.data == null) {
+      throw new Error(result.msg || t('operation.deployCenter.commandFailed'))
+    }
+    openTask(result.data)
+    showToast('success', t('operation.task.started'))
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.deployCenter.commandFailed'))
+  } finally {
+    commandLoading.value = false
   }
 }
 </script>
@@ -283,30 +409,83 @@ async function submitUpload() {
             <input type="file" class="mt-3 text-sm" :disabled="!canFileUpload" @change="onUploadFileChange" />
             <p v-if="uploadFile" class="mt-2 text-sm font-medium">{{ uploadFile.name }} ({{ Math.round(uploadFile.size / 1024) }} KB)</p>
           </div>
-          <div class="grid gap-4 md:grid-cols-2">
+          <div class="space-y-4">
             <label class="block text-sm">
               <span class="mb-1 block text-gray-600">{{ t('operation.deployCenter.targetPath') }}</span>
-              <select v-model="uploadTarget" class="field-input w-full">
-                <option v-for="p in UPLOAD_TARGET_PATHS" :key="p" :value="p">{{ p }}</option>
-              </select>
+              <input
+                v-model="uploadTarget"
+                class="field-input w-full font-mono text-xs"
+                :placeholder="t('operation.deployCenter.pathPlaceholder')"
+              />
+              <p class="mt-1 text-xs text-gray-400">{{ t('operation.deployCenter.pathHint') }}</p>
+            </label>
+            <label v-if="pathPresetOptions.length" class="block text-sm">
+              <span class="mb-1 block text-gray-600">{{ t('operation.deployCenter.pathPreset') }}</span>
+              <AppSelect v-model="pathPresetPick" :options="pathPresetOptions" :placeholder="t('operation.deployCenter.pathPresetPick')" />
             </label>
             <label class="block text-sm">
               <span class="mb-1 block text-gray-600">{{ t('operation.deployCenter.postAction') }}</span>
-              <select v-model="uploadPostAction" class="field-input w-full">
-                <option v-for="opt in postActionOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-              </select>
+              <AppSelect v-model="postMode" :options="postModeOptions" />
+            </label>
+            <label v-if="postMode === 'preset'" class="block text-sm">
+              <span class="mb-1 block text-gray-600">{{ t('operation.deployCenter.postPreset') }}</span>
+              <AppSelect v-model="presetPostAction" :options="presetPostOptions" />
+            </label>
+            <label v-if="postMode === 'custom'" class="block text-sm">
+              <span class="mb-1 block text-gray-600">{{ t('operation.deployCenter.postCustom') }}</span>
+              <textarea
+                v-model="customPostCommand"
+                rows="4"
+                class="field-input w-full font-mono text-xs"
+                :placeholder="t('operation.deployCenter.commandPlaceholder')"
+              />
             </label>
           </div>
           <button
             type="button"
             class="btn-primary mt-4"
-            :disabled="!canFileUpload || uploading || !uploadFile"
+            :disabled="!canFileUpload || uploading || !uploadFile || presetsLoading"
             @click="submitUpload"
           >
             <Loader2 v-if="uploading" class="h-4 w-4 animate-spin" />
             {{ uploading ? t('operation.deployCenter.uploading') : t('operation.deployCenter.uploadSubmit') }}
           </button>
           <p v-if="!canFileUpload" class="mt-2 text-xs text-amber-600">{{ t('operation.deployCenter.noUploadPermission') }}</p>
+        </section>
+
+        <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900/40">
+          <h2 class="mb-4 text-sm font-semibold">{{ t('operation.deployCenter.remoteCommandTitle') }}</h2>
+          <p class="mb-4 text-sm text-gray-500">{{ t('operation.deployCenter.remoteCommandHint') }}</p>
+          <div class="space-y-4">
+            <label class="block text-sm">
+              <span class="mb-1 block text-gray-600">{{ t('operation.deployCenter.workDir') }}</span>
+              <input
+                v-model="remoteWorkDir"
+                class="field-input w-full font-mono text-xs"
+                :placeholder="t('operation.deployCenter.workDirPlaceholder')"
+              />
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1 block text-gray-600">{{ t('operation.deployCenter.command') }}</span>
+              <textarea
+                v-model="remoteCommand"
+                rows="5"
+                class="field-input w-full font-mono text-xs"
+                :placeholder="t('operation.deployCenter.commandPlaceholder')"
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            class="btn-primary mt-4"
+            :disabled="!canCommandExec || commandLoading || !selectedServerId"
+            @click="submitRemoteCommand"
+          >
+            <Loader2 v-if="commandLoading" class="h-4 w-4 animate-spin" />
+            <Terminal v-else class="h-4 w-4" />
+            {{ commandLoading ? t('operation.deployCenter.commandRunning') : t('operation.deployCenter.commandSubmit') }}
+          </button>
+          <p v-if="!canCommandExec" class="mt-2 text-xs text-amber-600">{{ t('operation.deployCenter.noCommandPermission') }}</p>
         </section>
       </div>
     </div>

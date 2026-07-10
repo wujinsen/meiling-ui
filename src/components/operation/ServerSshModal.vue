@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getServerApi, saveServerSshApi, testServerSshApi } from '@/api/operation'
 import AppModal from '@/components/ui/AppModal.vue'
+import AppSelect from '@/components/ui/AppSelect.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
@@ -33,9 +34,16 @@ const passphrase = ref('')
 const sshPort = ref(22)
 const sshUser = ref('ubuntu')
 const connPref = ref<'auto' | 'inner' | 'public'>('auto')
+const uploadAllowedRoots = ref('')
 const testResult = ref<OperationSshTest | null>(null)
 
 const sshConfigured = computed(() => server.value?.sshConfigured === true)
+
+const connPrefOptions = computed(() => [
+  { value: 'auto' as const, label: t('operation.ssh.connAuto') },
+  { value: 'inner' as const, label: t('operation.ssh.connInner') },
+  { value: 'public' as const, label: t('operation.ssh.connPublic') },
+])
 
 async function loadServer() {
   if (props.serverId == null) return
@@ -50,6 +58,7 @@ async function loadServer() {
     sshPort.value = result.data.sshPort ?? 22
     sshUser.value = result.data.sshUser || 'ubuntu'
     connPref.value = (result.data.connPref as 'auto' | 'inner' | 'public') || 'auto'
+    uploadAllowedRoots.value = result.data.uploadAllowedRoots ?? ''
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.server.loadFailed'))
     emit('close')
@@ -84,6 +93,7 @@ async function save() {
       sshUser: sshUser.value.trim() || 'ubuntu',
       sshAuthType: 1,
       connPref: connPref.value,
+      uploadAllowedRoots: uploadAllowedRoots.value.trim() || null,
     }
     if (privateKey.value.trim()) body.privateKey = privateKey.value.trim()
     if (passphrase.value.trim()) body.passphrase = passphrase.value.trim()
@@ -156,11 +166,7 @@ async function testConnection() {
         </div>
         <div class="form-grid-row">
           <FormField :label="t('operation.ssh.connPref')" horizontal class="form-field-span-2">
-            <select v-model="connPref" class="field-input">
-              <option value="auto">{{ t('operation.ssh.connAuto') }}</option>
-              <option value="inner">{{ t('operation.ssh.connInner') }}</option>
-              <option value="public">{{ t('operation.ssh.connPublic') }}</option>
-            </select>
+            <AppSelect v-model="connPref" :options="connPrefOptions" />
           </FormField>
         </div>
         <div class="form-grid-row">
@@ -172,6 +178,17 @@ async function testConnection() {
               class="field-input mt-2 font-mono text-xs"
               :placeholder="sshConfigured ? t('operation.ssh.privateKeyKeep') : t('operation.ssh.privateKeyPlaceholder')"
             />
+          </FormField>
+        </div>
+        <div class="form-grid-row">
+          <FormField :label="t('operation.ssh.uploadAllowedRoots')" horizontal class="form-field-span-2">
+            <textarea
+              v-model="uploadAllowedRoots"
+              rows="3"
+              class="field-input font-mono text-xs"
+              :placeholder="t('operation.ssh.uploadAllowedRootsPlaceholder')"
+            />
+            <p class="mt-1 text-xs text-gray-400">{{ t('operation.ssh.uploadAllowedRootsHint') }}</p>
           </FormField>
         </div>
         <div class="form-grid-row">
