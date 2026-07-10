@@ -31,7 +31,7 @@
 | **P0** | Wiki 治理全链路 | `knowledge/wiki-govern/index` | [wiki-govern-frontend.md](wiki-govern-frontend.md) | ✅ | 🔵 **W2/W4/W5/W7** polish |
 | **P1** | 平台 LLM 设置 | `system/kb-llm/index` | [kb-llm-platform-frontend.md](kb-llm-platform-frontend.md) | ✅ T19 | ✅ **T19d** 联调验收（DB Key 入库待运维配 secret） |
 | **P1** | Ingest 三 Tab | `knowledge/ingest/index` | [kb-import-entry-frontend.md](kb-import-entry-frontend.md) | ✅ T20a/b/e | ✅ **T20f** Tab1/3 UI + 直联 |
-| **P2** | 运维 Dashboard | `knowledge/ops/dashboard` | **本文 §8** | 📋 KBOPS-9 | 📋 规划 |
+| **P2** | 运维 Dashboard | `knowledge/ops/dashboard` | **本文 §8** | ✅ KBOPS-9 | ✅ 前端聚合 |
 
 **建议迭代顺序**：**W2/W4/W5/W7（治理闭环）→ Dashboard（P2）**；O1–O4、T20f Tab1/3、**T19d** 前端 **已完成**。
 
@@ -255,7 +255,16 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 | LLM 可用 D3 | `GET /kb/ask/llm-config` | available 指示灯 |
 | 断链 Top N D4 | lint issues `broken_link` | P2 可选 |
 
-后端 Dashboard 专用 API **尚未实现**；P2 前可用现有 logs/issues 前端聚合。
+后端 Dashboard 专用 API **尚未实现**；当前由 `KnowledgeOpsDashboardView` 聚合 `sync/logs`、`lint/issues`、`ask/llm-config`。
+
+| 区块 | 前端落点 | 状态 |
+|------|----------|------|
+| D1 Sync 趋势 | `KbOpsSyncTrendChart` + `aggregateSyncTrendByDay` | ✅ |
+| D2 待处理工单 | `aggregatePendingIssues` | ✅ |
+| D3 LLM 可用 | `getKbLlmConfigApi` 指示灯 | ✅ |
+| D4 断链 Top N | `topBrokenLinkIssues` | ✅ |
+
+菜单 SQL：`docs/sql/13_kb_ops_dashboard_menu.sql`；未执行时由 `knowledgeSupplementRoutes` 补侧栏。
 
 ---
 
@@ -282,7 +291,7 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 | W1–W8 | 治理 | 见 wiki-govern §13 | P0 |
 | T19d | LLM | 见 kb-llm-platform | P1 |
 | T20f | Ingest | 见 kb-import-entry §10 | P1 | ✅ UI |
-| D1–D4 | Dashboard | §8 四区块 | P2 |
+| D1–D4 | Dashboard | §8 四区块 | P2 | ✅ |
 
 ---
 
@@ -299,14 +308,18 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 | `src/components/knowledge/govern/GovernFixPanel.vue` | W2/W4/W5 |
 | `src/components/knowledge/govern/GovernSyncPanel.vue` | 治理页 Sync（可复用 Ops 面板） |
 | `src/views/system/kb-llm/index.vue` | T19d |
-| `src/views/knowledge/KnowledgeIngestWorkbenchView.vue` | T20f 三 Tab |
+| `src/views/knowledge/KnowledgeOpsDashboardView.vue` | KBOPS-9 运维看板 D1–D4 |
+| `src/utils/kbOpsDashboard.ts` | Dashboard 前端聚合（Sync 趋势 / 工单 / 断链 Top N） |
+| `src/components/knowledge/KbOpsSyncTrendChart.vue` | D1 近 7 日堆叠柱状图 |
+| `scripts/kb-e2e-walkthrough.mjs` | T19d + T16f + T20f 主链路 E2E（`npm run kb:e2e`） |
+| `scripts/kb-e2e-extended.mjs` | AI 写盘 / Tab3 冲突 / rawUpload 权限（`npm run kb:e2e:extended`） |
 | `src/utils/kbSyncStatus.ts` | Sync 状态/日志归一化 |
 | `src/utils/kbImport.ts` | Raw/Wiki 导入校验与冲突判定 |
 | `src/utils/kbWorkflowRoutes.ts` | nextSteps 路由跳转 |
 | `src/utils/kbSyncScope.ts` | 三空间 trigger 参数 |
-| `src/constants/permissions.ts` | `KB_SYNC_TRIGGER` / `KB_LINT_SCAN` |
+| `src/constants/permissions.ts` | `KB_SYNC_TRIGGER` / `KB_LINT_SCAN` / `KB_OPS_DASHBOARD` |
 
-菜单 SQL（本仓库）：`docs/sql/12_kb_platform_llm_menu.sql`；Ingest Tab1 见 distribute `16_kb_import_entry_menu.sql`。
+菜单 SQL（本仓库）：`docs/sql/12_kb_platform_llm_menu.sql`、`docs/sql/13_kb_ops_dashboard_menu.sql`；Ingest Tab1 见 distribute `16_kb_import_entry_menu.sql`。
 
 ---
 
@@ -318,6 +331,8 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 4. 测试空间：`900000000000000001` enterprise-kb · `900000000000000003` moli-ops-manual · `900000000000000002` jp-fe-ap-exam  
 5. LLM：完成 T19d 或 yml 配 `kb.llm`  
 6. Tab1/3：`VITE_MOCK_KB_IMPORT=false` 且后端 T20a/b 就绪后直联  
+7. **E2E**：`npm run kb:e2e` + `npm run kb:e2e:extended`（见根目录 `AGENTS.md`）；`KB_BASE` 指向 knowledge-server 实际端口  
+8. **运维看板**：执行 `docs/sql/13_kb_ops_dashboard_menu.sql` 后重新登录（或依赖 supplement 菜单）  
 
 ---
 
@@ -337,6 +352,7 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-10 | **KBOPS-9** `KnowledgeOpsDashboardView` D1–D4；E2E 脚本 walkthrough + extended（12/12 + 7/7）；`13_kb_ops_dashboard_menu.sql` |
 | 2026-07-10 | O1–O4、`KbSyncOpsPanel`、T20f Tab1/3 UI 排版、治理工作流链接；验收表标 ✅ |
 | 2026-07-09 | meiling-ui 版：§0 现状审计、代码落点对齐仓库、5141 联调说明 |
 | 2026-07-09 | distribute 初稿：O1–O4、排期、Dashboard |

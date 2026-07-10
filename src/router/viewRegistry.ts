@@ -49,6 +49,7 @@ const CRM_VIEWS: Record<string, () => Promise<Component>> = {
   'knowledge/ingest/index': () => import('@/views/knowledge/KnowledgeIngestWorkbenchView.vue'),
   'knowledge/wiki-govern/index': () => import('@/views/knowledge/KnowledgeWikiGovernView.vue'),
   'knowledge/wiki/govern/index': () => import('@/views/knowledge/KnowledgeWikiGovernView.vue'),
+  'knowledge/ops/dashboard/index': () => import('@/views/knowledge/KnowledgeOpsDashboardView.vue'),
   'knowledge/spaces/index': () => import('@/views/knowledge/KnowledgeSpaceManageView.vue'),
   'knowledge/documents/index': () => import('@/views/knowledge/KnowledgeDocumentManageView.vue'),
   'knowledge/documents/edit': () => import('@/views/knowledge/KnowledgeDocumentEditView.vue'),

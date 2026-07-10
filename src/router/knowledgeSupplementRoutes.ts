@@ -46,11 +46,23 @@ export const KNOWLEDGE_WIKI_GOVERN_ROUTE: RouteRecordRaw = {
   },
 }
 
+/** KBOPS-9：运维 Dashboard（Sync 趋势 / 待处理工单 / LLM / 断链 Top N） */
+export const KNOWLEDGE_OPS_DASHBOARD_ROUTE: RouteRecordRaw = {
+  path: 'ops/dashboard',
+  name: 'KnowledgeOpsDashboard',
+  component: () => import('@/views/knowledge/KnowledgeOpsDashboardView.vue'),
+  meta: {
+    titleKey: 'knowledge.opsDashboard.title',
+    perms: 'kb:ops:dashboard',
+  },
+}
+
 const SUPPLEMENT_ROUTES: RouteRecordRaw[] = [
   KNOWLEDGE_DOCUMENTS_ROUTE,
   KNOWLEDGE_DOCUMENT_EDIT_ROUTE,
   KNOWLEDGE_WIKI_EDIT_ROUTE,
   KNOWLEDGE_WIKI_GOVERN_ROUTE,
+  KNOWLEDGE_OPS_DASHBOARD_ROUTE,
 ]
 
 /** 后端未执行 06_knowledge_document_menu.sql 时，补全「文档管理」侧栏与路由 */
@@ -83,6 +95,22 @@ const KNOWLEDGE_WIKI_GOVERN_MENU: MenuVo = {
   perms: 'kb:wiki:govern:list',
   orderNum: 5,
   meta: { titleKey: 'knowledge.wikiGovern.title', icon: 'tool' },
+}
+
+/** 后端未执行 13_kb_ops_dashboard_menu.sql 时，补全「运维看板」侧栏 */
+const KNOWLEDGE_OPS_DASHBOARD_MENU: MenuVo = {
+  id: 'kb-supplement-ops-dashboard',
+  menuName: '运维看板',
+  menuNameEn: 'Ops Dashboard',
+  menuNameJa: '運用ダッシュボード',
+  name: 'KnowledgeOpsDashboard',
+  path: 'ops/dashboard',
+  component: 'knowledge/ops/dashboard/index',
+  menuType: 'C',
+  icon: 'dashboard',
+  perms: 'kb:ops:dashboard',
+  orderNum: 6,
+  meta: { titleKey: 'knowledge.opsDashboard.title', icon: 'dashboard' },
 }
 
 function normalizeMenuPath(path?: string) {
@@ -121,6 +149,19 @@ function hasWikiGovernMenu(children: MenuVo[]) {
   })
 }
 
+function hasOpsDashboardMenu(children: MenuVo[]) {
+  return children.some((child) => {
+    const path = normalizeMenuPath(child.path)
+    const component = (child.component || '').replace(/\/index$/i, '')
+    return (
+      path === 'ops/dashboard'
+      || component === 'knowledge/ops/dashboard'
+      || child.name === 'KnowledgeOpsDashboard'
+      || child.routeName === 'KnowledgeOpsDashboard'
+    )
+  })
+}
+
 function sortMenuChildren(children: MenuVo[]) {
   return [...children].sort((a, b) => (a.orderNum ?? 999) - (b.orderNum ?? 999))
 }
@@ -129,17 +170,16 @@ export function mergeKnowledgeSupplementMenus(menus: MenuVo[]): MenuVo[] {
   return menus.map((menu) => {
     const children = menu.children?.length ? mergeKnowledgeSupplementMenus(menu.children) : menu.children
 
-    if (menu.menuType === 'M' && children?.length && isKnowledgeParentMenu(menu) && !hasDocumentsMenu(children)) {
-      return {
-        ...menu,
-        children: sortMenuChildren([...children, KNOWLEDGE_DOCUMENTS_MENU]),
-      }
-    }
-
-    if (menu.menuType === 'M' && children?.length && isKnowledgeParentMenu(menu) && !hasWikiGovernMenu(children)) {
-      return {
-        ...menu,
-        children: sortMenuChildren([...children, KNOWLEDGE_WIKI_GOVERN_MENU]),
+    if (menu.menuType === 'M' && children?.length && isKnowledgeParentMenu(menu)) {
+      const extras: MenuVo[] = []
+      if (!hasDocumentsMenu(children)) extras.push(KNOWLEDGE_DOCUMENTS_MENU)
+      if (!hasWikiGovernMenu(children)) extras.push(KNOWLEDGE_WIKI_GOVERN_MENU)
+      if (!hasOpsDashboardMenu(children)) extras.push(KNOWLEDGE_OPS_DASHBOARD_MENU)
+      if (extras.length) {
+        return {
+          ...menu,
+          children: sortMenuChildren([...children, ...extras]),
+        }
       }
     }
 

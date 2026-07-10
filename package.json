@@ -10,7 +10,9 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "kb:e2e": "node scripts/kb-e2e-walkthrough.mjs",
+    "kb:e2e:extended": "node scripts/kb-e2e-extended.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",

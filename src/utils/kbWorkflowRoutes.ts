@@ -27,3 +27,7 @@ export function kbWikiGovernRoute(spaceId?: string | number | null) {
 export function kbLlmSettingsRoute() {
   return { path: '/system/kb-llm', query: {} as Record<string, string> }
 }
+
+export function kbOpsDashboardRoute() {
+  return { path: '/knowledge/ops/dashboard', query: {} as Record<string, string> }
+}

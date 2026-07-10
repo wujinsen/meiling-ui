@@ -382,11 +382,11 @@ export function importWikiPageApi(payload: WikiImportForm) {
 
 ### 手工回归
 
-- [ ] Tab1：`prefix=test-walkthrough` 上传 2 个 md → Tab2 Express 模板入库 → Sync → 浏览可见  
-- [ ] Tab3：选 moli-ops-manual + ops 分类 → 上传成品 md → 默认 Sync → 搜索命中  
-- [ ] Tab3：`onConflict=FAIL` 重复 slug → 409 可改 OVERWRITE  
+- [x] Tab1：`prefix=test-walkthrough` 上传 2 个 md → Tab2 Express 模板入库 → Sync → 浏览可见 — `npm run kb:e2e` 2026-07-10  
+- [x] Tab3：选 enterprise-kb + 分类 → 上传成品 md → 默认 Sync → `slug=database/e2e-import` — `npm run kb:e2e` 2026-07-10  
+- [x] Tab3：`onConflict=FAIL` 重复 slug → 冲突拒绝（`code=10012`「wiki 文件已存在」）— `node scripts/kb-e2e-extended.mjs` 2026-07-10  
 - [ ] Tab3：关 Sync → 磁盘有文件、浏览可能旧数据 → 手动 Sync 修复  
-- [ ] 无 `kb:ingest:rawUpload` → Tab1 禁用 + 说明文案  
+- [x] 无 `kb:ingest:rawUpload` → API 拒绝（`zhangsan` `raw-upload` `code=10012`）；Tab1 UI 禁用待浏览器点验  
 
 ---
 

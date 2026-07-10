@@ -60,10 +60,10 @@
 | 菜单 | 路由 component | 状态 | KBOPS 关联 |
 |------|----------------|------|------------|
 | 健康体检 | `knowledge/lint/index` → `KnowledgeLintView` | ✅ O1–O4 | **Sync 区增强已完成** |
-| Wiki 治理 | `knowledge/wiki-govern/index` → `KnowledgeWikiGovernView` | ✅ T16f 联调验收 | AI 写盘待 LLM Key；脚本 metadata 待样例 wiki |
+| Wiki 治理 | `knowledge/wiki-govern/index` → `KnowledgeWikiGovernView` | ✅ T16f 联调 + E2E AI 写盘 | 脚本 metadata 待含 `missing_dates` 样例 wiki |
 | Ingest 工作台 | `knowledge/ingest/index` → `KnowledgeIngestWorkbenchView` | ✅ 三 Tab UI | **T20f** Tab1/3 直联 + 排版 |
 | LLM 配置 | `system/kb-llm/index` 或 `knowledge/kb-llm/index` | ✅ T19d 联调验收 | DB Key 加密入库待运维 `KB_LLM_CONFIG_SECRET` |
-| （P2）运维看板 | `knowledge/ops/dashboard` | 📋 规划 | KBOPS-9 |
+| （P2）运维看板 | `knowledge/ops/dashboard` | ✅ 前端 | KBOPS-9 |
 
 ### 3.2 标准运维闭环
 
@@ -178,7 +178,7 @@
 - [x] Wiki 治理：script-fix / auto-fix / merge-hint / syncAfter 可点通（W2/W4/W5/W7）— 2026-07-10 API 联调；AI/脚本写盘成功路径待 LLM Key + metadata 样例  
 - [x] 平台 LLM：保存、脱敏展示、test 连通（T19d）— 2026-07-10 联调；新 Key 入库 / 清除 DB Key 待 secret + 持久化后补测  
 - [x] Ingest Tab1 上传 raw + Tab3 成品 import UI（T20f 前端）  
-- [ ] commit/publish 后 `nextSteps` 跳转治理/体检（端到端联调）  
+- [x] commit/publish 后 `nextSteps` 跳转治理/体检（端到端联调）— `kb:e2e` publish/import 均含 `wiki_govern_lint` + `kb_health_scan`  
 
 ### 8.3 回归场景
 

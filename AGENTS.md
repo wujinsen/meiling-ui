@@ -40,6 +40,32 @@ Tab3 权限：空间 **editor** + 内嵌 Sync 需 `kb:sync:trigger`（默认勾�
 - 产品背景：`../moli-project-distribute/docs/product/knowledge-import-entry-prd.md`
 - 流程图：`../moli-project-distribute/docs/diagrams/png/moli-kb-import-entry.png`
 
+### T16f / T20f 端到端联调脚本
+
+```powershell
+# 1) 启动 knowledge-server（8090 被占用时可改 8091，并设 KB_BASE）
+cd ..\moli-project-distribute\moli-knowledge\moli-knowledge-server
+$bytes = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+$env:KB_LLM_CONFIG_SECRET = [Convert]::ToBase64String($bytes)
+mvn spring-boot:run "-Dspring-boot.run.profiles=dev" `
+  "-Dspring-boot.run.workingDirectory=D:/work/moli_project/moli-project-distribute"
+
+# 2) 在 meiling-ui 根目录（另开终端）
+$env:KB_BASE = 'http://127.0.0.1:8090'   # 若改端口则同步
+$env:KB_E2E_LLM_API_KEY = '<有效智谱/DeepSeek Key>'  # 可选，默认 dev yml 占位
+npm run kb:e2e
+npm run kb:e2e:extended   # T16f AI 写盘 · Tab3 冲突 · zhangsan rawUpload 权限
+```
+
+覆盖：平台 LLM 测试/入库 → T16f lint/merge-hint → T20f Tab1 raw → Tab2 express+publish（`nextSteps`）→ Tab3 成品 import。扩展脚本另验 AI 写盘、`onConflict=FAIL` 冲突、`zhangsan` 无 `kb:ingest:rawUpload`。
+
+### KBOPS-9 运维看板
+
+- 路由：`/knowledge/ops/dashboard` · 权限 `kb:ops:dashboard`
+- 菜单 SQL：`docs/sql/13_kb_ops_dashboard_menu.sql`
+- 设计：`docs/api/knowledge-ops-frontend.md` §8
+
 ## 迭代清单
 
 任务结束前：

@@ -134,6 +134,7 @@ export const PERM = {
   KB_INGEST_COMMIT: 'kb:ingest:commit',
   KB_INGEST_RAW_UPLOAD: 'kb:ingest:rawUpload',
   KB_PLATFORM_LLM: 'kb:platform:llm',
+  KB_OPS_DASHBOARD: 'kb:ops:dashboard',
 
 } as const
 

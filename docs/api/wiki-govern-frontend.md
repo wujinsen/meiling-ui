@@ -373,7 +373,7 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 | Lint：issues 按 kind 分组可勾选 | ✅ | `GovernLintPanel` |
 | Lint 后默认勾选 script+AI，不含 `dup_slug` / info | ✅ | `buildDefaultSelectedKeys` |
 | **脚本修复** metadata | 🟡 | API 通（空 issues→`10012`；非 script kind→0 页）；三空间无 `missing_dates` 等样例，未验写盘 |
-| **AI 修复** 断链等 | 🟡 | `ai-batch-fix` 返回 `failedPages`+401（yaml LLM key 无效）；链路通，需有效 Key 验写盘 |
+| **AI 修复** 断链等 | ✅ | `scripts/kb-e2e-extended.mjs`：`ai-batch-fix` 写盘 `fixed=1`（GLM `glm-4-flash` + DB Key） |
 | **一键修复** `issuesBefore` → `issuesAfter` | ✅ | `moli-ops-manual`：1→218；含 `relint` 嵌套结果 |
 | `syncAfter=true` 后 DB 与文件一致 | ✅ | `auto-fix` 返回 `sync.success=true`；`POST /kb/sync/trigger` 亦通 |
 | `llmAvailable=false` 时 AI disabled，脚本可用 | ✅ | Fix 面板 + 一键可 `aiFix:false` 降级 |
@@ -386,7 +386,7 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 | 旁路跳转 Ingest / 健康体检 | ✅ | `KbGovernWorkflowLinks` + 复检后 CTA |
 | exitCode≠0 仍返回 issues（W8） | ✅ | `moli-ops-manual`：`exitCode=1`，218 issues |
 
-**联调记录（2026-07-10）**：空间 `moli-ops-manual`（218 issues：broken_link/orphan/missing_concept）；`govern/options` kinds 与文档一致；`merge-hint` / `sync` / `auto-fix+syncAfter` 实机通过。**阻塞**：有效 LLM API Key（同 T19d）后方可验 AI 写盘成功路径；脚本 metadata 修复需含 `missing_dates` 等 issue 的测试 wiki。
+**联调记录（2026-07-10）**：空间 `moli-ops-manual`（218 issues：broken_link/orphan/missing_concept）；`govern/options` kinds 与文档一致；`merge-hint` / `sync` / `auto-fix+syncAfter` 实机通过。**AI 写盘（2026-07-10）**：`enterprise-kb` 植入 `broken_link` → `ai-batch-fix` `fixedPages=1`（`KB_BASE=:8091`，平台 LLM 已入库）。脚本 metadata 修复仍需含 `missing_dates` 等 issue 的测试 wiki。
 
 ---
 
