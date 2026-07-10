@@ -11,7 +11,7 @@
 | 优先级 | 页面 | 路由 | 后端 | 前端 | 对接文档 |
 |--------|------|------|------|------|----------|
 | **P0** | Ingest 工作台 | `knowledge/ingest/index` | ✅ T15+T18+T19+T20 | ✅ **三 Tab + Tab1/3 UI** | [ingest-workbench-frontend.md](ingest-workbench-frontend.md) · [kb-import-entry-frontend.md](kb-import-entry-frontend.md) |
-| **P0** | Wiki 治理 | `knowledge/wiki-govern/index` | ✅ T16a/e/g · T16f 待开发 | 🟡 **§8 主流程已有， polish 未接完** | [wiki-govern-frontend.md](wiki-govern-frontend.md) · 见 §14–§15 |
+| **P0** | Wiki 治理 | `knowledge/wiki-govern/index` | ✅ T16a/e/g/f | ✅ **T16f 联调验收** | [wiki-govern-frontend.md §13](wiki-govern-frontend.md#13-验收清单前端自测) |
 | P1 | Wiki 编辑 | `knowledge/wiki/edit` | ✅ T14 | ✅ 已有 | KNOWLEDGE_API §8 |
 | P1 | 健康体检 | `knowledge/lint/index` | ✅ | ✅ Sync **O1–O4** | [knowledge-ops-frontend.md §3](knowledge-ops-frontend.md#3-p0--健康体检页-sync-增强o1o4) · KNOWLEDGE_API §4 |
 

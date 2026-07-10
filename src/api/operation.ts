@@ -7,10 +7,12 @@ import type {
   OperationProject,
   OperationServer,
   OperationServerTopology,
+  OperationServerLinks,
   OperationPortAudit,
   OperationStats,
   DeployExecAction,
   OperationDeployStatus,
+  OperationHealthProbeResult,
   PlatformQuery,
   ProjectQuery,
   ServerQuery,
@@ -71,6 +73,12 @@ export const getServerTopologyApi = (id: number | string) =>
   request<OperationServerTopology>(`/operation/server/${id}/topology`, { method: 'GET' })
 export const checkServerApi = (id: number | string) =>
   request<OperationServer>(`/operation/server/${id}/check`, { method: 'POST' })
+export const getServerLinksApi = (id: number | string) =>
+  request<OperationServerLinks>(`/operation/server/${id}/links`, { method: 'GET' })
+export const saveServerLinksApi = (id: number | string, body: OperationServerLinks) =>
+  request<boolean>(`/operation/server/${id}/links`, { method: 'PUT', body: JSON.stringify(body) })
+export const probeAllHealthApi = () =>
+  request<OperationHealthProbeResult>('/operation/health/probe-all', { method: 'POST' })
 
 export const listPlatformApi = (params?: PlatformQuery) => platform.list(params as Record<string, string | number | undefined>)
 export const getPlatformApi = platform.get

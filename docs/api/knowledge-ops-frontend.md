@@ -13,8 +13,8 @@
 |------|----------|------|------------|
 | 健康体检 · 质量 | `KnowledgeLintView.vue` | ✅ | — |
 | 健康体检 · Sync | `KbSyncOpsPanel.vue`（`KbSyncPanel` 别名） | ✅ O1–O4 | KBOPS-1/2 后端字段就绪后可自动对齐 `running` 轮询 |
-| Wiki 治理 | `KnowledgeWikiGovernView.vue` + `GovernFixPanel` | 🟡 W2/W4/W5/W7 | 旁路链接 + `GovernSyncPanel` + `KbGovernWorkflowLinks` 已挂载；联调验收 |
-| LLM 配置 T19d | `src/views/system/kb-llm/index.vue` | ✅ 页面已有 | 联调验收见 [kb-llm-platform-frontend.md](kb-llm-platform-frontend.md) |
+| Wiki 治理 | `KnowledgeWikiGovernView.vue` + `GovernFixPanel` | ✅ T16f 联调验收 | AI 写盘待有效 LLM Key；脚本修复待含 metadata issue 样例 |
+| LLM 配置 T19d | `src/views/system/kb-llm/index.vue` | ✅ 联调验收通过 | 见 [kb-llm-platform-frontend.md §14](kb-llm-platform-frontend.md#14-验收清单前端自测) |
 | Ingest 三 Tab T20f | `KnowledgeIngestWorkbenchView.vue` | ✅ UI + 直联 | Tab1 `KbRawUploadPanel`、Tab3 `KbWikiImportPanel` 排版与联调就绪；`VITE_MOCK_KB_IMPORT=false` |
 | Sync API | `src/api/knowledge.ts` | ✅ | 类型在 `src/types/knowledge.ts`；状态归一化 `src/utils/kbSyncStatus.ts` |
 | 空间解析 | `src/utils/kbSyncScope.ts` | ✅ | 已禁止静默默认 enterprise-kb |
@@ -29,11 +29,11 @@
 |--------|------|----------------|------|------|------|
 | **P0** | 健康体检 · Sync 增强 | `knowledge/lint/index` | **本文 §3** | 🔵 KBOPS-1/2 待修 | 🔵 **O1–O4** |
 | **P0** | Wiki 治理全链路 | `knowledge/wiki-govern/index` | [wiki-govern-frontend.md](wiki-govern-frontend.md) | ✅ | 🔵 **W2/W4/W5/W7** polish |
-| **P1** | 平台 LLM 设置 | `system/kb-llm/index` | [kb-llm-platform-frontend.md](kb-llm-platform-frontend.md) | ✅ T19 | 🟡 **T19d** 联调验收 |
+| **P1** | 平台 LLM 设置 | `system/kb-llm/index` | [kb-llm-platform-frontend.md](kb-llm-platform-frontend.md) | ✅ T19 | ✅ **T19d** 联调验收（DB Key 入库待运维配 secret） |
 | **P1** | Ingest 三 Tab | `knowledge/ingest/index` | [kb-import-entry-frontend.md](kb-import-entry-frontend.md) | ✅ T20a/b/e | ✅ **T20f** Tab1/3 UI + 直联 |
 | **P2** | 运维 Dashboard | `knowledge/ops/dashboard` | **本文 §8** | 📋 KBOPS-9 | 📋 规划 |
 
-**建议迭代顺序**：**W2/W4/W5/W7（治理闭环）→ T19d 验收 → Dashboard（P2）**；O1–O4、T20f Tab1/3 前端 **已完成**。
+**建议迭代顺序**：**W2/W4/W5/W7（治理闭环）→ Dashboard（P2）**；O1–O4、T20f Tab1/3、**T19d** 前端 **已完成**。
 
 **网关前缀**：`{VITE_API_BASE_URL}/KnowledgeServer`（开发代理 `vite.config.ts` → `http://127.0.0.1:8888`）
 

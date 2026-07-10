@@ -1,22 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerTopologyApi, listServerApi, updateServerApi } from '@/api/operation'
+import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerLinksApi, getServerTopologyApi, listComponentApi, listProjectApi, listServerApi, probeAllHealthApi, saveServerLinksApi, updateServerApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
-import { guardAction } from '@/composables/useActionPermissions'
+import { guardAction, assertAction } from '@/composables/useActionPermissions'
 import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { createEmptyServer, type OperationServer, type OperationServerTopology } from '@/types/operation'
+import { createEmptyServer, type OperationComponent, type OperationProject, type OperationServer, type OperationServerTopology } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
-import { Activity, GitBranch, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { Activity, GitBranch, Link2, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -33,6 +33,43 @@ const topologyOpen = ref(false)
 const topologyLoading = ref(false)
 const topologyTitle = ref('')
 const topology = ref<OperationServerTopology | null>(null)
+const topologyServerId = ref<string | number | null>(null)
+const linksEditing = ref(false)
+const linksLoading = ref(false)
+const linksSaving = ref(false)
+const linkProjectIds = ref<string[]>([])
+const linkComponentIds = ref<string[]>([])
+const allProjects = ref<OperationProject[]>([])
+const allComponents = ref<OperationComponent[]>([])
+const linkProjectSearch = ref('')
+const linkComponentSearch = ref('')
+const probingAll = ref(false)
+
+const canEditLinks = computed(() => assertAction(PERM.OP_SERVER_EDIT))
+
+function matchesLinkSearch(keyword: string, ...fields: Array<string | undefined | null>) {
+  const q = keyword.trim().toLowerCase()
+  if (!q) return true
+  return fields.some((field) => field?.toLowerCase().includes(q))
+}
+
+const filteredLinkProjects = computed(() => {
+  const selected = new Set(linkProjectIds.value)
+  return allProjects.value.filter((item) => {
+    const id = item.id != null ? String(item.id) : ''
+    if (selected.has(id)) return true
+    return matchesLinkSearch(linkProjectSearch.value, item.projectName, item.serverIp, item.port)
+  })
+})
+
+const filteredLinkComponents = computed(() => {
+  const selected = new Set(linkComponentIds.value)
+  return allComponents.value.filter((item) => {
+    const id = item.id != null ? String(item.id) : ''
+    if (selected.has(id)) return true
+    return matchesLinkSearch(linkComponentSearch.value, item.componentName, item.serverIp, item.port)
+  })
+})
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, serverName: '', ip: '', environment: '' as number | '' })
 
@@ -160,6 +197,8 @@ async function openTopology(row: OperationServer) {
   topologyOpen.value = true
   topologyLoading.value = true
   topologyTitle.value = row.serverName || String(row.id)
+  topologyServerId.value = row.id
+  linksEditing.value = false
   topology.value = null
   try {
     const result = await getServerTopologyApi(row.id)
@@ -168,14 +207,124 @@ async function openTopology(row: OperationServer) {
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.server.topologyFailed'))
     topologyOpen.value = false
+    topologyServerId.value = null
   } finally {
     topologyLoading.value = false
+  }
+}
+
+async function reloadTopology() {
+  if (topologyServerId.value == null) return
+  topologyLoading.value = true
+  try {
+    const result = await getServerTopologyApi(topologyServerId.value)
+    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.topologyFailed'))
+    topology.value = result.data
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.server.topologyFailed'))
+  } finally {
+    topologyLoading.value = false
+  }
+}
+
+function toggleLinkId(ids: string[], id: string | number | undefined, checked: boolean) {
+  if (id == null) return
+  const key = String(id)
+  if (checked) {
+    if (!ids.includes(key)) ids.push(key)
+  } else {
+    const idx = ids.indexOf(key)
+    if (idx >= 0) ids.splice(idx, 1)
+  }
+}
+
+function isLinkSelected(ids: string[], id: string | number | undefined) {
+  return id != null && ids.includes(String(id))
+}
+
+async function startEditLinks() {
+  if (!guardAction(PERM.OP_SERVER_EDIT) || topologyServerId.value == null) return
+  linksEditing.value = true
+  linksLoading.value = true
+  linkProjectSearch.value = ''
+  linkComponentSearch.value = ''
+  linkProjectIds.value = []
+  linkComponentIds.value = []
+  allProjects.value = []
+  allComponents.value = []
+  try {
+    const [linksRes, projectsRes, componentsRes] = await Promise.all([
+      getServerLinksApi(topologyServerId.value),
+      listProjectApi({ pageNum: 1, pageSize: 500 }),
+      listComponentApi({ pageNum: 1, pageSize: 500 }),
+    ])
+    if (linksRes.code !== API_SUCCESS_CODE || !linksRes.data) throw new Error(linksRes.msg || t('operation.server.linksLoadFailed'))
+    if (projectsRes.code !== API_SUCCESS_CODE || !projectsRes.data) throw new Error(projectsRes.msg || t('operation.project.loadFailed'))
+    if (componentsRes.code !== API_SUCCESS_CODE || !componentsRes.data) throw new Error(componentsRes.msg || t('operation.component.loadFailed'))
+    linkProjectIds.value = (linksRes.data.projectIds ?? []).map(String)
+    linkComponentIds.value = (linksRes.data.componentIds ?? []).map(String)
+    allProjects.value = projectsRes.data.list ?? []
+    allComponents.value = componentsRes.data.list ?? []
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.server.linksLoadFailed'))
+    linksEditing.value = false
+  } finally {
+    linksLoading.value = false
+  }
+}
+
+function cancelEditLinks() {
+  linksEditing.value = false
+  linkProjectSearch.value = ''
+  linkComponentSearch.value = ''
+}
+
+async function saveLinks() {
+  if (!guardAction(PERM.OP_SERVER_EDIT) || topologyServerId.value == null) return
+  linksSaving.value = true
+  try {
+    const result = await saveServerLinksApi(topologyServerId.value, {
+      serverId: topologyServerId.value,
+      projectIds: linkProjectIds.value,
+      componentIds: linkComponentIds.value,
+    })
+    if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.server.linksSaveFailed'))
+    showToast('success', t('operation.server.linksSaveOk'))
+    linksEditing.value = false
+    await reloadTopology()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.server.linksSaveFailed'))
+  } finally {
+    linksSaving.value = false
+  }
+}
+
+async function probeAll() {
+  probingAll.value = true
+  try {
+    const result = await probeAllHealthApi()
+    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.health.probeAllFailed'))
+    const data = result.data
+    showToast('success', t('operation.health.probeAllOk', {
+      servers: data.serversProbed ?? 0,
+      components: data.componentsProbed ?? 0,
+      deploys: data.deployStatusesSynced ?? 0,
+    }))
+    await loadList()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.health.probeAllFailed'))
+  } finally {
+    probingAll.value = false
   }
 }
 
 function closeTopology() {
   topologyOpen.value = false
   topology.value = null
+  topologyServerId.value = null
+  linksEditing.value = false
+  linkProjectSearch.value = ''
+  linkComponentSearch.value = ''
 }
 
 watch(() => [query.pageNum, query.pageSize], loadList)
@@ -203,6 +352,10 @@ onMounted(loadList)
           <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
         </form>
         <div class="toolbar-actions">
+          <button type="button" class="btn-ghost shrink-0" :disabled="probingAll" @click="probeAll">
+            <Activity class="h-4 w-4" :class="{ 'animate-pulse': probingAll }" />
+            {{ probingAll ? t('operation.health.probeAllRunning') : t('operation.health.probeAll') }}
+          </button>
           <button type="button" class="btn-primary shrink-0" @click="openCreate"><Plus class="h-4 w-4" /> {{ t('operation.common.add') }}</button>
         </div>
       </template>
@@ -293,6 +446,66 @@ onMounted(loadList)
 
     <AppModal :open="topologyOpen" :title="t('operation.server.topologyTitle', { name: topologyTitle })" wide @close="closeTopology">
       <div v-if="topologyLoading" class="py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</div>
+      <div v-else-if="linksEditing" class="space-y-6">
+        <p class="text-sm text-gray-500">{{ t('operation.server.editLinksHint') }}</p>
+        <div v-if="linksLoading" class="py-8 text-center text-gray-400">{{ t('operation.common.loading') }}</div>
+        <template v-else>
+          <section>
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-sm font-semibold">
+                {{ t('operation.server.topologyProjects') }}
+                <span class="font-normal text-gray-400">({{ linkProjectIds.length }}/{{ allProjects.length }})</span>
+              </h3>
+              <input
+                v-model="linkProjectSearch"
+                type="search"
+                class="field-input max-w-xs text-sm"
+                :placeholder="t('operation.server.linkSearchPlaceholder')"
+              />
+            </div>
+            <div v-if="!allProjects.length" class="text-sm text-gray-400">{{ t('operation.common.empty') }}</div>
+            <div v-else-if="!filteredLinkProjects.length" class="text-sm text-gray-400">{{ t('operation.server.linkSearchEmpty') }}</div>
+            <div v-else class="max-h-48 space-y-2 overflow-y-auto rounded border border-gray-100 p-3 dark:border-white/10">
+              <label v-for="p in filteredLinkProjects" :key="String(p.id)" class="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  :checked="isLinkSelected(linkProjectIds, p.id)"
+                  @change="toggleLinkId(linkProjectIds, p.id, ($event.target as HTMLInputElement).checked)"
+                />
+                <span>{{ p.projectName }}</span>
+                <span class="text-gray-400">· {{ p.serverIp || '-' }} · {{ p.port || '-' }}</span>
+              </label>
+            </div>
+          </section>
+          <section>
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-sm font-semibold">
+                {{ t('operation.server.topologyComponents') }}
+                <span class="font-normal text-gray-400">({{ linkComponentIds.length }}/{{ allComponents.length }})</span>
+              </h3>
+              <input
+                v-model="linkComponentSearch"
+                type="search"
+                class="field-input max-w-xs text-sm"
+                :placeholder="t('operation.server.linkSearchPlaceholder')"
+              />
+            </div>
+            <div v-if="!allComponents.length" class="text-sm text-gray-400">{{ t('operation.common.empty') }}</div>
+            <div v-else-if="!filteredLinkComponents.length" class="text-sm text-gray-400">{{ t('operation.server.linkSearchEmpty') }}</div>
+            <div v-else class="max-h-48 space-y-2 overflow-y-auto rounded border border-gray-100 p-3 dark:border-white/10">
+              <label v-for="c in filteredLinkComponents" :key="String(c.id)" class="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  :checked="isLinkSelected(linkComponentIds, c.id)"
+                  @change="toggleLinkId(linkComponentIds, c.id, ($event.target as HTMLInputElement).checked)"
+                />
+                <span>{{ c.componentName }}</span>
+                <span class="text-gray-400">· {{ c.serverIp || '-' }} · {{ c.port || '-' }}</span>
+              </label>
+            </div>
+          </section>
+        </template>
+      </div>
       <div v-else-if="topology" class="space-y-6">
         <div class="rounded-lg border border-gray-100 p-4 dark:border-white/10">
           <HealthStatusBadge :status="topology.server?.status" />
@@ -320,7 +533,18 @@ onMounted(loadList)
         </section>
       </div>
       <template #footer>
-        <button type="button" class="btn-ghost" @click="closeTopology">{{ t('operation.common.cancel') }}</button>
+        <template v-if="linksEditing">
+          <button type="button" class="btn-ghost" :disabled="linksSaving" @click="cancelEditLinks">{{ t('operation.common.cancel') }}</button>
+          <button type="button" class="btn-primary" :disabled="linksSaving || linksLoading" @click="saveLinks">
+            {{ linksSaving ? t('operation.common.saving') : t('operation.common.save') }}
+          </button>
+        </template>
+        <template v-else>
+          <button v-if="canEditLinks" type="button" class="btn-ghost" @click="startEditLinks">
+            <Link2 class="h-4 w-4" /> {{ t('operation.server.editLinks') }}
+          </button>
+          <button type="button" class="btn-ghost" @click="closeTopology">{{ t('operation.common.cancel') }}</button>
+        </template>
       </template>
     </AppModal>
   </div>

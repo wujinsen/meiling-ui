@@ -18,6 +18,10 @@ export type OperationProject = {
   environment?: Environment
   remark?: string
   createTime?: string | number
+  expectedPort?: string | null
+  portMatchStatus?: number | null
+  deployRunning?: boolean | null
+  lastDeployCheckTime?: string | number | null
 }
 
 export type OperationServer = {
@@ -62,6 +66,19 @@ export type OperationServerTopology = {
   server?: OperationServer
   projects?: OperationTopologyProject[]
   components?: OperationTopologyComponent[]
+}
+
+export type OperationServerLinks = {
+  serverId?: number | string
+  projectIds?: (number | string)[]
+  componentIds?: (number | string)[]
+}
+
+export type OperationHealthProbeResult = {
+  serversProbed?: number
+  componentsProbed?: number
+  deployStatusesSynced?: number
+  serverIdsSynced?: number
 }
 
 export type OperationPlatform = {

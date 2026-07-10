@@ -3,7 +3,10 @@ import '@/styles/cockpit.css'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { probeAllHealthApi } from '@/api/operation'
 import { useCockpit } from '@/composables/useCockpit'
+import { showToast } from '@/composables/useToast'
+import { API_SUCCESS_CODE } from '@/types/api'
 import CockpitHeader from '@/views/CandlelightDragon/cockpit/components/CockpitHeader.vue'
 import CockpitKpiCard from '@/views/CandlelightDragon/cockpit/components/CockpitKpiCard.vue'
 import CockpitTrendChart from '@/views/CandlelightDragon/cockpit/components/CockpitTrendChart.vue'
@@ -21,12 +24,14 @@ import {
   Boxes,
   Layers,
   Monitor,
+  Activity,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
 const rootRef = ref<HTMLElement | null>(null)
 const isFullscreen = ref(false)
+const probingAll = ref(false)
 
 const {
   loading,
@@ -100,6 +105,25 @@ function goOps(path: string) {
   router.push(path).catch(() => {
     openDrill('ops:nav', t('cockpit.opsNavHint'))
   })
+}
+
+async function probeAllFromCockpit() {
+  probingAll.value = true
+  try {
+    const result = await probeAllHealthApi()
+    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.health.probeAllFailed'))
+    const data = result.data
+    showToast('success', t('operation.health.probeAllOk', {
+      servers: data.serversProbed ?? 0,
+      components: data.componentsProbed ?? 0,
+      deploys: data.deployStatusesSynced ?? 0,
+    }))
+    await loadOverview()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.health.probeAllFailed'))
+  } finally {
+    probingAll.value = false
+  }
 }
 </script>
 
@@ -202,6 +226,16 @@ function goOps(path: string) {
             {{ t(environmentI18nKey(item.env)) }} · {{ item.count }}
           </span>
         </div>
+        <button
+          v-if="filters.tab === 'ops'"
+          type="button"
+          class="btn-ghost mt-4 w-full justify-center text-sm"
+          :disabled="probingAll"
+          @click="probeAllFromCockpit"
+        >
+          <Activity class="h-4 w-4" :class="{ 'animate-pulse': probingAll }" />
+          {{ probingAll ? t('cockpit.ops.probeAllRunning') : t('cockpit.ops.probeAll') }}
+        </button>
       </div>
 
       <div class="card card-interactive p-5 xl:col-span-3">

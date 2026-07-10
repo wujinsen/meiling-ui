@@ -1,6 +1,6 @@
 # Wiki 治理工作台 · 前端对接说明（meiling-ui）
 
-> **读者**：meiling-ui 前端。后端 **T16a/e/g ✅** 已就绪；**T16f 待开发**。  
+> **读者**：meiling-ui 前端。后端 **T16a/e/g ✅** 已就绪；**T16f 联调验收 ✅**（2026-07-10）。  
 > **总览**：[knowledge-workbench-frontend.md](knowledge-workbench-frontend.md)  
 > **HTTP 契约总表**：[KNOWLEDGE_API.md](KNOWLEDGE_API.md) §4.6 + §8.6  
 > **产品方案**：[Wiki治理工作台产品方案.md](../../moli-knowledge/kb/wiki/guides/Wiki治理工作台产品方案.md)
@@ -372,18 +372,21 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 |----|------|------|
 | Lint：issues 按 kind 分组可勾选 | ✅ | `GovernLintPanel` |
 | Lint 后默认勾选 script+AI，不含 `dup_slug` / info | ✅ | `buildDefaultSelectedKeys` |
-| **脚本修复** metadata | 🔵 联调 | 前端已调 `script-fix`；需后端验 `missing_dates` 等 |
-| **AI 修复** 断链等 | 🔵 联调 | 依赖 `kb.llm` + `ai-batch-fix` |
-| **一键修复** `issuesBefore` → `issuesAfter` | ✅ | `runAutoFix` + Fix 面板摘要 |
-| `syncAfter=true` 后 DB 与文件一致 | 🔵 联调 | 勾选已映射；需后端 Sync + 健康体检 |
+| **脚本修复** metadata | 🟡 | API 通（空 issues→`10012`；非 script kind→0 页）；三空间无 `missing_dates` 等样例，未验写盘 |
+| **AI 修复** 断链等 | 🟡 | `ai-batch-fix` 返回 `failedPages`+401（yaml LLM key 无效）；链路通，需有效 Key 验写盘 |
+| **一键修复** `issuesBefore` → `issuesAfter` | ✅ | `moli-ops-manual`：1→218；含 `relint` 嵌套结果 |
+| `syncAfter=true` 后 DB 与文件一致 | ✅ | `auto-fix` 返回 `sync.success=true`；`POST /kb/sync/trigger` 亦通 |
 | `llmAvailable=false` 时 AI disabled，脚本可用 | ✅ | Fix 面板 + 一键可 `aiFix:false` 降级 |
 | `dup_slug` 仅手动，不进批量 API | ✅ | manual badge + 编辑页跳转 |
 | `slug_mismatch` 走 script 非 manual | ✅ | `kbWikiGovern.ts` + options 兜底 |
-| merge-hint 复制指令 | ✅ | 复制 `cursorPrompt` |
+| merge-hint 复制指令 | ✅ | `cursorPrompt` + `manualSteps` 完整 |
 | merge-hint 展示 manualSteps / 冲突 slug | ✅ | `GovernMergeHintPanel` |
 | Fix 结果 `pages[]` 明细表 | ✅ | Fix 面板表格 |
 | script-fix 后自动复检 | ✅ | `runScriptFix` → `runRelint(true)` |
 | 旁路跳转 Ingest / 健康体检 | ✅ | `KbGovernWorkflowLinks` + 复检后 CTA |
+| exitCode≠0 仍返回 issues（W8） | ✅ | `moli-ops-manual`：`exitCode=1`，218 issues |
+
+**联调记录（2026-07-10）**：空间 `moli-ops-manual`（218 issues：broken_link/orphan/missing_concept）；`govern/options` kinds 与文档一致；`merge-hint` / `sync` / `auto-fix+syncAfter` 实机通过。**阻塞**：有效 LLM API Key（同 T19d）后方可验 AI 写盘成功路径；脚本 metadata 修复需含 `missing_dates` 等 issue 的测试 wiki。
 
 ---
 
@@ -418,8 +421,8 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 | W4 | Sync 对象字段 | ✅ `KbSyncTrigger` |
 | W5 | 单独 script/ai 后是否 relint | ✅ script 后自动 relint |
 | W6 | dryRun UI | ⏸ 不做 |
-| W7 | T16f | 待后端排期 |
-| W8 | exitCode≠0 仍返回 issues | 🔵 联调 |
+| W7 | T16f | ✅ 联调验收（2026-07-10） |
+| W8 | exitCode≠0 仍返回 issues | ✅ `moli-ops-manual` exitCode=1 + 218 issues |
 
 ---
 
@@ -439,6 +442,7 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-10 | T16f 后端联调验收：lint/fix/merge-hint/sync/auto-fix+syncAfter |
 | 2026-06-28 | 代码审计：§13 验收改状态表；新增 §14 落点、§15 后端确认 |
 | 2026-06-28 | 对齐总览；补 manualOnlyKinds、merge-hint 类型、代码落点 |
 | 2026-06-27 | T16e：新增 script-fix / ai-batch-fix / auto-fix；治理页不再推荐 enrich 批量 |

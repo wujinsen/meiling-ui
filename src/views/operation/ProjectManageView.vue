@@ -5,6 +5,7 @@ import { addProjectApi, deleteProjectApi, execDeployApi, getDeployStatusApi, get
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
+import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
@@ -226,6 +227,19 @@ async function execDeploy(action: DeployExecAction) {
   }
 }
 
+function deployRunningLabel(row: OperationProject) {
+  if (!resolveDeployServiceKey(row.projectName)) return null
+  if (row.deployRunning == null) return t('operation.deploy.unknown')
+  return row.deployRunning ? t('operation.deploy.running') : t('operation.deploy.stopped')
+}
+
+function deployRunningClass(row: OperationProject) {
+  if (row.deployRunning == null) return 'border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300'
+  return row.deployRunning
+    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300'
+    : 'border-gray-200 bg-gray-50 text-gray-600 dark:border-white/10 dark:bg-white/5 dark:text-gray-300'
+}
+
 watch(() => [query.pageNum, query.pageSize], loadList)
 onMounted(loadList)
 </script>
@@ -259,14 +273,15 @@ onMounted(loadList)
 
     <div class="card p-5">
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-        <table class="w-full min-w-[1000px] text-left text-sm">
+        <table class="w-full min-w-[1180px] text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">
             <tr>
               <th class="px-4 py-3">{{ t('operation.project.projectName') }}</th>
               <th class="px-4 py-3">URL</th>
               <th class="px-4 py-3">{{ t('operation.project.serverIp') }}</th>
-              <th class="px-4 py-3">{{ t('operation.project.innerIp') }}</th>
               <th class="px-4 py-3">{{ t('operation.project.port') }}</th>
+              <th class="px-4 py-3">{{ t('operation.port.status') }}</th>
+              <th class="px-4 py-3">{{ t('operation.deploy.status') }}</th>
               <th class="px-4 py-3">{{ t('operation.project.deployPath') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.environment') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.createTime') }}</th>
@@ -274,14 +289,23 @@ onMounted(loadList)
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
-            <tr v-else-if="!list.length"><td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
+            <tr v-if="loading"><td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
+            <tr v-else-if="!list.length"><td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
             <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
               <td class="px-4 py-3 font-medium">{{ row.projectName }}</td>
               <td class="px-4 py-3"><a v-if="row.url" :href="row.url" target="_blank" class="text-brand-600 hover:underline">{{ row.url }}</a><span v-else>-</span></td>
               <td class="px-4 py-3">{{ row.serverIp || '-' }}</td>
-              <td class="px-4 py-3">{{ row.innerIp || '-' }}</td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
+              <td class="px-4 py-3"><PortMatchBadge :status="row.portMatchStatus" :expected-port="row.expectedPort" /></td>
+              <td class="px-4 py-3">
+                <span v-if="deployRunningLabel(row)" class="badge" :class="deployRunningClass(row)">
+                  {{ deployRunningLabel(row) }}
+                </span>
+                <span v-else class="text-gray-400">-</span>
+                <p v-if="row.lastDeployCheckTime && resolveDeployServiceKey(row.projectName)" class="mt-1 text-[10px] text-gray-400">
+                  {{ formatDateTime(row.lastDeployCheckTime) }}
+                </p>
+              </td>
               <td class="max-w-[160px] truncate px-4 py-3">{{ row.deployPath || '-' }}</td>
               <td class="px-4 py-3"><span class="badge bg-gray-100 dark:bg-white/10">{{ envLabel(row.environment) }}</span></td>
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>

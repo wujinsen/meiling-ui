@@ -60,9 +60,9 @@
 | 菜单 | 路由 component | 状态 | KBOPS 关联 |
 |------|----------------|------|------------|
 | 健康体检 | `knowledge/lint/index` → `KnowledgeLintView` | ✅ O1–O4 | **Sync 区增强已完成** |
-| Wiki 治理 | `knowledge/wiki-govern/index` → `KnowledgeWikiGovernView` | 🟡 主流程已有 | **T16f / KBOPS-6** W2/W4/W5/W7 polish |
+| Wiki 治理 | `knowledge/wiki-govern/index` → `KnowledgeWikiGovernView` | ✅ T16f 联调验收 | AI 写盘待 LLM Key；脚本 metadata 待样例 wiki |
 | Ingest 工作台 | `knowledge/ingest/index` → `KnowledgeIngestWorkbenchView` | ✅ 三 Tab UI | **T20f** Tab1/3 直联 + 排版 |
-| LLM 配置 | `system/kb-llm/index` 或 `knowledge/kb-llm/index` | ✅ 页面已有 | **T19d / KBOPS-7** 联调验收 |
+| LLM 配置 | `system/kb-llm/index` 或 `knowledge/kb-llm/index` | ✅ T19d 联调验收 | DB Key 加密入库待运维 `KB_LLM_CONFIG_SECRET` |
 | （P2）运维看板 | `knowledge/ops/dashboard` | 📋 规划 | KBOPS-9 |
 
 ### 3.2 标准运维闭环
@@ -175,8 +175,8 @@
 
 ### 8.2 P1 发布门槛
 
-- [ ] Wiki 治理：script-fix / auto-fix / merge-hint / syncAfter 可点通（W2/W4/W5/W7）  
-- [ ] 平台 LLM：保存、脱敏展示、test 连通（T19d）  
+- [x] Wiki 治理：script-fix / auto-fix / merge-hint / syncAfter 可点通（W2/W4/W5/W7）— 2026-07-10 API 联调；AI/脚本写盘成功路径待 LLM Key + metadata 样例  
+- [x] 平台 LLM：保存、脱敏展示、test 连通（T19d）— 2026-07-10 联调；新 Key 入库 / 清除 DB Key 待 secret + 持久化后补测  
 - [x] Ingest Tab1 上传 raw + Tab3 成品 import UI（T20f 前端）  
 - [ ] commit/publish 后 `nextSteps` 跳转治理/体检（端到端联调）  
 
@@ -209,6 +209,8 @@
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-10 | T16f Wiki 治理全链路 API 联调（lint/merge-hint/sync/auto-fix） |
+| 2026-07-10 | T19d 平台 LLM 联调验收（GET/PUT/test、权限、脱敏、provider 预设） |
 | 2026-07-10 | 前端：O1–O4、`KbSyncOpsPanel`、T20f Tab1/3 UI、治理 `KbGovernWorkflowLinks` |
 | 2026-07-09 | meiling-ui 版：从 distribute PRD 适配，补代码现状与文档地图 |
 | 2026-07-09 | distribute 初稿 |

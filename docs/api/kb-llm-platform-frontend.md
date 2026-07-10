@@ -428,27 +428,30 @@ KbPlatformLlmSettingsView
 
 ## 14. 验收清单（前端自测）
 
-- [ ] 无 `kb:platform:llm` 用户看不到菜单或 PUT/GET 报无权限
-- [ ] 进入页 GET 加载表单；`source` 标签正确
-- [ ] 选 provider 预设自动填 baseUrl/model
-- [ ] api-key 留空保存不丢已有 key（mask 不变）
-- [ ] 填新 key 保存后 mask 更新；输入框清空
-- [ ] **测试连接**：保存前用表单值可测通/测失败
-- [ ] **清除 DB Key**：二次确认后 `persistedInDatabase=false`，若 yaml 有 key 则 `source=yaml_fallback`
-- [ ] 保存后 Ask 页 LLM 开关变为可用（无需重启后端）
-- [ ] i18n zh/en/ja 三套键齐全
+- [x] 无 `kb:platform:llm` 用户看不到菜单或 PUT/GET 报无权限 — `zhangsan` GET `code=10012`「无权管理平台 LLM 配置」；有权限用户侧栏可见 **LLM Settings**
+- [x] 进入页 GET 加载表单；`source` 标签正确 — admin GET 返回 `source=yaml_fallback`、`apiKeyMask=****LzM0`、状态条展示正常
+- [x] 选 provider 预设自动填 baseUrl/model — `index.vue` `PROVIDER_PRESETS` + `watch(form.provider)`（代码 + 页面结构）
+- [x] api-key 留空保存不丢已有 key（mask 不变） — PUT 仅改 model/extraModels 后 `apiKeyMask` 仍为 `****LzM0`
+- [ ] 填新 key 保存后 mask 更新；输入框清空 — **环境阻塞**：服务端未配置 `KB_LLM_CONFIG_SECRET`，PUT 返回 `code=10012`；前端 `resolvePageAlert` → `error.secretMissing` 全页告警 ✅
+- [x] **测试连接**：保存前用表单值可测通/测失败 — POST test 返回 `success=false` + `error`（当前 yaml key 401）/ 成功时 toast + 结果卡
+- [ ] **清除 DB Key**：二次确认后 `persistedInDatabase=false` — **待补测**：当前 `persistedInDatabase=false`（Key 仅在 yaml），无「清除 DB Key」按钮；逻辑与 Mock 已覆盖
+- [x] 保存后 Ask 页 LLM 开关变为可用（无需重启后端） — 保存前后 `GET /kb/ask/llm-config` 均为 `available=true`
+- [x] i18n zh/en/ja 三套键齐全 — `src/i18n/locales/{zh,en,ja}.ts` → `system.kbLlm.*`
+
+**联调记录（2026-07-10）**：`moli-knowledge-server :8090` + `meiling-ui :5141`（`VITE_USE_MOCK_KNOWLEDGE` 未设 = 直联）。**T19d 前端验收通过**；运维侧配置 `KB_LLM_CONFIG_SECRET` 后可补测「新 Key 入库」与「清除 DB Key」两条。
 
 ---
 
-## 15. 相关文件（meiling-ui 待增/改）
+## 15. 相关文件（meiling-ui）
 
-| 文件 | 动作 |
+| 文件 | 状态 |
 |------|------|
-| `src/views/system/kb-llm/index.vue` 或 `KbPlatformLlmSettingsView.vue` | **新建** |
-| `src/api/knowledge.ts` | 增 3 个 API 函数 |
-| `src/types/knowledge.ts` | 增 §4 类型 |
-| `src/constants/permissions.ts` | 增 `KB_PLATFORM_LLM` |
-| `src/locales/**/system.json`（或等价） | 增 `system.kbLlm.*` |
+| `src/views/system/kb-llm/index.vue` | ✅ |
+| `src/api/knowledge.ts` | ✅ 3 个 API |
+| `src/types/knowledge.ts` | ✅ §4 类型 |
+| `src/constants/permissions.ts` | ✅ `KB_PLATFORM_LLM` |
+| `src/i18n/locales/{zh,en,ja}.ts` | ✅ `system.kbLlm.*` |
+| `src/router/viewRegistry.ts` | ✅ `knowledge/kb-llm/index` |
 
 路由由后端 **动态菜单** 加载（`component: system/kb-llm/index`），一般**不必**改 `router` 静态表；若本地 dev 需静态 fallback，参考其它 `system/*` 页。
 
