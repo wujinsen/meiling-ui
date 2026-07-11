@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerLinksApi, getServerTopologyApi, listComponentApi, listProjectApi, listServerApi, probeAllHealthApi, saveServerLinksApi, updateServerApi } from '@/api/operation'
+import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerLinksApi, getServerTopologyApi, listComponentApi, listProjectApi, listServerApi, saveServerLinksApi, updateServerApi } from '@/api/operation'
+import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import ServerSshModal from '@/components/operation/ServerSshModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
+import { useProbeAllHealth } from '@/composables/useProbeAllHealth'
 import { confirm } from '@/composables/useConfirm'
 import { guardAction, assertAction } from '@/composables/useActionPermissions'
 import { PERM } from '@/constants/permissions'
@@ -15,6 +17,7 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
+import { OPERATION_ERR_SERVER_TASK_RUNNING } from '@/constants/operationErrors'
 import { createEmptyServer, type OperationComponent, type OperationProject, type OperationServer, type OperationServerTopology } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
 import { Activity, GitBranch, KeyRound, Link2, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
@@ -44,7 +47,6 @@ const allProjects = ref<OperationProject[]>([])
 const allComponents = ref<OperationComponent[]>([])
 const linkProjectSearch = ref('')
 const linkComponentSearch = ref('')
-const probingAll = ref(false)
 const sshModalOpen = ref(false)
 const sshServerId = ref<string | number | null>(null)
 const sshServerName = ref('')
@@ -131,6 +133,18 @@ async function loadList() {
   }
 }
 
+const {
+  drawerOpen: taskDrawerOpen,
+  task: taskDetail,
+  logText: taskLogText,
+  polling: taskPolling,
+  openTask,
+  closeDrawer: closeTaskDrawer,
+  probeAll,
+  busy: probingAll,
+  resolveErrorMessage,
+} = useProbeAllHealth({ onFinished: loadList })
+
 function openCreate() {
   if (!guardAction(PERM.OP_SERVER_ADD)) return
   form.value = createEmptyServer()
@@ -203,7 +217,15 @@ async function checkRow(row: OperationServer) {
   checkingId.value = row.id
   try {
     const result = await checkServerApi(row.id)
-    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.health.checkFailed'))
+    if (result.code === OPERATION_ERR_SERVER_TASK_RUNNING) {
+      showToast('error', resolveErrorMessage(result.code, result.msg))
+      const taskRef = result.data
+      if (typeof taskRef === 'number' || typeof taskRef === 'string') openTask(taskRef)
+      return
+    }
+    if (result.code !== API_SUCCESS_CODE || !result.data || typeof result.data !== 'object') {
+      throw new Error(resolveErrorMessage(result.code, result.msg) || t('operation.health.checkFailed'))
+    }
     const idx = list.value.findIndex((item) => String(item.id) === String(row.id))
     if (idx >= 0) list.value[idx] = { ...list.value[idx], ...result.data }
     showToast('success', t('operation.health.checkOk'))
@@ -321,25 +343,6 @@ async function saveLinks() {
   }
 }
 
-async function probeAll() {
-  probingAll.value = true
-  try {
-    const result = await probeAllHealthApi()
-    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.health.probeAllFailed'))
-    const data = result.data
-    showToast('success', t('operation.health.probeAllOk', {
-      servers: data.serversProbed ?? 0,
-      components: data.componentsProbed ?? 0,
-      deploys: data.deployStatusesSynced ?? 0,
-    }))
-    await loadList()
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('operation.health.probeAllFailed'))
-  } finally {
-    probingAll.value = false
-  }
-}
-
 function closeTopology() {
   topologyOpen.value = false
   topology.value = null
@@ -370,8 +373,10 @@ onMounted(loadList)
             <span>{{ t('operation.common.environment') }}</span>
             <EnvironmentSelect v-model="query.environment" include-all />
           </div>
-          <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
-          <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
+          <div class="operation-form-actions">
+            <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
+            <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
+          </div>
         </form>
         <div class="toolbar-actions">
           <button type="button" class="btn-ghost shrink-0" :disabled="probingAll" @click="probeAll">
@@ -579,6 +584,14 @@ onMounted(loadList)
       :server-name="sshServerName"
       @close="closeSshModal"
       @saved="onSshSaved"
+    />
+
+    <DeployTaskDrawer
+      :open="taskDrawerOpen"
+      :task="taskDetail"
+      :log-text="taskLogText"
+      :polling="taskPolling"
+      @close="closeTaskDrawer"
     />
   </div>
 </template>

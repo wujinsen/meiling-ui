@@ -1,7 +1,7 @@
 # 用户中心 HTTP API 地图（meiling-ui · 运维域摘要）
 
 > **全量 ~70 接口**见 [`moli-project-distribute/docs/api/user-center-api-map.md`](../../moli-project-distribute/docs/api/user-center-api-map.md)（登录、RBAC、字典、日志等）。  
-> **前端对接专稿**：[operation-frontend.md](operation-frontend.md)（排期 S0–S5、枚举、UI 要点、验收表）。  
+> **前端对接专稿**：[operation-frontend.md](operation-frontend.md)（排期 S0–S9、枚举、UI 要点、验收表）。  
 > 本文 **§4** 为 meiling-ui 运营管理页联调的 HTTP 权威索引。
 
 ---
@@ -25,7 +25,8 @@
 - `GET /operation/server/{id}`：`operation:server:list`
 - `DELETE /operation/server/{ids}`：`operation:server:remove` + `list`
 - `GET /operation/server/{id}/topology`：`operation:server:list`；返回 `OperationServerTopologyVo`（server + projects + components）
-- `POST /operation/server/{id}/check`：`operation:server:list`；TCP 探活，更新并返回 `OperationServerVo`
+- `POST /operation/server/{id}/check`：`operation:server:list`；TCP 探活（异步任务化时可能返回 `code=10107` + `data=taskId`）
+- `POST /operation/health/probe-all`：`operation:server:list`；**返回 `data=taskId`**，非同步 `{ serversProbed, ... }`
 
 ### 项目管理 `OperationProjectController`（前缀 `/operation/project`，5个）
 
@@ -55,8 +56,19 @@
 
 ### 部署脚本 `OperationDeployController`（前缀 `/operation/deploy`，2个）
 
-- `GET /operation/deploy/{serviceKey}/status`：`operation:server:list`；只读调用 `moli-service.sh status`（user-center/gateway/knowledge）
-- `POST /operation/deploy/{serviceKey}/{action}`：`operation:deploy:exec` + `operation:server:list`；`status`/`logs` 只读；`start`/`stop`/`restart` 需 `ops.deploy.enabled=true`
+- `GET /operation/deploy/presets?serverId=`：`operation:server:list`；`pathPresets` · `actionPresets` · **`serviceKeys`**
+- `GET /operation/deploy/{serviceKey}/status?serverId=`：`operation:server:list`；只读 `moli-service.sh status`
+- `POST /operation/deploy/{serviceKey}/{action}?serverId=`：`operation:deploy:exec` + `list`；`start`/`stop`/`restart`
+- `POST /operation/deploy/{serviceKey}/{action}/task?serverId=`：创建异步部署任务，返回 `taskId`
+
+### 运维任务 `OperationTaskController`（前缀 `/operation/task`）
+
+- `GET /operation/task/{id}?logOffset=`：轮询进度与增量日志（`DeployTaskDrawer`）
+
+### 文件与命令（部署中心）
+
+- `POST /operation/file/upload`：`operation:file:upload`；返回 `taskId`
+- `POST /operation/command/exec/task`：`operation:command:exec`；返回 `taskId`
 
 ---
 

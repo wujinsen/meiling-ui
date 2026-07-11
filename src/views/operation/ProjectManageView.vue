@@ -3,7 +3,9 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { addProjectApi, deleteProjectApi, execDeployApi, getDeployStatusApi, getProjectApi, listProjectApi, updateProjectApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import OperationServerSelect from '@/components/operation/OperationServerSelect.vue'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import AppModal from '@/components/ui/AppModal.vue'
@@ -15,8 +17,9 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject } from '@/types/operation'
+import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject, type OperationServer } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
+import { isOperationOrphan } from '@/utils/operationOrphan'
 import { resolveDeployServiceKey } from '@/utils/operationPort'
 import { ClipboardList, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Server, Square, Trash2 } from 'lucide-vue-next'
 
@@ -36,10 +39,13 @@ const deployLoading = ref(false)
 const deployExecuting = ref(false)
 const deployTitle = ref('')
 const deployServiceKey = ref<string | null>(null)
+const deployServerId = ref<string | number | null>(null)
 const deployStatus = ref<OperationDeployStatus | null>(null)
 
 const canDeployExec = computed(() => assertAction(PERM.OP_DEPLOY_EXEC))
 const deployExecAvailable = computed(() => deployStatus.value?.available !== false)
+
+const serverIpLocked = computed(() => !isOperationOrphan(form.value.serverId))
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, projectName: '', serverIp: '', environment: '' as number | '' })
 
@@ -104,6 +110,17 @@ function closeModal() {
   form.value = createEmptyProject()
 }
 
+function onServerPick(server: OperationServer | null) {
+  if (!server) return
+  form.value.serverIp = server.ip || ''
+  form.value.innerIp = server.innerIp || ''
+}
+
+function normalizeServerId(serverId?: string | number | null) {
+  if (serverId == null || serverId === '') return undefined
+  return serverId
+}
+
 async function submitForm() {
   if (!guardAction(isEdit.value ? PERM.OP_PROJECT_EDIT : PERM.OP_PROJECT_ADD)) return
   if (!form.value.projectName?.trim()) {
@@ -115,6 +132,7 @@ async function submitForm() {
     const payload: OperationProject = {
       ...form.value,
       projectName: form.value.projectName.trim(),
+      serverId: normalizeServerId(form.value.serverId),
       url: form.value.url?.trim() || undefined,
       serverIp: form.value.serverIp?.trim() || undefined,
       innerIp: form.value.innerIp?.trim() || undefined,
@@ -152,8 +170,8 @@ function openPortAudit() {
   auditOpen.value = true
 }
 
-async function loadDeployStatus(serviceKey: string) {
-  const result = await getDeployStatusApi(serviceKey)
+async function loadDeployStatus(serviceKey: string, serverId?: string | number | null) {
+  const result = await getDeployStatusApi(serviceKey, serverId ?? undefined)
   if (result.code !== API_SUCCESS_CODE || !result.data) {
     throw new Error(result.msg || t('operation.deploy.statusFailed'))
   }
@@ -163,17 +181,23 @@ async function loadDeployStatus(serviceKey: string) {
 async function openDeployStatus(row: OperationProject) {
   const serviceKey = resolveDeployServiceKey(row.projectName)
   if (!serviceKey) return
+  if (row.serverId == null || row.serverId === '') {
+    showToast('error', t('operation.project.deployNeedsServerId'))
+    return
+  }
   deployOpen.value = true
   deployLoading.value = true
   deployTitle.value = row.projectName || serviceKey
   deployServiceKey.value = serviceKey
+  deployServerId.value = row.serverId
   deployStatus.value = null
   try {
-    await loadDeployStatus(serviceKey)
+    await loadDeployStatus(serviceKey, deployServerId.value)
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.deploy.statusFailed'))
     deployOpen.value = false
     deployServiceKey.value = null
+    deployServerId.value = null
   } finally {
     deployLoading.value = false
   }
@@ -182,6 +206,7 @@ async function openDeployStatus(row: OperationProject) {
 function closeDeployModal() {
   deployOpen.value = false
   deployServiceKey.value = null
+  deployServerId.value = null
   deployStatus.value = null
 }
 
@@ -189,7 +214,7 @@ async function refreshDeployStatus() {
   if (!deployServiceKey.value) return
   deployLoading.value = true
   try {
-    await loadDeployStatus(deployServiceKey.value)
+    await loadDeployStatus(deployServiceKey.value, deployServerId.value)
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.deploy.statusFailed'))
   } finally {
@@ -214,7 +239,7 @@ async function execDeploy(action: DeployExecAction) {
 
   deployExecuting.value = true
   try {
-    const result = await execDeployApi(deployServiceKey.value, action)
+    const result = await execDeployApi(deployServiceKey.value, action, deployServerId.value ?? undefined)
     if (result.code !== API_SUCCESS_CODE || !result.data) {
       throw new Error(result.msg || t('operation.deploy.execFailed'))
     }
@@ -261,8 +286,10 @@ onMounted(loadList)
             <span>{{ t('operation.common.environment') }}</span>
             <EnvironmentSelect v-model="query.environment" include-all />
           </div>
-          <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
-          <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
+          <div class="operation-form-actions">
+            <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
+            <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
+          </div>
         </form>
         <div class="toolbar-actions">
           <button type="button" class="btn-ghost shrink-0" @click="openPortAudit"><ClipboardList class="h-4 w-4" /> {{ t('operation.port.audit') }}</button>
@@ -291,8 +318,19 @@ onMounted(loadList)
           <tbody>
             <tr v-if="loading"><td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
             <tr v-else-if="!list.length"><td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
-            <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
-              <td class="px-4 py-3 font-medium">{{ row.projectName }}</td>
+            <tr
+              v-for="row in list"
+              v-else
+              :key="String(row.id)"
+              class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5"
+              :class="isOperationOrphan(row.serverId) && 'operation-table-row--orphan'"
+            >
+              <td class="px-4 py-3 font-medium">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="truncate">{{ row.projectName }}</span>
+                  <OperationOrphanBadge :show="isOperationOrphan(row.serverId)" />
+                </div>
+              </td>
               <td class="px-4 py-3"><a v-if="row.url" :href="row.url" target="_blank" class="text-brand-600 hover:underline">{{ row.url }}</a><span v-else>-</span></td>
               <td class="px-4 py-3">{{ row.serverIp || '-' }}</td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
@@ -311,7 +349,14 @@ onMounted(loadList)
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
               <td class="px-4 py-3">
                 <div class="btn-action-group flex-wrap justify-end">
-                  <button v-if="resolveDeployServiceKey(row.projectName)" type="button" class="btn-action-edit" @click="openDeployStatus(row)">
+                  <button
+                    v-if="resolveDeployServiceKey(row.projectName)"
+                    type="button"
+                    class="btn-action-edit"
+                    :disabled="row.serverId == null || row.serverId === ''"
+                    :title="row.serverId == null || row.serverId === '' ? t('operation.project.deployNeedsServerId') : undefined"
+                    @click="openDeployStatus(row)"
+                  >
                     <Server class="h-3.5 w-3.5" />{{ t('operation.deploy.status') }}
                   </button>
                   <button type="button" class="btn-action-edit" @click="openEdit(row)"><Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}</button>
@@ -338,11 +383,21 @@ onMounted(loadList)
             </FormField>
           </div>
           <div class="form-grid-row">
+            <FormField :label="t('operation.common.linkServer')" horizontal class="form-field-span-2">
+              <OperationServerSelect
+                v-model="form.serverId"
+                :environment="form.environment"
+                @select="onServerPick"
+              />
+              <p class="mt-1 text-xs text-gray-400">{{ t('operation.common.serverIpFromServer') }}</p>
+            </FormField>
+          </div>
+          <div class="form-grid-row">
             <FormField :label="t('operation.project.serverIp')" horizontal>
-              <input v-model="form.serverIp" class="field-input" />
+              <input v-model="form.serverIp" class="field-input" :readonly="serverIpLocked" />
             </FormField>
             <FormField :label="t('operation.project.innerIp')" horizontal>
-              <input v-model="form.innerIp" class="field-input" />
+              <input v-model="form.innerIp" class="field-input" :readonly="serverIpLocked" />
             </FormField>
           </div>
           <div class="form-grid-row">

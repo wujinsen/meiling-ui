@@ -4,7 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { addComponentApi, checkComponentApi, deleteComponentApi, getComponentApi, listComponentApi, revealComponentSecretApi, updateComponentApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
+import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import OperationServerSelect from '@/components/operation/OperationServerSelect.vue'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import SecretManageModal from '@/components/operation/SecretManageModal.vue'
@@ -17,8 +19,9 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { createEmptyComponent, type OperationComponent } from '@/types/operation'
+import { createEmptyComponent, type OperationComponent, type OperationServer } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
+import { isOperationOrphan } from '@/utils/operationOrphan'
 import { Pencil, Plus, RefreshCw, Search, Trash2, Activity, ClipboardList, KeyRound } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -39,6 +42,8 @@ const secretSaving = ref(false)
 const secretRow = ref<OperationComponent | null>(null)
 
 const canManagePassword = computed(() => assertOperationSecretEdit(PERM.OP_COMPONENT_EDIT))
+
+const serverIpLocked = computed(() => !isOperationOrphan(form.value.serverId))
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, componentName: '', serverIp: '', environment: '' as number | '' })
 
@@ -106,6 +111,16 @@ function closeModal() {
   passwordInput.value = ''
 }
 
+function onServerPick(server: OperationServer | null) {
+  if (!server) return
+  form.value.serverIp = server.ip || ''
+}
+
+function normalizeServerId(serverId?: string | number | null) {
+  if (serverId == null || serverId === '') return undefined
+  return serverId
+}
+
 async function submitForm() {
   if (!guardAction(isEdit.value ? PERM.OP_COMPONENT_EDIT : PERM.OP_COMPONENT_ADD)) return
   if (!form.value.componentName?.trim()) {
@@ -117,6 +132,7 @@ async function submitForm() {
     const payload: OperationComponent = {
       ...form.value,
       componentName: form.value.componentName.trim(),
+      serverId: normalizeServerId(form.value.serverId),
       serverIp: form.value.serverIp?.trim() || undefined,
       account: form.value.account?.trim() || undefined,
       deployPath: form.value.deployPath?.trim() || undefined,
@@ -218,8 +234,10 @@ onMounted(loadList)
             <span>{{ t('operation.common.environment') }}</span>
             <EnvironmentSelect v-model="query.environment" include-all />
           </div>
-          <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
-          <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
+          <div class="operation-form-actions">
+            <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
+            <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
+          </div>
         </form>
         <div class="toolbar-actions">
           <button type="button" class="btn-ghost shrink-0" @click="auditOpen = true"><ClipboardList class="h-4 w-4" /> {{ t('operation.port.audit') }}</button>
@@ -248,8 +266,19 @@ onMounted(loadList)
           <tbody>
             <tr v-if="loading"><td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
             <tr v-else-if="!list.length"><td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
-            <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
-              <td class="px-4 py-3 font-medium">{{ row.componentName }}</td>
+            <tr
+              v-for="row in list"
+              v-else
+              :key="String(row.id)"
+              class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5"
+              :class="isOperationOrphan(row.serverId) && 'operation-table-row--orphan'"
+            >
+              <td class="px-4 py-3 font-medium">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="truncate">{{ row.componentName }}</span>
+                  <OperationOrphanBadge :show="isOperationOrphan(row.serverId)" />
+                </div>
+              </td>
               <td class="px-4 py-3">{{ row.serverIp || '-' }}</td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
               <td class="px-4 py-3"><PortMatchBadge :status="row.portMatchStatus" :expected-port="row.expectedPort" /></td>
@@ -292,8 +321,18 @@ onMounted(loadList)
             </FormField>
           </div>
           <div class="form-grid-row">
+            <FormField :label="t('operation.common.linkServer')" horizontal class="form-field-span-2">
+              <OperationServerSelect
+                v-model="form.serverId"
+                :environment="form.environment"
+                @select="onServerPick"
+              />
+              <p class="mt-1 text-xs text-gray-400">{{ t('operation.common.serverIpFromServer') }}</p>
+            </FormField>
+          </div>
+          <div class="form-grid-row">
             <FormField :label="t('operation.component.serverIp')" horizontal>
-              <input v-model="form.serverIp" class="field-input" />
+              <input v-model="form.serverIp" class="field-input" :readonly="serverIpLocked" />
             </FormField>
             <FormField :label="t('operation.component.port')" horizontal>
               <input v-model="form.port" class="field-input" />

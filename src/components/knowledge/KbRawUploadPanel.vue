@@ -146,16 +146,19 @@ function goIngest() {
         </div>
 
         <div
-          class="rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors"
-          :class="dragOver ? 'border-brand-400 bg-brand-50/50 dark:bg-brand-500/10' : 'border-gray-200 dark:border-white/10'"
+          class="app-upload-dropzone"
+          :class="[
+            dragOver && 'app-upload-dropzone--active',
+            !canUpload && 'app-upload-dropzone--disabled',
+          ]"
           @dragover.prevent="dragOver = canUpload"
           @dragleave.prevent="dragOver = false"
           @drop.prevent="onDrop"
         >
-          <Upload class="mx-auto h-8 w-8 text-gray-400" />
-          <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">{{ t('knowledge.ingest.rawUpload.dropHint') }}</p>
-          <p class="mt-1 text-xs text-gray-400">{{ t('knowledge.ingest.rawUpload.fileLimit') }}</p>
-          <label class="btn-ghost mt-3 inline-flex cursor-pointer text-sm" :class="!canUpload && 'pointer-events-none opacity-50'">
+          <Upload class="app-upload-dropzone-icon" />
+          <p class="app-upload-dropzone-hint">{{ t('knowledge.ingest.rawUpload.dropHint') }}</p>
+          <p class="text-xs text-gray-400">{{ t('knowledge.ingest.rawUpload.fileLimit') }}</p>
+          <label class="btn-upload-pick" :class="!canUpload && 'is-disabled'">
             {{ t('knowledge.ingest.rawUpload.pickFiles') }}
             <input type="file" class="sr-only" multiple accept=".md,.markdown,.txt" :disabled="!canUpload" @change="onFileChange" />
           </label>

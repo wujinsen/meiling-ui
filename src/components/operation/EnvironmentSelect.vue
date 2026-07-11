@@ -8,6 +8,8 @@ const model = defineModel<number | '' | undefined>({ default: '' })
 
 const props = defineProps<{
   includeAll?: boolean
+  /** 传给 AppSelect：false 时宽度随内容 */
+  block?: boolean
 }>()
 
 const { t } = useI18n()
@@ -31,5 +33,5 @@ const options = computed(() => {
 </script>
 
 <template>
-  <AppSelect v-model="model" :options="options" />
+  <AppSelect v-model="model" :options="options" :block="block ?? true" />
 </template>

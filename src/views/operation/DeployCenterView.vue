@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   createCommandTaskApi,
   createDeployTaskApi,
   getDeployPresetsApi,
   getDeployStatusApi,
-  listServerApi,
   uploadFileApi,
 } from '@/api/operation'
+import DeployServerPicker from '@/components/operation/DeployServerPicker.vue'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
@@ -21,7 +21,6 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import {
   MOLI_DEPLOY_SERVICES,
   type DeployExecAction,
-  type MoliDeployServiceKey,
   type OperationDeployPresetItem,
   type OperationDeployStatus,
   type OperationServer,
@@ -33,15 +32,15 @@ import { Loader2, Play, RefreshCw, RotateCcw, Square, Terminal, Upload } from 'l
 const { t } = useI18n()
 const { drawerOpen, task, logText, polling, openTask, closeDrawer } = useOperationTaskPoll()
 
-const servers = ref<OperationServer[]>([])
-const serversLoading = ref(false)
 const selectedServerId = ref<string>('')
+const selectedServer = ref<OperationServer | null>(null)
 const statusMap = ref<Record<string, OperationDeployStatus | null>>({})
 const statusLoading = ref(false)
 const actionLoading = ref<string | null>(null)
 
 const pathPresets = ref<string[]>([])
 const actionPresets = ref<OperationDeployPresetItem[]>([])
+const deployServiceKeys = ref<string[]>([...MOLI_DEPLOY_SERVICES])
 const presetsLoading = ref(false)
 
 const uploadFile = ref<File | null>(null)
@@ -61,9 +60,9 @@ const canDeployExec = computed(() => assertAction(PERM.OP_DEPLOY_EXEC))
 const canFileUpload = computed(() => assertAction(PERM.OP_FILE_UPLOAD))
 const canCommandExec = computed(() => assertAction(PERM.OP_COMMAND_EXEC))
 
-const selectedServer = computed(() =>
-  servers.value.find((s) => String(s.id) === selectedServerId.value) ?? null,
-)
+function onServerSelect(server: OperationServer) {
+  selectedServer.value = server
+}
 
 const pathPresetOptions = computed(() =>
   pathPresets.value.map((p) => ({ value: p, label: p })),
@@ -81,22 +80,9 @@ const postModeOptions = computed(() => [
   { value: 'custom' as UploadPostMode, label: t('operation.deployCenter.postModeCustom') },
 ])
 
-async function loadServers() {
-  serversLoading.value = true
-  try {
-    const result = await listServerApi({ pageNum: 1, pageSize: 200 })
-    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.loadFailed'))
-    servers.value = result.data.list ?? []
-    if (!selectedServerId.value && servers.value.length) {
-      const pro = servers.value.find((s) => s.environment === 4) ?? servers.value[0]
-      selectedServerId.value = String(pro?.id ?? '')
-    }
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('operation.server.loadFailed'))
-  } finally {
-    serversLoading.value = false
-  }
-}
+const activeDeployServices = computed(() =>
+  deployServiceKeys.value.length ? deployServiceKeys.value : [...MOLI_DEPLOY_SERVICES],
+)
 
 async function loadPresets() {
   presetsLoading.value = true
@@ -106,6 +92,9 @@ async function loadPresets() {
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.deployCenter.presetsFailed'))
     pathPresets.value = result.data.pathPresets ?? []
     actionPresets.value = result.data.actionPresets ?? []
+    deployServiceKeys.value = result.data.serviceKeys?.length
+      ? result.data.serviceKeys
+      : [...MOLI_DEPLOY_SERVICES]
     if (!uploadTarget.value && pathPresets.value.length) {
       uploadTarget.value = pathPresets.value[0]
     }
@@ -124,7 +113,7 @@ async function refreshAllStatus() {
   const sid = selectedServerId.value || undefined
   try {
     await Promise.all(
-      MOLI_DEPLOY_SERVICES.map(async (key) => {
+      activeDeployServices.value.map(async (key) => {
         const result = await getDeployStatusApi(key, sid)
         if (result.code === API_SUCCESS_CODE && result.data) {
           statusMap.value[key] = result.data
@@ -150,26 +139,20 @@ watch(pathPresetPick, (p) => {
   if (p) uploadTarget.value = p
 })
 
-onMounted(async () => {
-  await loadServers()
-  if (selectedServerId.value) {
-    await loadPresets()
-    await refreshAllStatus()
-  }
-})
-
-function serviceLabel(key: MoliDeployServiceKey) {
-  return t(`operation.deployCenter.service.${key}`)
+function serviceLabel(key: string) {
+  const i18nKey = `operation.deployCenter.service.${key}`
+  const label = t(i18nKey)
+  return label === i18nKey ? key : label
 }
 
-function runningLabel(key: MoliDeployServiceKey) {
+function runningLabel(key: string) {
   const st = statusMap.value[key]
   if (st?.running === true) return t('operation.deploy.running')
   if (st?.running === false) return t('operation.deploy.stopped')
   return t('operation.deploy.unknown')
 }
 
-async function runDeployAction(key: MoliDeployServiceKey, action: DeployExecAction) {
+async function runDeployAction(key: string, action: DeployExecAction) {
   if (!guardAction(PERM.OP_DEPLOY_EXEC)) return
   if (
     !(await confirm({
@@ -206,8 +189,13 @@ function onUploadFileChange(event: Event) {
 
 function onUploadDrop(event: DragEvent) {
   uploadDragOver.value = false
+  if (!canFileUpload.value) return
   const f = event.dataTransfer?.files?.[0]
   if (f) uploadFile.value = f
+}
+
+function clearUploadFile() {
+  uploadFile.value = null
 }
 
 function resolveUploadPost(): { postAction: UploadPostAction; postCommand?: string } {
@@ -322,32 +310,8 @@ async function submitRemoteCommand() {
       </template>
     </OperationPageHeader>
 
-    <div class="mt-6 grid gap-6 lg:grid-cols-[240px_1fr]">
-      <aside class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900/40">
-        <h2 class="mb-3 text-sm font-semibold">{{ t('operation.deployCenter.serverList') }}</h2>
-        <div v-if="serversLoading" class="py-6 text-center text-sm text-gray-400">{{ t('operation.common.loading') }}</div>
-        <div v-else class="space-y-1">
-          <button
-            v-for="srv in servers"
-            :key="String(srv.id)"
-            type="button"
-            class="w-full rounded-lg px-3 py-2 text-left text-sm transition"
-            :class="
-              selectedServerId === String(srv.id)
-                ? 'bg-blue-50 font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                : 'hover:bg-gray-50 dark:hover:bg-white/5'
-            "
-            @click="selectedServerId = String(srv.id)"
-          >
-            <div>{{ srv.serverName }}</div>
-            <div class="text-xs text-gray-400">
-              {{ srv.innerIp || srv.ip || '-' }}
-              <span v-if="srv.sshConfigured" class="ml-1 text-emerald-600">SSH</span>
-            </div>
-          </button>
-        </div>
-        <p v-if="!servers.length && !serversLoading" class="text-sm text-gray-400">{{ t('operation.common.empty') }}</p>
-      </aside>
+    <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(17rem,280px)_1fr]">
+      <DeployServerPicker v-model="selectedServerId" @select="onServerSelect" />
 
       <div class="space-y-6">
         <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900/40">
@@ -358,7 +322,7 @@ async function submitRemoteCommand() {
           <div v-if="!selectedServerId" class="text-sm text-gray-400">{{ t('operation.deployCenter.selectServer') }}</div>
           <div v-else class="grid gap-4 md:grid-cols-3">
             <div
-              v-for="key in MOLI_DEPLOY_SERVICES"
+              v-for="key in activeDeployServices"
               :key="key"
               class="rounded-lg border border-gray-100 p-4 dark:border-white/10"
             >
@@ -367,7 +331,7 @@ async function submitRemoteCommand() {
               <div class="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  class="btn-ghost text-xs"
+                  class="btn-secondary text-xs"
                   :disabled="!canDeployExec || actionLoading === `${key}:start`"
                   @click="runDeployAction(key, 'start')"
                 >
@@ -375,7 +339,7 @@ async function submitRemoteCommand() {
                 </button>
                 <button
                   type="button"
-                  class="btn-ghost text-xs"
+                  class="btn-secondary text-xs"
                   :disabled="!canDeployExec || actionLoading === `${key}:stop`"
                   @click="runDeployAction(key, 'stop')"
                 >
@@ -383,7 +347,7 @@ async function submitRemoteCommand() {
                 </button>
                 <button
                   type="button"
-                  class="btn-ghost text-xs"
+                  class="btn-secondary text-xs"
                   :disabled="!canDeployExec || actionLoading === `${key}:restart`"
                   @click="runDeployAction(key, 'restart')"
                 >
@@ -398,16 +362,28 @@ async function submitRemoteCommand() {
         <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900/40">
           <h2 class="mb-4 text-sm font-semibold">{{ t('operation.deployCenter.uploadTitle') }}</h2>
           <div
-            class="mb-4 rounded-lg border-2 border-dashed p-6 text-center transition"
-            :class="uploadDragOver ? 'border-blue-400 bg-blue-50/50' : 'border-gray-200 dark:border-white/10'"
-            @dragover.prevent="uploadDragOver = true"
-            @dragleave="uploadDragOver = false"
+            class="app-upload-dropzone"
+            :class="[
+              uploadDragOver && 'app-upload-dropzone--active',
+              !canFileUpload && 'app-upload-dropzone--disabled',
+            ]"
+            @dragover.prevent="uploadDragOver = canFileUpload"
+            @dragleave.prevent="uploadDragOver = false"
             @drop.prevent="onUploadDrop"
           >
-            <Upload class="mx-auto mb-2 h-8 w-8 text-gray-400" />
-            <p class="text-sm text-gray-500">{{ t('operation.deployCenter.uploadHint') }}</p>
-            <input type="file" class="mt-3 text-sm" :disabled="!canFileUpload" @change="onUploadFileChange" />
-            <p v-if="uploadFile" class="mt-2 text-sm font-medium">{{ uploadFile.name }} ({{ Math.round(uploadFile.size / 1024) }} KB)</p>
+            <Upload class="app-upload-dropzone-icon" />
+            <p class="app-upload-dropzone-hint">{{ t('operation.deployCenter.uploadHint') }}</p>
+            <label class="btn-upload-pick" :class="!canFileUpload && 'is-disabled'">
+              {{ t('operation.deployCenter.pickFile') }}
+              <input type="file" class="sr-only" :disabled="!canFileUpload" @change="onUploadFileChange" />
+            </label>
+          </div>
+          <div v-if="uploadFile" class="app-upload-file-chip">
+            <span class="app-upload-file-chip__name">{{ uploadFile.name }}</span>
+            <span class="app-upload-file-chip__meta">{{ Math.round(uploadFile.size / 1024) }} KB</span>
+            <button type="button" class="app-upload-file-chip__clear" :disabled="uploading" @click="clearUploadFile">
+              {{ t('operation.common.clear') }}
+            </button>
           </div>
           <div class="space-y-4">
             <label class="block text-sm">
@@ -448,6 +424,7 @@ async function submitRemoteCommand() {
             @click="submitUpload"
           >
             <Loader2 v-if="uploading" class="h-4 w-4 animate-spin" />
+            <Upload v-else class="h-4 w-4" />
             {{ uploading ? t('operation.deployCenter.uploading') : t('operation.deployCenter.uploadSubmit') }}
           </button>
           <p v-if="!canFileUpload" class="mt-2 text-xs text-amber-600">{{ t('operation.deployCenter.noUploadPermission') }}</p>

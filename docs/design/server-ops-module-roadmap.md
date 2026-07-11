@@ -1,6 +1,6 @@
 # 服务器运维模块 · 演进规划（技术端运维）
 
-> 更新：2026-07-09 · 状态：**P0 安全已落地**（SVR-1/2/3）；**P1 可观测已落地**（SVR-4/5/6）；**P2 联动已落地**（SVR-7/8 + 驾驶舱统计）  
+> 更新：2026-07-11 · 状态：**P0–P2 已落地**；**前端 Breaking 对齐**（S7 异步探活 · S4 serverId · S9 serviceKeys · 10107）  
 > 归属：`moli-user-center` · `operation_*` 表 · 菜单「运营/运维管理」(id 400)  
 > 边界：**只管服务器/基础设施资产运维**；知识库内容管道运维见 [knowledge-ops-frontend.md](../api/knowledge-ops-frontend.md)（另一条独立路线，互不重叠）  
 > **浏览镜像**：工程契约权威仍在 `moli-project-distribute/docs/design/server-ops-module-roadmap.md`；改设计请先改 distribute 再同步本文件。
@@ -110,5 +110,5 @@
 
 - 表结构：`moli-project-distribute/docs/sql/USER_CENTER_SCHEMA.md` §2.3
 - API 地图：[user-center-api-map.md](../api/user-center-api-map.md) §4
-- **前端对接**：[operation-frontend.md](../api/operation-frontend.md)（枚举、TypeScript、联调 checklist、验收 S0–S5）
+- **前端对接**：[operation-frontend.md](../api/operation-frontend.md)（枚举、TypeScript、联调 checklist、验收 S0–S9）
 - 加密参考：`moli-project-distribute/docs/design/kb-llm-platform-settings.md` §3.3

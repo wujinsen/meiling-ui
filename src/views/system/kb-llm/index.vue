@@ -7,6 +7,7 @@ import {
   testKbPlatformLlmConfigApi,
 } from '@/api/knowledge'
 import AppSwitch from '@/components/ui/AppSwitch.vue'
+import AppSelect from '@/components/ui/AppSelect.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { confirm } from '@/composables/useConfirm'
 import { guardAction } from '@/composables/useActionPermissions'
@@ -31,6 +32,13 @@ const PROVIDER_PRESETS: Record<Exclude<LlmProvider, 'custom'>, { baseUrl: string
 }
 
 const PROVIDER_OPTIONS: LlmProvider[] = ['deepseek', 'qwen', 'glm', 'custom']
+
+const providerOptions = computed(() =>
+  PROVIDER_OPTIONS.map((p) => ({
+    value: p,
+    label: t(`system.kbLlm.provider.${p}`),
+  })),
+)
 
 const loading = ref(false)
 const saving = ref(false)
@@ -371,11 +379,7 @@ onMounted(loadConfig)
 
           <div class="form-grid-row">
             <FormField :label="t('system.kbLlm.field.provider')" horizontal>
-              <select v-model="form.provider" class="field-input">
-                <option v-for="p in PROVIDER_OPTIONS" :key="p" :value="p">
-                  {{ t(`system.kbLlm.provider.${p}`) }}
-                </option>
-              </select>
+              <AppSelect v-model="form.provider" :options="providerOptions" />
             </FormField>
             <FormField :label="t('system.kbLlm.field.model')" horizontal required>
               <input v-model="form.model" type="text" class="field-input" list="kb-llm-model-list" />

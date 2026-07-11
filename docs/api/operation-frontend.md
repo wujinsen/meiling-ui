@@ -8,7 +8,7 @@
 
 ---
 
-## 0. meiling-ui 代码落点（2026-07-09）
+## 0. meiling-ui 代码落点（2026-07-11）
 
 | 任务 | 页面 / 组件 | API / 工具 | 状态 |
 |------|-------------|------------|------|
@@ -16,11 +16,16 @@
 | **S1** 探测 | `ServerManageView` · `ComponentManageView` · `HealthStatusBadge` | `checkServerApi` · `checkComponentApi` · `operationHealth.ts` | ✅ |
 | **S2** 拓扑 | `ServerManageView` 拓扑弹窗 | `getServerTopologyApi` | ✅ |
 | **S3** 端口 | `PortAuditModal` · `PortMatchBadge` | `getPortAuditApi` · `operationPort.ts` | ✅ |
-| **S4** 部署 | `ProjectManageView` 进程状态弹窗 | `getDeployStatusApi` · `execDeployApi` · `resolveDeployServiceKey()` | ✅ |
+| **S4** 部署 | `ProjectManageView` 进程状态弹窗 | `getDeployStatusApi(serverId)` · `execDeployApi` · `resolveDeployServiceKey()` | ✅ |
 | **S5** 驾驶舱 | `CandlelightDragon/cockpit/index` · `useCockpit` | `getOperationStatsApi`（`cockpit.ts`） | ✅ |
-| 公共 | `EnvironmentSelect` · `OperationPageHeader` | `src/types/operation.ts` · `src/api/operation.ts` | ✅ |
+| **S6** 部署中心 | `DeployCenterView` · `DeployServerPicker` · `DeployTaskDrawer` | `getDeployPresetsApi` · `createDeployTaskApi` · `uploadFileApi` | ✅ |
+| **S7** 批量探活 | `ServerManageView` · 驾驶舱 ops | `probeAllHealthApi` → `taskId` · `useProbeAllHealth` · `useOperationTaskPoll` | ✅ |
+| **S9** 动态 serviceKey | `DeployCenterView` | `getDeployPresetsApi().serviceKeys`（回退 `MOLI_DEPLOY_SERVICES`） | ✅ |
+| **S10** serverId 表单 | `ProjectManageView` · `ComponentManageView` · `OperationServerSelect` | 提交 `serverId`；IP 由台账对齐 | ✅ |
+| **S11** orphan 标记 | `OperationOrphanBadge` · `operationOrphan.ts` | 列表 `serverId` 为空时徽章 + 行底色 | ✅ |
+| 公共 | `EnvironmentSelect` · `OperationPageHeader` · `AppSelect` | `src/types/operation.ts` · `src/api/operation.ts` · `operationErrors.ts` | ✅ |
 
-权限常量：`src/constants/permissions.ts` → `PERM.OP_*` · `OP_SECRET_VIEW` · `OP_DEPLOY_EXEC`。
+权限常量：`src/constants/permissions.ts` → `PERM.OP_*` · `OP_SECRET_VIEW` · `OP_DEPLOY_EXEC` · `OP_FILE_UPLOAD` · `OP_COMMAND_EXEC`。
 
 ---
 
@@ -108,7 +113,25 @@
 
 矩阵服务名与期望端口见 [§7](#7-端口矩阵对照表)。常量见 `src/utils/operationPort.ts` · 展示 `PortMatchBadge`。
 
-### 3.4 密码字段（平台 / 组件）
+**`expectedPort` 来源**：后端端口矩阵（如 `moli-server` → 期望 `8888`），**非前端写死**；前端仅展示接口返回的 `expectedPort`。
+
+### 3.4 运维错误码 `10101`–`10109`
+
+| code | 常量 | 典型场景 | 前端 |
+|------|------|----------|------|
+| `10101` | SSH 未配置 | 远程操作前未配 SSH | `operation.errors.10101` |
+| `10102` | SSH 连接失败 | 网络/凭据错误 | `operation.errors.10102` |
+| `10103` | 部署脚本不可用 | 本机无 `moli-service.sh` | `operation.errors.10103` |
+| `10104` | 上传路径拒绝 | 不在白名单 | `operation.errors.10104` |
+| `10105` | 任务不存在 | 任务 ID 无效 | `operation.errors.10105` |
+| `10106` | 服务器不存在 | ID 无效 | `operation.errors.10106` |
+| `10107` | 服务器任务进行中 | 单台 `check` 与批量探活/部署互斥 | Toast + 若有 `data=taskId` 打开 `DeployTaskDrawer` |
+| `10108` | 命令权限不足 | 无 `operation:command:exec` | `operation.errors.10108` |
+| `10109` | 本机部署未启用 | `ops.deploy.enabled=false` | `operation.errors.10109` |
+
+映射：`src/constants/operationErrors.ts` · `operationErrorI18nKey()`。
+
+### 3.5 密码字段（平台 / 组件）
 
 | 场景 | 行为 |
 |------|------|
@@ -260,14 +283,16 @@ export type OperationPortAudit = {
 | **S3-2** | 组件列表行内 `portMatchStatus` / `expectedPort`（`GET list` 已 enrichment） |
 | **S3-3** | `portMatchStatus === 2` 高亮；项目列表暂无行内字段，以弹窗为准 |
 
-### 6.2 部署进程状态（S4，只读默认）
+### 6.2 部署进程状态（S4）
 
 ```http
-GET  /operation/deploy/{serviceKey}/status
-POST /operation/deploy/{serviceKey}/{action}   # 变更动作见下
+GET  /operation/deploy/{serviceKey}/status?serverId={id}
+POST /operation/deploy/{serviceKey}/{action}?serverId={id}
 ```
 
-**`serviceKey` 白名单**：`user-center` | `gateway` | `knowledge`
+**`serviceKey`**：默认白名单 `user-center` | `gateway` | `knowledge`；部署中心从 `getDeployPresetsApi().serviceKeys` 动态渲染（S9）。
+
+**`serverId`（Breaking）**：项目行「进程状态」必须传台账 `project.serverId`；无 `serverId` 时按钮禁用并提示 `operation.project.deployNeedsServerId`。
 
 **项目名 → serviceKey 映射（`src/utils/operationPort.ts` · `resolveDeployServiceKey`）**：
 
@@ -292,11 +317,39 @@ export type OperationDeployStatus = {
 
 | ID | UI |
 |----|-----|
-| **S4-1** | 可映射的项目行显示「进程状态」；调 `getDeployStatusApi` |
+| **S4-1** | 可映射的项目行显示「进程状态」；`getDeployStatusApi(key, row.serverId)` |
 | **S4-2** | `available === false` 时展示 `message`（Windows 开发机 / 脚本不存在等） |
-| **S4-3** | 进程状态弹窗内 **启动 / 停止 / 重启**（`execDeployApi`）；需 `operation:deploy:exec` + 二次确认；`available === false` 时仅展示说明 |
+| **S4-3** | 进程状态弹窗内 **启动 / 停止 / 重启**（`execDeployApi` + `serverId`）；需 `operation:deploy:exec` |
 
-### 6.3 驾驶舱 ops KPI（S5）
+### 6.3 批量探活异步任务（S7）
+
+```http
+POST /operation/health/probe-all    # 返回 data = taskId（number），非同步统计
+GET  /operation/task/{id}           # 轮询进度与增量日志
+```
+
+| ID | UI |
+|----|-----|
+| **S7-1** | `ServerManageView` / 驾驶舱 ops「批量探活」→ `useProbeAllHealth` 创建任务并打开 `DeployTaskDrawer` |
+| **S7-2** | 任务完成后自动刷新列表 / 驾驶舱 stats；Toast：`probeAllStarted` → `probeAllFinished` |
+| **S7-3** | 单台 `POST .../check` 若返回 `10107` 且 `data=taskId`，提示并打开同一任务抽屉 |
+
+### 6.4 部署中心（S6 / S9）
+
+```http
+GET  /operation/deploy/presets?serverId={id}   # pathPresets · actionPresets · serviceKeys
+POST /operation/deploy/{key}/{action}/task?serverId={id}
+POST /operation/file/upload
+POST /operation/command/exec/task
+```
+
+| ID | UI |
+|----|-----|
+| **S6-1** | `DeployServerPicker`：搜索 / 环境筛选 / 分页（百台级服务器） |
+| **S6-2** | 文件发布：`app-upload-dropzone` + 任务抽屉 |
+| **S9-1** | moli 服务卡片按 `presets.serviceKeys` 渲染，无则回退 `MOLI_DEPLOY_SERVICES` |
+
+### 6.5 驾驶舱 ops KPI（S5）
 
 ```http
 GET /operation/stats
@@ -368,31 +421,22 @@ import type {
 // CRUD：/operation/project|server|platform|component — list|get|add|update|remove
 
 export const checkServerApi = (id: number | string) =>
-  request<OperationServer>(`/operation/server/${id}/check`, { method: 'POST' })
+  request<OperationServer | number>(`/operation/server/${id}/check`, { method: 'POST' })
 
-export const checkComponentApi = (id: number | string) =>
-  request<OperationComponent>(`/operation/component/${id}/check`, { method: 'POST' })
+export const probeAllHealthApi = () =>
+  request<number>('/operation/health/probe-all', { method: 'POST', timeoutMs: 15_000 })
 
-export const getServerTopologyApi = (id: number | string) =>
-  request<OperationServerTopology>(`/operation/server/${id}/topology`, { method: 'GET' })
+export const getDeployStatusApi = (serviceKey: string, serverId?: number | string | null) => {
+  const qs = serverId != null && serverId !== '' ? `?serverId=${serverId}` : ''
+  return request<OperationDeployStatus>(`/operation/deploy/${serviceKey}/status${qs}`, { method: 'GET', timeoutMs: 30_000 })
+}
 
-export const revealPlatformSecretApi = (id: number | string) =>
-  request<OperationSecretReveal>(`/operation/platform/${id}/secret`, { method: 'GET' })
+export const getDeployPresetsApi = (serverId?: number | string | null) => {
+  const qs = serverId != null && serverId !== '' ? `?serverId=${serverId}` : ''
+  return request<OperationDeployPresets>(`/operation/deploy/presets${qs}`, { method: 'GET' })
+}
 
-export const revealComponentSecretApi = (id: number | string) =>
-  request<OperationSecretReveal>(`/operation/component/${id}/secret`, { method: 'GET' })
-
-export const getPortAuditApi = () =>
-  request<OperationPortAudit>('/operation/audit/port-matrix', { method: 'GET' })
-
-export const getOperationStatsApi = () =>
-  request<OperationStats>('/operation/stats', { method: 'GET' })
-
-export const getDeployStatusApi = (serviceKey: string) =>
-  request<OperationDeployStatus>(`/operation/deploy/${serviceKey}/status`, { method: 'GET' })
-
-export const execDeployApi = (serviceKey: string, action: DeployExecAction) =>
-  request<OperationDeployStatus>(`/operation/deploy/${serviceKey}/${action}`, { method: 'POST' })
+// OperationDeployPresets.serviceKeys?: string[]  — 部署中心动态服务列表（S9）
 ```
 
 ---
@@ -409,6 +453,8 @@ export const execDeployApi = (serviceKey: string, action: DeployExecAction) =>
 | 6 | 服务器 id=201：拓扑含关联项目与组件 |
 | 7 | 端口校验：`mismatched >= 1`（种子 moli-server 9080） |
 | 8 | 驾驶舱 ops：`/operation/stats` 计数与库内台账一致 |
+| 9 | 批量探活：返回 `taskId`，抽屉轮询至 `finished`，列表自动刷新 |
+| 10 | 项目进程状态：有 `serverId` 的项目可查询；部署中心 `serviceKeys` 与 presets 一致 |
 
 ---
 
@@ -419,9 +465,14 @@ export const execDeployApi = (serviceKey: string, action: DeployExecAction) =>
 | S0 | 密码 | 列表无明文；reveal 受权限控制；空密码更新保留原值 |
 | S1 | 探测 | 行内探测更新状态灯；失败 Toast |
 | S2 | 拓扑 | 弹窗展示 projects + components；空列表友好提示 |
-| S3 | 端口 | 弹窗汇总与明细正确；组件列 badge 与 audit 一致 |
-| S4 | 部署 | status 只读可查；不可用时 message 可读 |
+| S3 | 端口 | 弹窗汇总与明细正确；组件/项目列 badge 展示 `expectedPort`（后端矩阵） |
+| S4 | 部署 | `getDeployStatusApi` 带 `serverId`；无 serverId 禁用按钮 |
 | S5 | 驾驶舱 | ops KPI 使用真实 stats，非纯 Mock |
+| S6 | 部署中心 | 服务器分页选择；上传/命令/启停走任务抽屉 |
+| S7 | 批量探活 | 异步 taskId + 轮询；完成后刷新 |
+| S9 | serviceKeys | 部署中心服务列表来自 presets，非仅前端常量 |
+| S10 | serverId 表单 | 项目/组件弹窗 `OperationServerSelect`；提交 `serverId` |
+| S11 | orphan 标记 | `serverId` 为空时列表琥珀色徽章 + 行底色 |
 
 ---
 

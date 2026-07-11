@@ -3,15 +3,14 @@ import '@/styles/cockpit.css'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { probeAllHealthApi } from '@/api/operation'
+import { useProbeAllHealth } from '@/composables/useProbeAllHealth'
 import { useCockpit } from '@/composables/useCockpit'
-import { showToast } from '@/composables/useToast'
-import { API_SUCCESS_CODE } from '@/types/api'
 import CockpitHeader from '@/views/CandlelightDragon/cockpit/components/CockpitHeader.vue'
 import CockpitKpiCard from '@/views/CandlelightDragon/cockpit/components/CockpitKpiCard.vue'
 import CockpitTrendChart from '@/views/CandlelightDragon/cockpit/components/CockpitTrendChart.vue'
 import CockpitDonut from '@/views/CandlelightDragon/cockpit/components/CockpitDonut.vue'
 import CockpitDrillDrawer from '@/views/CandlelightDragon/cockpit/components/CockpitDrillDrawer.vue'
+import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import { environmentI18nKey } from '@/utils/operationEnv'
 import {
   AlertTriangle,
@@ -31,7 +30,6 @@ const { t } = useI18n()
 const router = useRouter()
 const rootRef = ref<HTMLElement | null>(null)
 const isFullscreen = ref(false)
-const probingAll = ref(false)
 
 const {
   loading,
@@ -47,6 +45,16 @@ const {
   openDrill,
   closeDrill,
 } = useCockpit()
+
+const {
+  drawerOpen: taskDrawerOpen,
+  task: taskDetail,
+  logText: taskLogText,
+  polling: taskPolling,
+  closeDrawer: closeTaskDrawer,
+  probeAll: probeAllFromCockpit,
+  busy: probingAll,
+} = useProbeAllHealth({ onFinished: loadOverview })
 
 const funnelIcons = {
   users: Users,
@@ -105,25 +113,6 @@ function goOps(path: string) {
   router.push(path).catch(() => {
     openDrill('ops:nav', t('cockpit.opsNavHint'))
   })
-}
-
-async function probeAllFromCockpit() {
-  probingAll.value = true
-  try {
-    const result = await probeAllHealthApi()
-    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.health.probeAllFailed'))
-    const data = result.data
-    showToast('success', t('operation.health.probeAllOk', {
-      servers: data.serversProbed ?? 0,
-      components: data.componentsProbed ?? 0,
-      deploys: data.deployStatusesSynced ?? 0,
-    }))
-    await loadOverview()
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('operation.health.probeAllFailed'))
-  } finally {
-    probingAll.value = false
-  }
 }
 </script>
 
@@ -304,6 +293,14 @@ async function probeAllFromCockpit() {
       :rows="drillRows"
       :loading="drillLoading"
       @close="closeDrill"
+    />
+
+    <DeployTaskDrawer
+      :open="taskDrawerOpen"
+      :task="taskDetail"
+      :log-text="taskLogText"
+      :polling="taskPolling"
+      @close="closeTaskDrawer"
     />
   </div>
 </template>

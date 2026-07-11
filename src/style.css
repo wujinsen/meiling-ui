@@ -103,25 +103,114 @@
   }
 
   .btn-primary {
-    @apply inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-brand-500/20 transition;
+    @apply hover:bg-brand-700 hover:shadow-md hover:shadow-brand-500/25 active:bg-brand-800;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+    @apply disabled:cursor-not-allowed disabled:bg-brand-400 disabled:opacity-60 disabled:shadow-none disabled:hover:bg-brand-400;
+    @apply dark:focus-visible:ring-offset-gray-950;
   }
 
   .btn-danger {
-    @apply inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white shadow-sm shadow-red-500/20 transition;
+    @apply hover:bg-red-700 hover:shadow-md hover:shadow-red-500/25 active:bg-red-800;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+    @apply disabled:cursor-not-allowed disabled:bg-red-400 disabled:opacity-60 disabled:shadow-none disabled:hover:bg-red-400;
+    @apply dark:focus-visible:ring-offset-gray-950;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition;
+    @apply hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+    @apply disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:bg-white disabled:hover:text-gray-700;
+    @apply dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10 dark:hover:text-brand-300;
+    @apply dark:disabled:hover:border-white/10 dark:disabled:hover:bg-white/5 dark:disabled:hover:text-gray-200 dark:focus-visible:ring-offset-gray-950;
   }
 
   .btn-ghost {
-    @apply inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100;
-    @apply dark:text-gray-300 dark:hover:bg-white/5;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-transparent px-3 py-1.5 text-sm font-medium text-gray-600 transition;
+    @apply hover:border-gray-200/80 hover:bg-gray-100 hover:text-gray-900;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+    @apply disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-transparent disabled:hover:bg-transparent;
+    @apply dark:text-gray-300 dark:hover:border-white/10 dark:hover:bg-white/5 dark:hover:text-white;
+    @apply dark:disabled:hover:border-transparent dark:disabled:hover:bg-transparent dark:focus-visible:ring-offset-gray-950;
   }
 
   .toolbar-actions {
-    @apply inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200/80 bg-gray-50/60 p-1;
+    @apply inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-200/80 bg-gray-50/60 p-1 shadow-sm;
     @apply dark:border-white/10 dark:bg-white/[0.03];
   }
 
   .toolbar-actions .btn-primary {
-    @apply py-1.5;
+    @apply py-1.5 shadow-none hover:shadow-sm;
+  }
+
+  .toolbar-actions .btn-ghost {
+    @apply border-transparent bg-transparent shadow-none hover:border-white/80 hover:bg-white hover:shadow-sm;
+    @apply dark:hover:border-white/10 dark:hover:bg-white/10;
+  }
+
+  .operation-form-actions {
+    @apply inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-200/80 bg-gray-50/60 p-1 shadow-sm;
+    @apply dark:border-white/10 dark:bg-white/[0.03];
+  }
+
+  .operation-form-actions .btn-primary {
+    @apply py-1.5 shadow-none hover:shadow-sm;
+  }
+
+  .operation-form-actions .btn-ghost {
+    @apply border-transparent bg-transparent shadow-none hover:border-white/80 hover:bg-white hover:shadow-sm;
+    @apply dark:hover:border-white/10 dark:hover:bg-white/10;
+  }
+
+  .btn-upload-pick {
+    @apply btn-secondary mt-3 cursor-pointer shadow-sm hover:shadow;
+  }
+
+  .btn-upload-pick.is-disabled {
+    @apply pointer-events-none opacity-50;
+  }
+
+  .app-upload-dropzone {
+    @apply flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed border-brand-200 bg-brand-50/40 px-4 py-8 text-center transition;
+    @apply hover:border-brand-400 hover:bg-brand-50/70;
+    @apply dark:border-brand-500/30 dark:bg-brand-500/5 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/10;
+  }
+
+  .app-upload-dropzone--active {
+    @apply border-brand-500 bg-brand-50 shadow-inner shadow-brand-500/10;
+    @apply dark:border-brand-400 dark:bg-brand-500/15;
+  }
+
+  .app-upload-dropzone--disabled {
+    @apply cursor-not-allowed opacity-60 hover:border-brand-200 hover:bg-brand-50/40;
+    @apply dark:hover:border-brand-500/30 dark:hover:bg-brand-500/5;
+  }
+
+  .app-upload-dropzone-icon {
+    @apply h-9 w-9 text-brand-400 dark:text-brand-300;
+  }
+
+  .app-upload-dropzone-hint {
+    @apply mt-1 text-sm text-gray-600 dark:text-gray-300;
+  }
+
+  .app-upload-file-chip {
+    @apply mb-4 flex items-center justify-between gap-3 rounded-lg border border-brand-200/80 bg-brand-50/60 px-3 py-2 text-sm;
+    @apply dark:border-brand-500/25 dark:bg-brand-500/10;
+  }
+
+  .app-upload-file-chip__name {
+    @apply min-w-0 truncate font-medium text-gray-800 dark:text-gray-100;
+  }
+
+  .app-upload-file-chip__meta {
+    @apply shrink-0 text-xs text-gray-500 dark:text-gray-400;
+  }
+
+  .app-upload-file-chip__clear {
+    @apply btn-ghost shrink-0 px-2 py-1 text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400;
   }
 
   .btn-tree-toggle {
@@ -715,7 +804,7 @@
   }
 
   .page-header-card {
-    @apply overflow-hidden p-0;
+    @apply overflow-visible p-0;
   }
 
   .page-header-top {
@@ -744,6 +833,122 @@
 
   .operation-filter-field .field-input {
     @apply w-auto min-w-[8.5rem];
+  }
+
+  .deploy-server-picker {
+    @apply flex min-h-0 min-w-0 flex-col rounded-xl border border-gray-100 bg-white p-4 shadow-sm;
+    @apply dark:border-white/10 dark:bg-gray-900/40;
+  }
+
+  .deploy-server-picker__head {
+    @apply mb-3 flex items-start justify-between gap-2;
+  }
+
+  .deploy-server-picker__title {
+    @apply text-sm font-semibold text-gray-900 dark:text-white;
+  }
+
+  .deploy-server-picker__meta {
+    @apply shrink-0 text-xs text-gray-400;
+  }
+
+  .deploy-server-picker__filters {
+    @apply mb-3 space-y-2;
+  }
+
+  .deploy-server-picker__search {
+    @apply relative;
+  }
+
+  .deploy-server-picker__search-icon {
+    @apply pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400;
+  }
+
+  .deploy-server-picker__search-input {
+    @apply w-full py-1.5 pl-8 pr-3 text-sm;
+  }
+
+  .deploy-server-picker__env {
+    @apply flex items-center gap-2;
+  }
+
+  .deploy-server-picker__env-label {
+    @apply shrink-0 text-xs text-gray-500 dark:text-gray-400;
+  }
+
+  .deploy-server-picker__env .kb-space-dropdown {
+    @apply min-w-0 flex-1 sm:min-w-0;
+  }
+
+  .deploy-server-picker__list {
+    @apply -mx-1 max-h-[min(52vh,28rem)] space-y-1 overflow-y-auto px-1;
+  }
+
+  .deploy-server-picker__item {
+    @apply relative w-full rounded-lg px-3 py-2 text-left text-sm transition;
+    @apply hover:bg-gray-50 dark:hover:bg-white/5;
+  }
+
+  .deploy-server-picker__item--active {
+    @apply bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300;
+  }
+
+  .deploy-server-picker__item--pinned {
+    @apply mb-2 border border-brand-200/80 dark:border-brand-500/25;
+  }
+
+  .deploy-server-picker__item-top {
+    @apply flex items-start justify-between gap-2;
+  }
+
+  .deploy-server-picker__name {
+    @apply min-w-0 truncate;
+  }
+
+  .deploy-server-picker__env-badge {
+    @apply shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500;
+    @apply dark:bg-white/10 dark:text-gray-400;
+  }
+
+  .deploy-server-picker__item--active .deploy-server-picker__env-badge {
+    @apply bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-300;
+  }
+
+  .deploy-server-picker__sub {
+    @apply mt-0.5 text-xs text-gray-400;
+  }
+
+  .deploy-server-picker__ssh {
+    @apply ml-1 text-emerald-600 dark:text-emerald-400;
+  }
+
+  .deploy-server-picker__pinned-tag {
+    @apply mt-1 inline-block text-[10px] font-medium uppercase tracking-wide text-brand-600 dark:text-brand-300;
+  }
+
+  .deploy-server-picker__state {
+    @apply py-8 text-center text-sm text-gray-400;
+  }
+
+  .deploy-server-picker__pagination {
+    @apply mt-3 border-t border-gray-100 pt-3 dark:border-white/5;
+  }
+
+  .deploy-server-picker__pagination > div {
+    @apply flex-col items-stretch gap-2;
+  }
+
+  .deploy-server-picker__pagination > div > div {
+    @apply justify-center;
+  }
+
+  .operation-orphan-badge {
+    @apply inline-flex shrink-0 items-center rounded-full border border-amber-200/90 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700;
+    @apply dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300;
+  }
+
+  .operation-table-row--orphan {
+    @apply bg-amber-50/30 dark:bg-amber-500/[0.04];
   }
 
   .cockpit-filter-bar {
@@ -867,6 +1072,10 @@
     @apply relative min-w-[12rem] max-w-full sm:min-w-[16rem];
   }
 
+  .kb-space-dropdown--inline {
+    @apply inline-block min-w-0 w-auto;
+  }
+
   .kb-space-dropdown-trigger {
     @apply flex w-full cursor-pointer items-center justify-between gap-2 py-2 pl-3 pr-3 text-left text-sm;
   }
@@ -883,6 +1092,12 @@
     @apply absolute left-0 top-[calc(100%+0.375rem)] z-[90] max-h-64 min-w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg;
     @apply dark:border-white/10 dark:bg-surface-dark-card;
     width: max(100%, 14rem);
+  }
+
+  /* Teleport 到 body 时勿用 min-w-full / max(100%)，宽度由触发按钮 inline 决定 */
+  .kb-space-dropdown-panel.kb-space-dropdown-panel--portal {
+    @apply fixed z-[120] min-w-0 max-w-none;
+    width: auto;
   }
 
   .kb-space-dropdown-item {

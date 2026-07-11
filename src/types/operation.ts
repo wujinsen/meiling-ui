@@ -103,6 +103,7 @@ export type OperationPlatform = {
 
 export type OperationComponent = {
   id?: number | string
+  serverId?: number | string
   componentName?: string
   serverIp?: string
   account?: string
@@ -130,6 +131,7 @@ export type ProjectQuery = PageQuery & {
 export type ServerQuery = PageQuery & {
   serverName?: string
   ip?: string
+  environment?: Environment
 }
 
 export type PlatformQuery = PageQuery & {
@@ -142,7 +144,7 @@ export type ComponentQuery = PageQuery & {
 }
 
 export function createEmptyProject(): OperationProject {
-  return { projectName: '', url: '', serverIp: '', innerIp: '', port: '', deployPath: '', environment: 1, remark: '' }
+  return { projectName: '', serverId: '', url: '', serverIp: '', innerIp: '', port: '', deployPath: '', environment: 1, remark: '' }
 }
 
 export function createEmptyServer(): OperationServer {
@@ -156,6 +158,7 @@ export function createEmptyPlatform(): OperationPlatform {
 export function createEmptyComponent(): OperationComponent {
   return {
     componentName: '',
+    serverId: '',
     serverIp: '',
     account: '',
     password: '',
@@ -288,6 +291,8 @@ export type OperationDeployPresetItem = {
 export type OperationDeployPresets = {
   pathPresets: string[]
   actionPresets: OperationDeployPresetItem[]
+  /** 当前服务器可用的 deploy serviceKey 列表（S9） */
+  serviceKeys?: string[]
 }
 
 export type OperationCommandExec = {

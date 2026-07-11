@@ -15,7 +15,6 @@ import type {
   OperationCommandExec,
   OperationDeployPresets,
   OperationDeployStatus,
-  OperationHealthProbeResult,
   OperationSshTest,
   OperationTask,
   TaskQuery,
@@ -78,7 +77,7 @@ export const deleteServerApi = server.remove
 export const getServerTopologyApi = (id: number | string) =>
   request<OperationServerTopology>(`/operation/server/${id}/topology`, { method: 'GET' })
 export const checkServerApi = (id: number | string) =>
-  request<OperationServer>(`/operation/server/${id}/check`, { method: 'POST' })
+  request<OperationServer | number>(`/operation/server/${id}/check`, { method: 'POST' })
 export const getServerLinksApi = (id: number | string) =>
   request<OperationServerLinks>(`/operation/server/${id}/links`, { method: 'GET' })
 export const saveServerLinksApi = (id: number | string, body: OperationServerLinks) =>
@@ -88,7 +87,7 @@ export const saveServerSshApi = (id: number | string, body: OperationServerSsh) 
 export const testServerSshApi = (id: number | string) =>
   request<OperationSshTest>(`/operation/server/${id}/ssh/test`, { method: 'POST', timeoutMs: 30_000 })
 export const probeAllHealthApi = () =>
-  request<OperationHealthProbeResult>('/operation/health/probe-all', { method: 'POST' })
+  request<number>('/operation/health/probe-all', { method: 'POST', timeoutMs: 15_000 })
 
 export const listPlatformApi = (params?: PlatformQuery) => platform.list(params as Record<string, string | number | undefined>)
 export const getPlatformApi = platform.get

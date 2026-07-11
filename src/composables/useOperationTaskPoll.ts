@@ -5,6 +5,10 @@ import type { OperationTask } from '@/types/operation'
 
 const POLL_MS = 1500
 
+type OpenTaskOptions = {
+  onFinished?: (task: import('@/types/operation').OperationTask) => void | Promise<void>
+}
+
 /**
  * 运维异步任务轮询（SVR-14）：进度条 + 增量日志。
  */
@@ -16,6 +20,7 @@ export function useOperationTaskPoll() {
   const polling = ref(false)
   let logOffset = 0
   let timer: ReturnType<typeof setInterval> | null = null
+  let onFinished: OpenTaskOptions['onFinished']
 
   function stopPoll() {
     if (timer != null) {
@@ -39,14 +44,21 @@ export function useOperationTaskPoll() {
       }
       if (result.data.finished) {
         stopPoll()
+        if (onFinished) {
+          const cb = onFinished
+          onFinished = undefined
+          await cb(result.data)
+        }
       }
     } catch {
       stopPoll()
+      onFinished = undefined
     }
   }
 
-  function openTask(id: number | string) {
+  function openTask(id: number | string, options?: OpenTaskOptions) {
     stopPoll()
+    onFinished = options?.onFinished
     taskId.value = id
     logOffset = 0
     logText.value = ''
@@ -59,6 +71,7 @@ export function useOperationTaskPoll() {
 
   function closeDrawer() {
     stopPoll()
+    onFinished = undefined
     drawerOpen.value = false
     taskId.value = null
     task.value = null
