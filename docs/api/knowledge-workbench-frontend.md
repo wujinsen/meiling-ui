@@ -13,7 +13,7 @@
 | **P0** | Ingest 工作台 | `knowledge/ingest/index` | ✅ T15+T18+T19+T20 | ✅ **三 Tab + Tab1/3 UI** | [ingest-workbench-frontend.md](ingest-workbench-frontend.md) · [kb-import-entry-frontend.md](kb-import-entry-frontend.md) |
 | **P0** | Wiki 治理 | `knowledge/wiki-govern/index` | ✅ T16a/e/g/f | ✅ **T16f 联调验收** | [wiki-govern-frontend.md §13](wiki-govern-frontend.md#13-验收清单前端自测) |
 | P1 | Wiki 编辑 | `knowledge/wiki/edit` | ✅ T14 | ✅ 已有 | KNOWLEDGE_API §8 |
-| P1 | 健康体检 | `knowledge/lint/index` | ✅ | ✅ Sync **O1–O4** | [knowledge-ops-frontend.md §3](knowledge-ops-frontend.md#3-p0--健康体检页-sync-增强o1o4) · KNOWLEDGE_API §4 |
+| P1 | 健康体检 | `knowledge/lint/index` | ✅ | ✅ **O1–O4 + O9** | [knowledge-ops-frontend.md §3 / §3.8](knowledge-ops-frontend.md#38-p0--健康体检--定时-scan-状态可见o9) · KNOWLEDGE_API §4 |
 
 **网关前缀**：`{VITE_API_BASE_URL}/KnowledgeServer` + 下表路径（如 `/kb/wiki/lint-space`）。
 
@@ -230,6 +230,7 @@ export interface KbWorkflowHintVo {
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-12 | §1 健康体检标 **O1–O4 + O9**；对接文档链至 knowledge-ops §3.8 |
 | 2026-06-26 | §8.3 对齐 `10012` + `IngestRawConflictVo` + `llmFallback` Toast |
 | 2026-06-28 | §8.3 补 B4 commit 门禁（对齐 KNOWLEDGE_API · ops §2.6）；§7.3 B2/B4 标已结论 |
 | 2026-06-28 | §7.4 前端优先级；§8.2–§8.5 后端结论（接口不变） |

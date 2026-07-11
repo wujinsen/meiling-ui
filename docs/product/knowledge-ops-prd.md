@@ -59,7 +59,7 @@
 
 | 菜单 | 路由 component | 状态 | KBOPS 关联 |
 |------|----------------|------|------------|
-| 健康体检 | `knowledge/lint/index` → `KnowledgeLintView` | ✅ O1–O4 | **Sync 区增强已完成** |
+| 健康体检 | `knowledge/lint/index` → `KnowledgeLintView` | ✅ O1–O4 + **O9** | Sync 区 + 质量 Tab 定时 scan 状态条 |
 | Wiki 治理 | `knowledge/wiki-govern/index` → `KnowledgeWikiGovernView` | ✅ T16f 联调 + E2E AI 写盘 | 脚本 metadata 待含 `missing_dates` 样例 wiki |
 | Ingest 工作台 | `knowledge/ingest/index` → `KnowledgeIngestWorkbenchView` | ✅ 三 Tab UI | **T20f** Tab1/3 直联 + 排版 |
 | LLM 配置 | `system/kb-llm/index` 或 `knowledge/kb-llm/index` | ✅ T19d 联调验收 | DB Key 加密入库待运维 `KB_LLM_CONFIG_SECRET` |
@@ -209,6 +209,7 @@
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-12 | 健康体检 **O9**：质量 Tab 展示 `kb.lint.schedule-enabled`、最近 scan 落库、待处理工单数（`KbLintScanStatusBar`） |
 | 2026-07-10 | T16f Wiki 治理全链路 API 联调（lint/merge-hint/sync/auto-fix） |
 | 2026-07-10 | T19d 平台 LLM 联调验收（GET/PUT/test、权限、脱敏、provider 预设） |
 | 2026-07-10 | 前端：O1–O4、`KbSyncOpsPanel`、T20f Tab1/3 UI、治理 `KbGovernWorkflowLinks` |
