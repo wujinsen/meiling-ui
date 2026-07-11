@@ -1122,6 +1122,98 @@
     @apply min-w-[12rem] flex-1;
   }
 
+  .operation-server-filter {
+    @apply relative flex min-w-0 flex-1 items-stretch gap-1;
+  }
+
+  .operation-server-filter__trigger {
+    @apply field-input flex min-w-0 flex-1 items-center gap-2 py-2 text-left text-sm;
+  }
+
+  .operation-server-filter__clear {
+    @apply inline-flex shrink-0 items-center justify-center rounded-md border border-gray-200 px-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 dark:border-white/10 dark:hover:bg-white/5;
+  }
+
+  .operation-server-pick-modal {
+    @apply space-y-3;
+  }
+
+  .operation-server-pick-modal__all {
+    @apply w-full rounded-lg border border-gray-200 px-3 py-2 text-left text-sm transition hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5;
+  }
+
+  .operation-server-pick-modal__all--active {
+    @apply border-brand-300 bg-brand-50/70 text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300;
+  }
+
+  .operation-server-pick-modal__filters {
+    @apply flex flex-col gap-3 sm:flex-row sm:items-end;
+  }
+
+  .operation-server-pick-modal__search {
+    @apply relative min-w-0 flex-1;
+  }
+
+  .operation-server-pick-modal__search-icon {
+    @apply pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400;
+  }
+
+  .operation-server-pick-modal__search-input {
+    @apply pl-9;
+  }
+
+  .operation-server-pick-modal__env {
+    @apply flex shrink-0 items-center gap-2;
+  }
+
+  .operation-server-pick-modal__env-label {
+    @apply whitespace-nowrap text-xs text-gray-500;
+  }
+
+  .operation-server-pick-modal__list {
+    @apply max-h-72 space-y-1 overflow-y-auto;
+  }
+
+  .operation-server-pick-modal__item {
+    @apply relative w-full rounded-lg border border-transparent px-3 py-2.5 text-left transition hover:border-gray-200 hover:bg-gray-50 dark:hover:border-white/10 dark:hover:bg-white/5;
+  }
+
+  .operation-server-pick-modal__item--active {
+    @apply border-brand-300 bg-brand-50/70 dark:border-brand-500/30 dark:bg-brand-500/10;
+  }
+
+  .operation-server-pick-modal__item--pinned {
+    @apply mb-2 border-dashed;
+  }
+
+  .operation-server-pick-modal__item-top {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  .operation-server-pick-modal__name {
+    @apply truncate font-medium;
+  }
+
+  .operation-server-pick-modal__env-badge {
+    @apply shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-white/10;
+  }
+
+  .operation-server-pick-modal__sub {
+    @apply mt-1 truncate text-xs text-gray-500;
+  }
+
+  .operation-server-pick-modal__pinned-tag {
+    @apply absolute right-2 top-2 text-[10px] text-brand-600 dark:text-brand-400;
+  }
+
+  .operation-server-pick-modal__state {
+    @apply py-8 text-center text-sm text-gray-400;
+  }
+
+  .operation-server-pick-modal__pagination {
+    @apply pt-1;
+  }
+
   .cockpit-filter-bar {
     @apply flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3;
   }

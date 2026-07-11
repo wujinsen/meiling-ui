@@ -22,8 +22,8 @@
 | **S6** 部署中心 | `DeployCenterView` · `DeployServerPicker` · `DeployTaskDrawer` | `getDeployPresetsApi` · `createDeployTaskApi` · `uploadFileApi` | ✅ |
 | **S7** 批量探活 | `ServerManageView` · 驾驶舱 ops | `probeAllHealthApi` → `taskId` · `useProbeAllHealth` · `useOperationTaskPoll` | ✅ |
 | **S9** 动态 serviceKey | `DeployCenterView` | `getDeployPresetsApi().serviceKeys`（回退 `MOLI_DEPLOY_SERVICES`） | ✅ |
-| **S6-b** 多选服务器 | `ProjectManageView` · `ComponentManageView` · `OperationServerMultiSelect` | 提交 `serverIds`（首项主服务器）；`GET/PUT .../project|component/{id}/links` | ✅ |
-| **S10** serverId 表单 | `ProjectManageView` · `ComponentManageView` · `OperationServerMultiSelect` | 多选 `serverIds` + 主 `serverId`；IP 由台账对齐 | ✅ |
+| **S6-b** 多选服务器 | `ProjectManageView` · `ComponentManageView` · `OperationServerLinksModal` | 列表行「关联服务器」；分页搜索多选；`PUT .../links` | ✅ |
+| **S10** serverId 表单 | `ProjectManageView` · `ComponentManageView` | 编辑弹窗仅 IP；关联在列表独立弹窗 | ✅ |
 | **S11** orphan 标记 | `OperationOrphanBadge` · `operationOrphan.ts` · `operationServerLinks.ts` | 无关联服务器时徽章 + 行底色（含 `serverIds` 为空） | ✅ |
 | **S12** 端口矩阵 | `PortMatrixManageView` · `OperationPortMatrixAliasInput` | CRUD + 审计弹窗「管理端口矩阵」 | ✅ |
 | **S13** 任务历史 | `TaskHistoryView` · `OperationTaskStatusBadge` | `listTaskApi` 分页 + 日志抽屉 + 部署中心入口 | ✅ |
@@ -520,7 +520,8 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 
 | 项 | 说明 |
 |----|------|
-| 表单组件 | `OperationServerMultiSelect`（摘要 +「管理关联服务器」）→ `OperationServerLinksModal`（分页搜索多选） |
+| 表单组件 | 列表行「关联服务器」→ `OperationServerLinksModal`（一级弹窗，分页搜索多选） |
+| 编辑弹窗 | 不含关联 UI；已关联时 IP 只读，提示去列表配置 |
 | 提交字段 | `serverIds: string[]` + 主 `serverId`（`serverIds[0]`） |
 | 列表展示 | 主服务器 IP + `+N` 徽章（额外关联数）；无关联时 orphan 行样式 |
 | 独立 links API | `GET/PUT /operation/project/{id}/links` · `GET/PUT /operation/component/{id}/links` |

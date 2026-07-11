@@ -153,7 +153,11 @@ onUnmounted(stopAutoRefresh)
           </div>
           <div class="operation-filter-field operation-filter-field--wide">
             <span>{{ t('operation.taskHistory.server') }}</span>
-            <OperationServerSelect v-model="query.serverId" :empty-label="t('operation.taskHistory.allServers')" />
+            <OperationServerSelect
+              v-model="query.serverId"
+              :empty-label="t('operation.taskHistory.allServers')"
+              :pick-title="t('operation.taskHistory.pickServer')"
+            />
           </div>
           <label class="operation-filter-field">
             <span>{{ t('operation.taskHistory.projectId') }}</span>

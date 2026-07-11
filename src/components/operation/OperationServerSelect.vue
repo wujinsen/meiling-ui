@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getServerApi, listServerApi } from '@/api/operation'
-import AppSelect from '@/components/ui/AppSelect.vue'
-import { showToast } from '@/composables/useToast'
+import { ChevronDown, X } from 'lucide-vue-next'
+import { getServerApi } from '@/api/operation'
+import OperationServerPickModal from '@/components/operation/OperationServerPickModal.vue'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { Environment, OperationServer } from '@/types/operation'
 
@@ -11,11 +11,10 @@ const model = defineModel<string | number | '' | undefined>()
 
 const props = withDefaults(
   defineProps<{
-    /** 与表单环境联动筛选服务器 */
     environment?: Environment | number | ''
     disabled?: boolean
-    /** 空值选项文案（筛选器用「全部」） */
     emptyLabel?: string
+    pickTitle?: string
   }>(),
   { disabled: false },
 )
@@ -26,23 +25,15 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const loading = ref(false)
-const servers = ref<OperationServer[]>([])
+const pickOpen = ref(false)
+const selectedServer = ref<OperationServer | null>(null)
 
-const serverById = computed(() => {
-  const map = new Map<string, OperationServer>()
-  for (const srv of servers.value) {
-    if (srv.id != null) map.set(String(srv.id), srv)
+const displayLabel = computed(() => {
+  if (model.value == null || model.value === '') {
+    return props.emptyLabel ?? t('operation.common.linkServerNone')
   }
-  return map
-})
-
-const options = computed(() => {
-  const list = servers.value.map((srv) => ({
-    value: String(srv.id),
-    label: formatServerLabel(srv),
-  }))
-  return [{ value: '', label: props.emptyLabel ?? t('operation.common.linkServerNone') }, ...list]
+  if (selectedServer.value) return formatServerLabel(selectedServer.value)
+  return `#${model.value}`
 })
 
 function formatServerLabel(srv: OperationServer) {
@@ -50,76 +41,75 @@ function formatServerLabel(srv: OperationServer) {
   return `${srv.serverName || ip} · ${ip}`
 }
 
-function emitSelection(id: string | number | '' | undefined) {
-  if (id == null || id === '') {
-    emit('select', null)
-    return
-  }
-  emit('select', serverById.value.get(String(id)) ?? null)
-}
-
-async function ensureSelectedInList(id: string | number) {
-  const key = String(id)
-  if (serverById.value.has(key)) return
+async function ensureSelected(id: string | number) {
   try {
     const result = await getServerApi(id)
     if (result.code === API_SUCCESS_CODE && result.data) {
-      servers.value = [result.data, ...servers.value.filter((s) => String(s.id) !== key)]
+      selectedServer.value = result.data
+      emit('select', result.data)
     }
   } catch {
-    // ignore — dropdown may show empty until user re-picks
+    selectedServer.value = null
   }
 }
 
-async function loadServers() {
-  loading.value = true
-  try {
-    const result = await listServerApi({
-      pageNum: 1,
-      pageSize: 500,
-      environment: props.environment === '' || props.environment == null
-        ? undefined
-        : (props.environment as Environment),
-    })
-    if (result.code !== API_SUCCESS_CODE || !result.data) {
-      throw new Error(result.msg || t('operation.server.loadFailed'))
-    }
-    servers.value = result.data.list ?? []
-    if (model.value != null && model.value !== '') {
-      await ensureSelectedInList(model.value)
-    }
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('operation.server.loadFailed'))
-  } finally {
-    loading.value = false
-  }
+function onPick(id: string, server: OperationServer | null) {
+  model.value = id
+  selectedServer.value = server
+  emit('select', server)
+  pickOpen.value = false
 }
 
-watch(
-  () => props.environment,
-  () => {
-    void loadServers()
-  },
-)
+function clearSelection(event: Event) {
+  event.stopPropagation()
+  model.value = ''
+  selectedServer.value = null
+  emit('select', null)
+}
 
 watch(model, (id) => {
-  emitSelection(id)
+  if (id == null || id === '') {
+    selectedServer.value = null
+    emit('select', null)
+    return
+  }
+  void ensureSelected(id)
 })
 
-onMounted(async () => {
-  await loadServers()
-  if (model.value != null && model.value !== '') {
-    await ensureSelectedInList(model.value)
-    emitSelection(model.value)
-  }
+onMounted(() => {
+  if (model.value != null && model.value !== '') void ensureSelected(model.value)
 })
 </script>
 
 <template>
-  <AppSelect
-    v-model="model"
-    :options="options"
-    :disabled="disabled || loading"
-    :placeholder="t('operation.common.linkServerPick')"
-  />
+  <div class="operation-server-filter">
+    <button
+      type="button"
+      class="operation-server-filter__trigger"
+      :disabled="disabled"
+      @click="pickOpen = true"
+    >
+      <span class="min-w-0 flex-1 truncate text-left">{{ displayLabel }}</span>
+      <ChevronDown class="h-4 w-4 shrink-0 text-gray-400" />
+    </button>
+    <button
+      v-if="model != null && model !== '' && !disabled"
+      type="button"
+      class="operation-server-filter__clear"
+      :aria-label="t('operation.common.reset')"
+      @click="clearSelection"
+    >
+      <X class="h-3.5 w-3.5" />
+    </button>
+
+    <OperationServerPickModal
+      :open="pickOpen"
+      :model-value="model == null || model === '' ? '' : String(model)"
+      :title="pickTitle"
+      :all-label="emptyLabel"
+      :default-environment="environment"
+      @pick="onPick"
+      @close="pickOpen = false"
+    />
+  </div>
 </template>

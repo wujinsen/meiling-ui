@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { addProjectApi, deleteProjectApi, execDeployApi, getDeployStatusApi, getProjectApi, listProjectApi, updateProjectApi } from '@/api/operation'
+import { addProjectApi, deleteProjectApi, execDeployApi, getDeployStatusApi, getProjectApi, getProjectLinksApi, listProjectApi, saveProjectLinksApi, updateProjectApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
-import OperationServerMultiSelect from '@/components/operation/OperationServerMultiSelect.vue'
+import OperationServerLinksModal from '@/components/operation/OperationServerLinksModal.vue'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import AppModal from '@/components/ui/AppModal.vue'
@@ -17,12 +17,12 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject, type OperationServer } from '@/types/operation'
+import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
 import { isOperationOrphan } from '@/utils/operationOrphan'
 import { entityHasServer, linkedServerCount, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { resolveDeployServiceKey } from '@/utils/operationPort'
-import { ClipboardList, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Server, Square, Trash2 } from 'lucide-vue-next'
+import { ClipboardList, Link2, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Server, Square, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 
@@ -42,19 +42,15 @@ const deployTitle = ref('')
 const deployServiceKey = ref<string | null>(null)
 const deployServerId = ref<string | number | null>(null)
 const deployStatus = ref<OperationDeployStatus | null>(null)
+const linksOpen = ref(false)
+const linksSaving = ref(false)
+const linksRow = ref<OperationProject | null>(null)
+const linksServerIds = ref<string[]>([])
 
 const canDeployExec = computed(() => assertAction(PERM.OP_DEPLOY_EXEC))
 const deployExecAvailable = computed(() => deployStatus.value?.available !== false)
 
-const serverIpLocked = computed(() => (form.value.serverIds?.length ?? 0) > 0 || !isOperationOrphan(form.value.serverId))
-
-const formServerIds = computed({
-  get: () => (form.value.serverIds ?? []).map(String),
-  set: (ids: string[]) => {
-    form.value.serverIds = ids
-    form.value.serverId = ids[0] ?? ''
-  },
-})
+const serverIpLocked = computed(() => !isOperationOrphan(form.value.serverId))
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, projectName: '', serverIp: '', environment: '' as number | '' })
 
@@ -121,16 +117,52 @@ function closeModal() {
   form.value = createEmptyProject()
 }
 
-function onPrimaryServerChange(server: OperationServer | null) {
-  if (!server) {
-    if (!(form.value.serverIds?.length)) {
-      form.value.serverIp = ''
-      form.value.innerIp = ''
+async function openProjectLinks(row: OperationProject) {
+  if (!guardAction(PERM.OP_PROJECT_EDIT) || row.id == null) return
+  linksRow.value = row
+  try {
+    const [detailRes, linksRes] = await Promise.all([
+      getProjectApi(row.id),
+      getProjectLinksApi(row.id),
+    ])
+    if (detailRes.code !== API_SUCCESS_CODE || !detailRes.data) {
+      throw new Error(detailRes.msg || t('operation.project.loadFailed'))
     }
-    return
+    linksRow.value = detailRes.data
+    const serverIds = resolveEntityServerIds(linksRes.data?.serverIds ?? detailRes.data.serverIds, detailRes.data.serverId)
+    linksServerIds.value = serverIds.map(String)
+    linksOpen.value = true
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.project.linksLoadFailed'))
+    linksRow.value = null
   }
-  form.value.serverIp = server.ip || ''
-  form.value.innerIp = server.innerIp || ''
+}
+
+function closeProjectLinks() {
+  linksOpen.value = false
+  linksRow.value = null
+  linksServerIds.value = []
+}
+
+async function saveProjectLinks(ids: string[]) {
+  if (!linksRow.value?.id) return
+  if (!guardAction(PERM.OP_PROJECT_EDIT)) return
+  linksSaving.value = true
+  try {
+    const serverIds = normalizeServerIds(ids) ?? []
+    const result = await saveProjectLinksApi(linksRow.value.id, {
+      projectId: linksRow.value.id,
+      serverIds,
+    })
+    if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.project.linksSaveFailed'))
+    showToast('success', t('operation.project.linksSaveOk'))
+    closeProjectLinks()
+    await loadList()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.project.linksSaveFailed'))
+  } finally {
+    linksSaving.value = false
+  }
 }
 
 async function submitForm() {
@@ -140,10 +172,6 @@ async function submitForm() {
     return
   }
   const serverIds = normalizeServerIds(form.value.serverIds)
-  if (!serverIds?.length && !form.value.serverIp?.trim()) {
-    showToast('error', t('operation.project.serverRequired'))
-    return
-  }
   saving.value = true
   try {
     const primaryServerId = serverIds?.[0] ?? form.value.serverId
@@ -151,7 +179,7 @@ async function submitForm() {
       ...form.value,
       projectName: form.value.projectName.trim(),
       serverId: primaryServerId === '' || primaryServerId == null ? undefined : primaryServerId,
-      serverIds,
+      serverIds: isEdit.value ? serverIds : undefined,
       url: form.value.url?.trim() || undefined,
       serverIp: form.value.serverIp?.trim() || undefined,
       innerIp: form.value.innerIp?.trim() || undefined,
@@ -385,6 +413,9 @@ onMounted(loadList)
                   >
                     <Server class="h-3.5 w-3.5" />{{ t('operation.deploy.status') }}
                   </button>
+                  <button type="button" class="btn-action-edit" @click="openProjectLinks(row)">
+                    <Link2 class="h-3.5 w-3.5" />{{ t('operation.project.linkServers') }}
+                  </button>
                   <button type="button" class="btn-action-edit" @click="openEdit(row)"><Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}</button>
                   <button type="button" class="btn-action-danger" @click="removeRow(row)"><Trash2 class="h-3.5 w-3.5" />{{ t('operation.common.delete') }}</button>
                 </div>
@@ -409,17 +440,9 @@ onMounted(loadList)
             </FormField>
           </div>
           <div class="form-grid-row">
-            <FormField :label="t('operation.common.linkServer')" horizontal class="form-field-span-2">
-              <OperationServerMultiSelect
-                v-model="formServerIds"
-                :environment="form.environment"
-                @primary-change="onPrimaryServerChange"
-              />
-            </FormField>
-          </div>
-          <div class="form-grid-row">
             <FormField :label="t('operation.project.serverIp')" horizontal>
               <input v-model="form.serverIp" class="field-input" :readonly="serverIpLocked" />
+              <p class="mt-1 text-xs text-gray-400">{{ t('operation.project.linkServersEditHint') }}</p>
             </FormField>
             <FormField :label="t('operation.project.innerIp')" horizontal>
               <input v-model="form.innerIp" class="field-input" :readonly="serverIpLocked" />
@@ -452,6 +475,16 @@ onMounted(loadList)
     </AppModal>
 
     <PortAuditModal :open="auditOpen" @close="auditOpen = false" />
+
+    <OperationServerLinksModal
+      :open="linksOpen"
+      :model-value="linksServerIds"
+      :entity-name="linksRow?.projectName"
+      :default-environment="linksRow?.environment"
+      :saving="linksSaving"
+      @confirm="saveProjectLinks"
+      @close="closeProjectLinks"
+    />
 
     <AppModal :open="deployOpen" :title="t('operation.deploy.statusTitle', { name: deployTitle })" wide @close="closeDeployModal">
       <div v-if="deployLoading" class="py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</div>

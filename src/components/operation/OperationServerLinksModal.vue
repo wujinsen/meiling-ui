@@ -10,6 +10,7 @@ import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { Environment, OperationServer } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
+import { resolveServerSearchParams } from '@/utils/operationServerSearch'
 
 const PAGE_SIZE = 20
 const PAGE_SIZES = [20, 50, 100] as const
@@ -18,15 +19,16 @@ const props = withDefaults(
   defineProps<{
     open: boolean
     modelValue: string[]
+    entityName?: string
     defaultEnvironment?: Environment | number | ''
     disabled?: boolean
+    saving?: boolean
   }>(),
-  { defaultEnvironment: '', disabled: false },
+  { defaultEnvironment: '', disabled: false, saving: false },
 )
 
 const emit = defineEmits<{
-  'update:modelValue': [ids: string[]]
-  primaryChange: [server: OperationServer | null]
+  confirm: [ids: string[]]
   close: []
 }>()
 
@@ -55,15 +57,6 @@ function envLabel(env?: number) {
 function formatServerLabel(srv: OperationServer) {
   const ip = srv.innerIp || srv.ip || '-'
   return `${srv.serverName || ip} · ${ip}`
-}
-
-function resolveSearchParams() {
-  const q = keyword.value.trim()
-  if (!q) return {}
-  if (q.includes('.') || /^\d{1,3}(\.\d{1,3}){0,3}$/.test(q)) {
-    return { ip: q }
-  }
-  return { serverName: q }
 }
 
 function isSelected(id: string | number | undefined) {
@@ -121,7 +114,7 @@ async function loadList() {
       pageNum: pageNum.value,
       pageSize: pageSize.value,
       environment: environment.value === '' ? undefined : (environment.value as Environment),
-      ...resolveSearchParams(),
+      ...resolveServerSearchParams(keyword.value),
     })
     if (result.code !== API_SUCCESS_CODE || !result.data) {
       throw new Error(result.msg || t('operation.server.loadFailed'))
@@ -136,20 +129,16 @@ async function loadList() {
   }
 }
 
-function emitPrimary() {
-  const primaryId = draftIds.value[0]
-  if (!primaryId) {
-    emit('primaryChange', null)
-    return
-  }
-  emit('primaryChange', serverCache.value.get(primaryId) ?? null)
+function confirm() {
+  if (props.disabled || props.saving) return
+  emit('confirm', [...draftIds.value])
 }
 
-function confirm() {
-  emit('update:modelValue', [...draftIds.value])
-  emitPrimary()
-  emit('close')
-}
+const modalTitle = computed(() =>
+  props.entityName
+    ? t('operation.serverMulti.modalTitleNamed', { name: props.entityName })
+    : t('operation.serverMulti.modalTitle'),
+)
 
 function onSearchInput() {
   if (pageNum.value !== 1) {
@@ -194,9 +183,8 @@ watch(
 <template>
   <AppModal
     :open="open"
-    :title="t('operation.serverMulti.modalTitle')"
+    :title="modalTitle"
     extra-wide
-    elevated
     @close="emit('close')"
   >
     <div class="operation-server-links-modal">
@@ -324,8 +312,8 @@ watch(
 
     <template #footer>
       <button type="button" class="btn-ghost" @click="emit('close')">{{ t('operation.common.cancel') }}</button>
-      <button type="button" class="btn-primary" :disabled="disabled" @click="confirm">
-        {{ t('operation.serverMulti.confirm', { n: draftIds.length }) }}
+      <button type="button" class="btn-primary" :disabled="disabled || saving" @click="confirm">
+        {{ saving ? t('operation.common.saving') : t('operation.serverMulti.confirm', { n: draftIds.length }) }}
       </button>
     </template>
   </AppModal>
