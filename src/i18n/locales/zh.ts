@@ -2260,6 +2260,14 @@ export default {
     serverMulti: {
       searchPlaceholder: '搜索服务器名称或 IP',
       searchEmpty: '无匹配服务器',
+      manage: '管理关联服务器',
+      modalTitle: '关联服务器',
+      selectedSection: '已选服务器',
+      selectedCount: '已选 {n} 台',
+      setPrimary: '设为主',
+      empty: '暂未关联服务器',
+      confirm: '确定关联（{n}）',
+      offPageSelected: '另有 {n} 台已选服务器不在当前页',
     },
     server: {
       title: '服务器管理',

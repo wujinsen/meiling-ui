@@ -2239,6 +2239,14 @@ export default {
     serverMulti: {
       searchPlaceholder: 'サーバー名または IP で検索',
       searchEmpty: '一致するサーバーがありません',
+      manage: '関連サーバーを管理',
+      modalTitle: 'サーバー関連付け',
+      selectedSection: '選択済みサーバー',
+      selectedCount: '{n} 台選択',
+      setPrimary: '主に設定',
+      empty: '関連サーバーがありません',
+      confirm: '確定（{n}）',
+      offPageSelected: '現在のページ外に {n} 台の選択済みサーバーがあります',
     },
     server: {
       title: 'サーバー管理',

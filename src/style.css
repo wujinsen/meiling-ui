@@ -277,6 +277,58 @@
     @apply ml-1 inline-flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-white hover:text-rose-600 dark:hover:bg-white/10;
   }
 
+  .operation-server-links-modal {
+    @apply space-y-5;
+  }
+
+  .operation-server-links-modal__selected {
+    @apply rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-white/10 dark:bg-white/5;
+  }
+
+  .operation-server-links-modal__selected-head {
+    @apply mb-2 flex items-center justify-between gap-2;
+  }
+
+  .operation-server-links-modal__section-title {
+    @apply text-sm font-medium text-gray-700 dark:text-gray-200;
+  }
+
+  .operation-server-links-modal__chips {
+    @apply flex max-h-28 flex-wrap gap-1.5 overflow-y-auto;
+  }
+
+  .operation-server-links-modal__filters {
+    @apply mb-3 flex flex-col gap-3 sm:flex-row sm:items-end;
+  }
+
+  .operation-server-links-modal__search {
+    @apply relative min-w-0 flex-1;
+  }
+
+  .operation-server-links-modal__search-icon {
+    @apply pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400;
+  }
+
+  .operation-server-links-modal__search-input {
+    @apply pl-9;
+  }
+
+  .operation-server-links-modal__env {
+    @apply flex shrink-0 items-center gap-2;
+  }
+
+  .operation-server-links-modal__env-label {
+    @apply whitespace-nowrap text-xs text-gray-500;
+  }
+
+  .operation-server-links-modal__state {
+    @apply py-10 text-center text-sm text-gray-400;
+  }
+
+  .operation-server-links-modal__pagination {
+    @apply mt-3;
+  }
+
   .btn-tree-toggle {
     @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 transition;
     @apply hover:bg-white hover:text-gray-900 hover:shadow-sm;

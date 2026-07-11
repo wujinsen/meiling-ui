@@ -2239,6 +2239,14 @@ export default {
     serverMulti: {
       searchPlaceholder: 'Search server name or IP',
       searchEmpty: 'No matching servers',
+      manage: 'Manage linked servers',
+      modalTitle: 'Link servers',
+      selectedSection: 'Selected servers',
+      selectedCount: '{n} selected',
+      setPrimary: 'Set primary',
+      empty: 'No servers linked',
+      confirm: 'Confirm ({n})',
+      offPageSelected: '{n} selected server(s) not on this page',
     },
     server: {
       title: 'Server Management',

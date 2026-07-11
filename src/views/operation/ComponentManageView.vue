@@ -352,7 +352,6 @@ onMounted(loadList)
                 :environment="form.environment"
                 @primary-change="onPrimaryServerChange"
               />
-              <p class="mt-1 text-xs text-gray-400">{{ t('operation.project.multiServerHint') }}</p>
             </FormField>
           </div>
           <div class="form-grid-row">

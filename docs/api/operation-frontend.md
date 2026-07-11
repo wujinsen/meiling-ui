@@ -520,7 +520,7 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 
 | 项 | 说明 |
 |----|------|
-| 表单组件 | `OperationServerMultiSelect`（搜索 + checkbox；首项标「主」） |
+| 表单组件 | `OperationServerMultiSelect`（摘要 +「管理关联服务器」）→ `OperationServerLinksModal`（分页搜索多选） |
 | 提交字段 | `serverIds: string[]` + 主 `serverId`（`serverIds[0]`） |
 | 列表展示 | 主服务器 IP + `+N` 徽章（额外关联数）；无关联时 orphan 行样式 |
 | 独立 links API | `GET/PUT /operation/project/{id}/links` · `GET/PUT /operation/component/{id}/links` |
