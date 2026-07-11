@@ -285,6 +285,7 @@ export type OperationTask = {
   id?: number | string
   taskType?: string
   serverId?: number | string | null
+  projectId?: number | string | null
   serviceKey?: string | null
   action?: string
   targetName?: string | null
@@ -301,7 +302,12 @@ export type OperationTask = {
 export type TaskQuery = PageQuery & {
   taskType?: string
   serverId?: number | string
+  projectId?: number | string
 }
+
+/** 异步任务类型（SVR-14） */
+export const OPERATION_TASK_TYPES = ['deploy', 'upload', 'command', 'health_probe'] as const
+export type OperationTaskType = (typeof OPERATION_TASK_TYPES)[number]
 
 /** moli 三件套 serviceKey */
 export const MOLI_DEPLOY_SERVICES = ['user-center', 'gateway', 'knowledge'] as const

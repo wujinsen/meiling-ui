@@ -1,6 +1,6 @@
 # 服务器运维模块 · 演进规划（技术端运维）
 
-> 更新：2026-07-11 · 状态：**P0–P2 已落地**；**前端 Breaking 对齐**（S7 异步探活 · S4 serverId · S9 serviceKeys · 10107）· **SVR-21 端口矩阵管理页**  
+> 更新：2026-07-11 · 状态：**P0–P2 已落地**；**SVR-21d 端口矩阵管理页** ✅  
 > 归属：`moli-user-center` · `operation_*` 表 · 菜单「运营/运维管理」(id 400)  
 > 边界：**只管服务器/基础设施资产运维**；知识库内容管道运维见 [knowledge-ops-frontend.md](../api/knowledge-ops-frontend.md)（另一条独立路线，互不重叠）  
 > **浏览镜像**：工程契约权威仍在 `moli-project-distribute/docs/design/server-ops-module-roadmap.md`；改设计请先改 distribute 再同步本文件。
@@ -85,6 +85,14 @@
 | **SVR-7** | 端口矩阵校验 `GET /operation/audit/port-matrix` | ✅ 2026-07-09 |
 | **SVR-8** | `moli-service.sh status` 只读 + 可选 deploy:exec | ✅ 2026-07-09 |
 | **SVR-9** | 驾驶舱 `GET /operation/stats` | ✅ 2026-07-09 |
+
+### P2+ —— 端口矩阵可配置化（SVR-21）
+
+| 任务 | 内容 | 状态 |
+|------|------|------|
+| **SVR-21a–c** | DB 表 + Provider + CRUD API | ✅ 后端 · [`operation-port-matrix-api.md`](../api/operation-port-matrix-api.md) |
+| **SVR-21d** | meiling-ui `operation/port-matrix/index` | ✅ · [operation-frontend.md](../api/operation-frontend.md) §14 |
+| **SVR-21e** | SQL 迁移 + production-checklist 加注 | ✅ distribute |
 
 ---
 

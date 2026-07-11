@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import {
   createCommandTaskApi,
   createDeployTaskApi,
@@ -27,9 +28,10 @@ import {
   type UploadPostAction,
   type UploadPostMode,
 } from '@/types/operation'
-import { Loader2, Play, RefreshCw, RotateCcw, Square, Terminal, Upload } from 'lucide-vue-next'
+import { Loader2, Play, RefreshCw, RotateCcw, Square, Terminal, Upload, List } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const router = useRouter()
 const { drawerOpen, task, logText, polling, openTask, closeDrawer } = useOperationTaskPoll()
 
 const selectedServerId = ref<string>('')
@@ -62,6 +64,12 @@ const canCommandExec = computed(() => assertAction(PERM.OP_COMMAND_EXEC))
 
 function onServerSelect(server: OperationServer) {
   selectedServer.value = server
+}
+
+function openTaskHistory() {
+  const query: Record<string, string> = {}
+  if (selectedServerId.value) query.serverId = selectedServerId.value
+  router.push({ path: '/operation/task', query })
 }
 
 const pathPresetOptions = computed(() =>
@@ -303,6 +311,10 @@ async function submitRemoteCommand() {
   <div class="page-shell">
     <OperationPageHeader :title="t('operation.deployCenter.title')" :subtitle="t('operation.deployCenter.subtitle')">
       <template #actions>
+        <button type="button" class="btn-ghost" @click="openTaskHistory">
+          <List class="h-4 w-4" />
+          {{ t('operation.taskHistory.openFromDeploy') }}
+        </button>
         <button type="button" class="btn-ghost" :disabled="statusLoading" @click="refreshAllStatus">
           <RefreshCw class="h-4 w-4" :class="{ 'animate-spin': statusLoading }" />
           {{ t('operation.deploy.refresh') }}

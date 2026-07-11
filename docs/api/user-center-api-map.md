@@ -46,6 +46,14 @@
 - `DELETE /operation/component/{ids}`：`operation:component:remove` + `list`
 - `POST /operation/component/{id}/check`：`operation:component:list`；TCP 探活，更新并返回 `OperationComponentVo`
 
+### 端口矩阵 `OperationPortMatrixController`（前缀 `/operation/port-matrix`，5个）
+
+- `GET /operation/port-matrix/list`：`operation:port-matrix:list`；分页；`matrixKey` / `displayName` / `enabled` 筛选
+- `GET /operation/port-matrix/{id}`：`operation:port-matrix:list`
+- `POST /operation/port-matrix`：`operation:port-matrix:add` + `list`
+- `PUT /operation/port-matrix`：`operation:port-matrix:edit` + `list`
+- `DELETE /operation/port-matrix/{ids}`：`operation:port-matrix:remove` + `list`
+
 ### 运维审计 `OperationAuditController`（前缀 `/operation/audit`，1个）
 
 - `GET /operation/audit/port-matrix`：`operation:project:list`；对照 production-checklist 校验项目/组件端口
@@ -64,6 +72,7 @@
 ### 运维任务 `OperationTaskController`（前缀 `/operation/task`）
 
 - `GET /operation/task/{id}?logOffset=`：轮询进度与增量日志（`DeployTaskDrawer`）
+- `GET /operation/task/list`：`operation:server:list`；任务历史分页（`TaskHistoryView`）；可按 `taskType` / `serverId` / `projectId` 筛选
 
 ### 文件与命令（部署中心）
 
@@ -75,5 +84,6 @@
 ## 相关
 
 - 前端排期与验收：[operation-frontend.md](operation-frontend.md)
+- 端口矩阵契约：[operation-port-matrix-api.md](operation-port-matrix-api.md)
 - 后端路线图：[server-ops-module-roadmap.md](../design/server-ops-module-roadmap.md)
 - 全量 API 地图：[distribute user-center-api-map.md](../../moli-project-distribute/docs/api/user-center-api-map.md)

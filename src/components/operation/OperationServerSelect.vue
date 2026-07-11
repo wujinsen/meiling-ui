@@ -14,6 +14,8 @@ const props = withDefaults(
     /** 与表单环境联动筛选服务器 */
     environment?: Environment | number | ''
     disabled?: boolean
+    /** 空值选项文案（筛选器用「全部」） */
+    emptyLabel?: string
   }>(),
   { disabled: false },
 )
@@ -40,7 +42,7 @@ const options = computed(() => {
     value: String(srv.id),
     label: formatServerLabel(srv),
   }))
-  return [{ value: '', label: t('operation.common.linkServerNone') }, ...list]
+  return [{ value: '', label: props.emptyLabel ?? t('operation.common.linkServerNone') }, ...list]
 })
 
 function formatServerLabel(srv: OperationServer) {

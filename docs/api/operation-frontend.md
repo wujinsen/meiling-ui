@@ -18,12 +18,14 @@
 | **S3** 端口 | `PortAuditModal` · `PortMatchBadge` | `getPortAuditApi` · `operationPort.ts` | ✅ |
 | **S4** 部署 | `ProjectManageView` 进程状态弹窗 | `getDeployStatusApi(serverId)` · `execDeployApi` · `resolveDeployServiceKey()` | ✅ |
 | **S5** 驾驶舱 | `CandlelightDragon/cockpit/index` · `useCockpit` | `getOperationStatsApi`（`cockpit.ts`） | ✅ |
+| **S5-4** envBreakdown | `CockpitOpsEnvChart` | ops 页环境分布饼图 · 点击钻取 | ✅ |
 | **S6** 部署中心 | `DeployCenterView` · `DeployServerPicker` · `DeployTaskDrawer` | `getDeployPresetsApi` · `createDeployTaskApi` · `uploadFileApi` | ✅ |
 | **S7** 批量探活 | `ServerManageView` · 驾驶舱 ops | `probeAllHealthApi` → `taskId` · `useProbeAllHealth` · `useOperationTaskPoll` | ✅ |
 | **S9** 动态 serviceKey | `DeployCenterView` | `getDeployPresetsApi().serviceKeys`（回退 `MOLI_DEPLOY_SERVICES`） | ✅ |
 | **S10** serverId 表单 | `ProjectManageView` · `ComponentManageView` · `OperationServerSelect` | 提交 `serverId`；IP 由台账对齐 | ✅ |
 | **S11** orphan 标记 | `OperationOrphanBadge` · `operationOrphan.ts` | 列表 `serverId` 为空时徽章 + 行底色 | ✅ |
 | **S12** 端口矩阵 | `PortMatrixManageView` · `OperationPortMatrixAliasInput` | CRUD + 审计弹窗「管理端口矩阵」 | ✅ |
+| **S13** 任务历史 | `TaskHistoryView` · `OperationTaskStatusBadge` | `listTaskApi` 分页 + 日志抽屉 + 部署中心入口 | ✅ |
 | 公共 | `EnvironmentSelect` · `OperationPageHeader` · `AppSelect` | `src/types/operation.ts` · `src/api/operation.ts` · `operationErrors.ts` | ✅ |
 
 权限常量：`src/constants/permissions.ts` → `PERM.OP_*` · `OP_SECRET_VIEW` · `OP_DEPLOY_EXEC` · `OP_FILE_UPLOAD` · `OP_COMMAND_EXEC`。
@@ -64,6 +66,8 @@
 | 服务器管理 | `operation/server/index` | `operation:server:list` | 同上 |
 | 平台管理 | `operation/platform/index` | `operation:platform:list` | 同上 |
 | 组件管理 | `operation/component/index` | `operation:component:list` | 同上 |
+| 任务历史 | `operation/task/index` | `operation:server:list` | 只读列表 + 日志抽屉（与部署中心同权） |
+| 端口矩阵 | `operation/port-matrix/index` | `operation:port-matrix:list` | `add` / `edit` / `remove` + **list** |
 
 **跨域权限**（非菜单 perms，需角色 `sys_action` 绑定）：
 
@@ -377,13 +381,15 @@ export type OperationStats = {
 | **S5-1** | 驾驶舱 `tab=ops` 时请求 `getOperationStatsApi`，用真实计数覆盖 Mock KPI |
 | **S5-2** | 映射：`projects/servers/components/platforms` → 对应 KPI 卡片；点击跳转 `/operation/*` |
 | **S5-3** | `portMismatches + healthDown` 可合并展示为「告警」类 KPI |
-| **S5-4** | `envBreakdown` 可驱动环境分布图（可选） |
+| **S5-4** | ops 页 `CockpitOpsEnvChart` 展示 `envBreakdown` 环境分布饼图 |
 
 ---
 
 ## 7. 端口矩阵对照表
 
-权威来源：distribute [production-checklist.md §2](../../moli-project-distribute/docs/ops/production-checklist.md) + 后端 `OperationPortMatrix`。
+> **SVR-21 后**：运行时权威改为 DB + 运维台「端口矩阵」菜单（`operation/port-matrix/index`）。下表为**初始种子**；改端口请在管理页维护，无需发版。设计：[`operation-port-matrix-config.md`](../../moli-project-distribute/docs/design/operation-port-matrix-config.md)。
+
+权威来源：distribute [production-checklist.md §2](../../moli-project-distribute/docs/ops/production-checklist.md) + 表 `operation_port_matrix`。
 
 | matrixKey | 期望端口 | 匹配别名（名称归一化后） |
 |-----------|----------|--------------------------|
@@ -475,12 +481,42 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | S10 | serverId 表单 | 项目/组件弹窗 `OperationServerSelect`；提交 `serverId` |
 | S11 | orphan 标记 | `serverId` 为空时列表琥珀色徽章 + 行底色 |
 | S12 | 端口矩阵管理 | `PortMatrixManageView` · CRUD `/operation/port-matrix/*`；审计弹窗跳转 |
+| S13 | 任务历史 | `TaskHistoryView` · `GET /operation/task/list`；筛选 + 日志抽屉 |
+
+---
+
+## 14. 端口矩阵管理页（SVR-21d）
+
+> **后端契约**：[operation-port-matrix-api.md](operation-port-matrix-api.md) · **方案**：[operation-port-matrix-config.md](../../moli-project-distribute/docs/design/operation-port-matrix-config.md)
+
+| 项 | 值 |
+|----|-----|
+| 菜单 id | 406（父 400） |
+| 路由 | `operation/port-matrix/index` → `/operation/port-matrix` |
+| 列表权限 | `operation:port-matrix:list` |
+| 写权限 | `add` / `edit` / `remove` + **list** |
+
+### 14.1 页面能力
+
+| 功能 | 实现 |
+|------|------|
+| 分页列表 | `PortMatrixManageView` · `GET /operation/port-matrix/list` |
+| 新增/编辑弹窗 | `POST` / `PUT` · `OperationPortMatrixAliasInput` 别名 Tag |
+| 删除 | `DELETE /operation/port-matrix/{ids}` |
+| 端口校验 | 工具栏「端口校验」→ `PortAuditModal`（`operation:project:list`） |
+
+保存成功后**无需重启** user-center；可立即打开端口校验验证 `portMatchStatus` 变化。
+
+### 14.2 与 S3 审计弹窗联动
+
+项目/组件管理页 `PortAuditModal` 底部「管理端口矩阵」→ `/operation/port-matrix`（需 `operation:port-matrix:list`）。审计 API 权限与矩阵 CRUD 权限分离。
 
 ---
 
 ## 11. 相关
 
 - 后端路线图：[server-ops-module-roadmap.md](../design/server-ops-module-roadmap.md)
+- **端口矩阵 HTTP 契约（SVR-21）**：[operation-port-matrix-api.md](operation-port-matrix-api.md)
 - API 全量列表：[user-center-api-map.md](user-center-api-map.md) §4
 - 部署脚本：`moli-project-distribute/deploy/linux/moli-service.sh`（S4 服务端调用）
 - 知识库运维（另一条线）：[knowledge-ops-frontend.md](knowledge-ops-frontend.md)

@@ -90,6 +90,16 @@ function buildTrend(query: CockpitQuery) {
 
 export function buildMockDrillRows(req: DrillRequest): DrillRow[] {
   const metric = req.metric
+  if (metric.startsWith('ops:env:')) {
+    const envCode = metric.split(':')[2]
+    const envNames: Record<string, string> = { '1': '开发', '2': '测试', '3': '预发', '4': '生产' }
+    const envLabel = envNames[envCode] ?? envCode
+    return [
+      { name: 'api-gateway', env: envLabel, ip: '10.0.1.12', status: '正常' },
+      { name: 'user-service', env: envLabel, ip: '10.0.1.18', status: '正常' },
+      { name: 'mysql-primary', env: envLabel, ip: '10.0.3.2', status: '正常' },
+    ]
+  }
   if (metric.startsWith('ops:')) {
     return [
       { name: 'api-gateway', env: '生产', ip: '10.0.1.12', status: '正常' },

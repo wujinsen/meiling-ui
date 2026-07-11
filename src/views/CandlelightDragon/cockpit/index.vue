@@ -9,6 +9,7 @@ import CockpitHeader from '@/views/CandlelightDragon/cockpit/components/CockpitH
 import CockpitKpiCard from '@/views/CandlelightDragon/cockpit/components/CockpitKpiCard.vue'
 import CockpitTrendChart from '@/views/CandlelightDragon/cockpit/components/CockpitTrendChart.vue'
 import CockpitDonut from '@/views/CandlelightDragon/cockpit/components/CockpitDonut.vue'
+import CockpitOpsEnvChart from '@/views/CandlelightDragon/cockpit/components/CockpitOpsEnvChart.vue'
 import CockpitDrillDrawer from '@/views/CandlelightDragon/cockpit/components/CockpitDrillDrawer.vue'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import { environmentI18nKey } from '@/utils/operationEnv'
@@ -114,6 +115,10 @@ function goOps(path: string) {
     openDrill('ops:nav', t('cockpit.opsNavHint'))
   })
 }
+
+function onEnvBreakdownClick(env: number) {
+  openDrill(`ops:env:${env}`, t(environmentI18nKey(env)))
+}
 </script>
 
 <template>
@@ -162,8 +167,44 @@ function goOps(path: string) {
       </div>
     </section>
 
+    <section v-if="overview && filters.tab === 'ops'" class="chart-row">
+      <div class="card card-interactive chart-row-main flex h-full flex-col p-5">
+        <div class="mb-4">
+          <h2 class="page-title">{{ t('cockpit.chart.envBreakdown') }}</h2>
+          <p class="page-subtitle">{{ t('cockpit.chart.envBreakdownSub') }}</p>
+        </div>
+        <CockpitOpsEnvChart :breakdown="overview.ops.envBreakdown" @env-click="onEnvBreakdownClick" />
+      </div>
+      <div class="card card-interactive chart-row-side flex h-full flex-col p-5">
+        <h2 class="page-title">{{ t('cockpit.ops.title') }}</h2>
+        <p class="page-subtitle mb-4">{{ t('cockpit.ops.sub') }}</p>
+        <div class="grid grid-cols-2 gap-3">
+          <button
+            v-for="card in opsCards"
+            :key="card.key"
+            type="button"
+            class="list-item p-3 text-left transition hover:shadow-sm"
+            @click="goOps(card.path)"
+          >
+            <component :is="card.icon" class="h-5 w-5 text-brand-500 dark:text-brand-400" />
+            <p class="mt-2 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ card.value }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ card.label }}</p>
+          </button>
+        </div>
+        <button
+          type="button"
+          class="btn-ghost mt-4 w-full justify-center text-sm"
+          :disabled="probingAll"
+          @click="probeAllFromCockpit"
+        >
+          <Activity class="h-4 w-4" :class="{ 'animate-pulse': probingAll }" />
+          {{ probingAll ? t('cockpit.ops.probeAllRunning') : t('cockpit.ops.probeAll') }}
+        </button>
+      </div>
+    </section>
+
     <section v-if="overview" class="grid grid-cols-1 gap-4 xl:grid-cols-12">
-      <div class="card card-interactive p-5 xl:col-span-5">
+      <div v-if="filters.tab === 'business'" class="card card-interactive p-5 xl:col-span-5">
         <h2 class="page-title mb-4">{{ t('cockpit.funnel.title') }}</h2>
         <div class="space-y-2">
           <button
@@ -190,7 +231,7 @@ function goOps(path: string) {
         </div>
       </div>
 
-      <div class="card card-interactive p-5 xl:col-span-4">
+      <div v-if="filters.tab === 'business'" class="card card-interactive p-5 xl:col-span-4">
         <h2 class="page-title">{{ t('cockpit.ops.title') }}</h2>
         <p class="page-subtitle mb-4">{{ t('cockpit.ops.sub') }}</p>
         <div class="grid grid-cols-2 gap-3">
@@ -206,28 +247,9 @@ function goOps(path: string) {
             <p class="text-xs text-gray-500 dark:text-gray-400">{{ card.label }}</p>
           </button>
         </div>
-        <div class="mt-4 flex flex-wrap gap-2">
-          <span
-            v-for="item in overview.ops.envBreakdown"
-            :key="item.env"
-            class="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600 dark:bg-white/10 dark:text-gray-300"
-          >
-            {{ t(environmentI18nKey(item.env)) }} · {{ item.count }}
-          </span>
-        </div>
-        <button
-          v-if="filters.tab === 'ops'"
-          type="button"
-          class="btn-ghost mt-4 w-full justify-center text-sm"
-          :disabled="probingAll"
-          @click="probeAllFromCockpit"
-        >
-          <Activity class="h-4 w-4" :class="{ 'animate-pulse': probingAll }" />
-          {{ probingAll ? t('cockpit.ops.probeAllRunning') : t('cockpit.ops.probeAll') }}
-        </button>
       </div>
 
-      <div class="card card-interactive p-5 xl:col-span-3">
+      <div class="card card-interactive p-5" :class="filters.tab === 'ops' ? 'xl:col-span-8' : 'xl:col-span-3'">
         <h2 class="page-title mb-4">{{ t('cockpit.alerts.title') }}</h2>
         <div class="max-h-[280px] space-y-2 overflow-y-auto">
           <div

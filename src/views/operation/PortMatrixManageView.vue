@@ -15,14 +15,15 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
 import AppSwitch from '@/components/ui/AppSwitch.vue'
 import FormField from '@/components/ui/FormField.vue'
-import { guardAction } from '@/composables/useActionPermissions'
+import { assertAction, guardAction } from '@/composables/useActionPermissions'
 import { confirm } from '@/composables/useConfirm'
 import { formatDateTime, showToast } from '@/composables/useToast'
 import { PERM } from '@/constants/permissions'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyPortMatrix, type OperationPortMatrix } from '@/types/operation'
-import { Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { ClipboardList, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 
 const { t } = useI18n()
 
@@ -34,7 +35,17 @@ const modalOpen = ref(false)
 const modalTitle = ref('')
 const form = ref<OperationPortMatrix>(createEmptyPortMatrix())
 const aliasList = ref<string[]>([])
+const auditOpen = ref(false)
 const isEdit = computed(() => form.value.id != null)
+
+const canAdd = computed(() => assertAction(PERM.OP_PORT_MATRIX_ADD))
+const canEdit = computed(() => assertAction(PERM.OP_PORT_MATRIX_EDIT))
+const canRemove = computed(() => assertAction(PERM.OP_PORT_MATRIX_REMOVE))
+
+function isValidPort(port: string) {
+  const n = Number(port)
+  return Number.isInteger(n) && n >= 1 && n <= 65535
+}
 
 const enabledFilterOptions = computed(() => [
   { value: '', label: t('operation.common.all') },
@@ -122,6 +133,10 @@ async function submitForm() {
     showToast('error', t('operation.portMatrix.portRequired'))
     return
   }
+  if (!isValidPort(expectedPort)) {
+    showToast('error', t('operation.portMatrix.portInvalid'))
+    return
+  }
   saving.value = true
   try {
     const payload = {
@@ -187,7 +202,12 @@ onMounted(loadList)
           </div>
         </form>
         <div class="toolbar-actions">
-          <button type="button" class="btn-primary shrink-0" @click="openCreate"><Plus class="h-4 w-4" /> {{ t('operation.common.add') }}</button>
+          <button type="button" class="btn-ghost shrink-0" @click="auditOpen = true">
+            <ClipboardList class="h-4 w-4" /> {{ t('operation.port.audit') }}
+          </button>
+          <button v-if="canAdd" type="button" class="btn-primary shrink-0" @click="openCreate">
+            <Plus class="h-4 w-4" /> {{ t('operation.common.add') }}
+          </button>
         </div>
       </template>
     </OperationPageHeader>
@@ -232,10 +252,15 @@ onMounted(loadList)
               <td class="max-w-[140px] truncate px-4 py-3 text-xs text-gray-500" :title="row.source">{{ row.source || '-' }}</td>
               <td class="px-4 py-3">{{ formatDateTime(row.updateTime || row.createTime) }}</td>
               <td class="px-4 py-3">
-                <div class="btn-action-group flex-wrap justify-end">
-                  <button type="button" class="btn-action-edit" @click="openEdit(row)"><Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}</button>
-                  <button type="button" class="btn-action-danger" @click="removeRow(row)"><Trash2 class="h-3.5 w-3.5" />{{ t('operation.common.delete') }}</button>
+                <div v-if="canEdit || canRemove" class="btn-action-group flex-wrap justify-end">
+                  <button v-if="canEdit" type="button" class="btn-action-edit" @click="openEdit(row)">
+                    <Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}
+                  </button>
+                  <button v-if="canRemove" type="button" class="btn-action-danger" @click="removeRow(row)">
+                    <Trash2 class="h-3.5 w-3.5" />{{ t('operation.common.delete') }}
+                  </button>
                 </div>
+                <span v-else class="text-xs text-gray-400">—</span>
               </td>
             </tr>
           </tbody>
@@ -286,5 +311,7 @@ onMounted(loadList)
         </div>
       </form>
     </AppModal>
+
+    <PortAuditModal :open="auditOpen" @close="auditOpen = false" />
   </div>
 </template>
