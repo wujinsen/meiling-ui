@@ -6,7 +6,7 @@ import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
-import OperationServerSelect from '@/components/operation/OperationServerSelect.vue'
+import OperationServerMultiSelect from '@/components/operation/OperationServerMultiSelect.vue'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import SecretManageModal from '@/components/operation/SecretManageModal.vue'
@@ -21,6 +21,7 @@ import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyComponent, type OperationComponent, type OperationServer } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
+import { entityHasServer, linkedServerCount, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { isOperationOrphan } from '@/utils/operationOrphan'
 import { Pencil, Plus, RefreshCw, Search, Trash2, Activity, ClipboardList, KeyRound } from 'lucide-vue-next'
 
@@ -43,7 +44,15 @@ const secretRow = ref<OperationComponent | null>(null)
 
 const canManagePassword = computed(() => assertOperationSecretEdit(PERM.OP_COMPONENT_EDIT))
 
-const serverIpLocked = computed(() => !isOperationOrphan(form.value.serverId))
+const serverIpLocked = computed(() => (form.value.serverIds?.length ?? 0) > 0 || !isOperationOrphan(form.value.serverId))
+
+const formServerIds = computed({
+  get: () => (form.value.serverIds ?? []).map(String),
+  set: (ids: string[]) => {
+    form.value.serverIds = ids
+    form.value.serverId = ids[0] ?? ''
+  },
+})
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, componentName: '', serverIp: '', environment: '' as number | '' })
 
@@ -96,7 +105,9 @@ async function openEdit(row: OperationComponent) {
   try {
     const result = await getComponentApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.component.loadFailed'))
-    form.value = { ...result.data }
+    const data = result.data
+    const serverIds = resolveEntityServerIds(data.serverIds, data.serverId)
+    form.value = { ...data, serverIds, serverId: serverIds[0] ?? data.serverId ?? '' }
     passwordInput.value = ''
     modalTitle.value = t('operation.common.edit')
     modalOpen.value = true
@@ -111,14 +122,14 @@ function closeModal() {
   passwordInput.value = ''
 }
 
-function onServerPick(server: OperationServer | null) {
-  if (!server) return
+function onPrimaryServerChange(server: OperationServer | null) {
+  if (!server) {
+    if (!(form.value.serverIds?.length)) {
+      form.value.serverIp = ''
+    }
+    return
+  }
   form.value.serverIp = server.ip || ''
-}
-
-function normalizeServerId(serverId?: string | number | null) {
-  if (serverId == null || serverId === '') return undefined
-  return serverId
 }
 
 async function submitForm() {
@@ -127,12 +138,19 @@ async function submitForm() {
     showToast('error', t('operation.component.nameRequired'))
     return
   }
+  const serverIds = normalizeServerIds(form.value.serverIds)
+  if (!serverIds?.length && !form.value.serverIp?.trim()) {
+    showToast('error', t('operation.project.serverRequired'))
+    return
+  }
   saving.value = true
   try {
+    const primaryServerId = serverIds?.[0] ?? form.value.serverId
     const payload: OperationComponent = {
       ...form.value,
       componentName: form.value.componentName.trim(),
-      serverId: normalizeServerId(form.value.serverId),
+      serverId: primaryServerId === '' || primaryServerId == null ? undefined : primaryServerId,
+      serverIds,
       serverIp: form.value.serverIp?.trim() || undefined,
       account: form.value.account?.trim() || undefined,
       deployPath: form.value.deployPath?.trim() || undefined,
@@ -271,15 +289,22 @@ onMounted(loadList)
               v-else
               :key="String(row.id)"
               class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5"
-              :class="isOperationOrphan(row.serverId) && 'operation-table-row--orphan'"
+              :class="!entityHasServer(row) && 'operation-table-row--orphan'"
             >
               <td class="px-4 py-3 font-medium">
                 <div class="flex min-w-0 items-center gap-2">
                   <span class="truncate">{{ row.componentName }}</span>
-                  <OperationOrphanBadge :show="isOperationOrphan(row.serverId)" />
+                  <OperationOrphanBadge :show="!entityHasServer(row)" />
                 </div>
               </td>
-              <td class="px-4 py-3">{{ row.serverIp || '-' }}</td>
+              <td class="px-4 py-3">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span>{{ row.serverIp || '-' }}</span>
+                  <span v-if="linkedServerCount(row) > 1" class="operation-alias-chip operation-alias-chip--compact text-[10px]">
+                    +{{ linkedServerCount(row) - 1 }}
+                  </span>
+                </div>
+              </td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
               <td class="px-4 py-3"><PortMatchBadge :status="row.portMatchStatus" :expected-port="row.expectedPort" /></td>
               <td class="px-4 py-3">{{ row.version || '-' }}</td>
@@ -322,12 +347,12 @@ onMounted(loadList)
           </div>
           <div class="form-grid-row">
             <FormField :label="t('operation.common.linkServer')" horizontal class="form-field-span-2">
-              <OperationServerSelect
-                v-model="form.serverId"
+              <OperationServerMultiSelect
+                v-model="formServerIds"
                 :environment="form.environment"
-                @select="onServerPick"
+                @primary-change="onPrimaryServerChange"
               />
-              <p class="mt-1 text-xs text-gray-400">{{ t('operation.common.serverIpFromServer') }}</p>
+              <p class="mt-1 text-xs text-gray-400">{{ t('operation.project.multiServerHint') }}</p>
             </FormField>
           </div>
           <div class="form-grid-row">

@@ -10,7 +10,7 @@ import { showToast } from '@/composables/useToast'
 import { PERM } from '@/constants/permissions'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { OperationServer, OperationServerSsh, OperationSshTest } from '@/types/operation'
-import { Loader2, Plug } from 'lucide-vue-next'
+import { Loader2, Plug, KeyRound, X } from 'lucide-vue-next'
 
 const props = defineProps<{
   open: boolean
@@ -36,6 +36,8 @@ const sshUser = ref('ubuntu')
 const connPref = ref<'auto' | 'inner' | 'public'>('auto')
 const uploadAllowedRoots = ref('')
 const testResult = ref<OperationSshTest | null>(null)
+const keyFileName = ref('')
+const keyDragOver = ref(false)
 
 const sshConfigured = computed(() => server.value?.sshConfigured === true)
 
@@ -51,6 +53,7 @@ async function loadServer() {
   testResult.value = null
   privateKey.value = ''
   passphrase.value = ''
+  keyFileName.value = ''
   try {
     const result = await getServerApi(props.serverId)
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.loadFailed'))
@@ -102,6 +105,7 @@ async function save() {
     showToast('success', t('operation.ssh.saveOk'))
     privateKey.value = ''
     passphrase.value = ''
+    keyFileName.value = ''
     await loadServer()
     emit('saved')
   } catch (e) {
@@ -111,16 +115,37 @@ async function save() {
   }
 }
 
+function readKeyFile(file: File) {
+  const reader = new FileReader()
+  reader.onload = () => {
+    privateKey.value = String(reader.result ?? '')
+    keyFileName.value = file.name
+  }
+  reader.readAsText(file)
+}
+
 function onKeyFile(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    privateKey.value = String(reader.result ?? '')
-  }
-  reader.readAsText(file)
+  readKeyFile(file)
   input.value = ''
+}
+
+function onKeyDrop(event: DragEvent) {
+  keyDragOver.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (!file) return
+  readKeyFile(file)
+}
+
+function clearKeyFile() {
+  keyFileName.value = ''
+  privateKey.value = ''
+}
+
+function onKeyPaste() {
+  if (privateKey.value.trim()) keyFileName.value = ''
 }
 
 async function testConnection() {
@@ -171,13 +196,47 @@ async function testConnection() {
         </div>
         <div class="form-grid-row">
           <FormField :label="t('operation.ssh.privateKey')" horizontal class="form-field-span-2">
-            <input type="file" accept=".pem,.key,text/plain" class="field-input text-sm" @change="onKeyFile" />
-            <textarea
-              v-model="privateKey"
-              rows="4"
-              class="field-input mt-2 font-mono text-xs"
-              :placeholder="sshConfigured ? t('operation.ssh.privateKeyKeep') : t('operation.ssh.privateKeyPlaceholder')"
-            />
+            <div class="space-y-2">
+              <label
+                class="operation-pem-key-pick"
+                :class="{
+                  'operation-pem-key-pick--filled': keyFileName,
+                  'operation-pem-key-pick--active': keyDragOver,
+                }"
+                @dragover.prevent="keyDragOver = true"
+                @dragleave.prevent="keyDragOver = false"
+                @drop.prevent="onKeyDrop"
+              >
+                <input type="file" class="sr-only" accept=".pem,.key,text/plain" @change="onKeyFile" />
+                <span class="operation-pem-key-pick-icon">
+                  <KeyRound class="h-4 w-4" />
+                </span>
+                <span class="operation-pem-key-pick-body">
+                  <span class="operation-pem-key-pick-title">{{ t('operation.ssh.pickKeyFile') }}</span>
+                  <span class="operation-pem-key-pick-name">
+                    {{ keyFileName || t('operation.ssh.pickKeyHint') }}
+                  </span>
+                </span>
+                <span class="operation-pem-key-pick-action">{{ t('operation.ssh.browse') }}</span>
+                <button
+                  v-if="keyFileName"
+                  type="button"
+                  class="operation-pem-key-pick-clear"
+                  :aria-label="t('operation.ssh.clearKeyFile')"
+                  @click.stop.prevent="clearKeyFile"
+                >
+                  <X class="h-3.5 w-3.5" />
+                </button>
+              </label>
+              <p class="text-xs text-gray-400">{{ t('operation.ssh.orPasteKey') }}</p>
+              <textarea
+                v-model="privateKey"
+                rows="4"
+                class="field-input font-mono text-xs"
+                :placeholder="sshConfigured ? t('operation.ssh.privateKeyKeep') : t('operation.ssh.privateKeyPlaceholder')"
+                @input="onKeyPaste"
+              />
+            </div>
           </FormField>
         </div>
         <div class="form-grid-row">

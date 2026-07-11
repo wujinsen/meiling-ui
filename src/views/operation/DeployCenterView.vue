@@ -20,14 +20,15 @@ import { showToast } from '@/composables/useToast'
 import { PERM } from '@/constants/permissions'
 import { API_SUCCESS_CODE } from '@/types/api'
 import {
-  MOLI_DEPLOY_SERVICES,
   type DeployExecAction,
   type OperationDeployPresetItem,
+  type OperationDeployServiceOption,
   type OperationDeployStatus,
   type OperationServer,
   type UploadPostAction,
   type UploadPostMode,
 } from '@/types/operation'
+import { normalizeDeployServiceKeys } from '@/utils/operationDeploy'
 import { Loader2, Play, RefreshCw, RotateCcw, Square, Terminal, Upload, List } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -42,7 +43,7 @@ const actionLoading = ref<string | null>(null)
 
 const pathPresets = ref<string[]>([])
 const actionPresets = ref<OperationDeployPresetItem[]>([])
-const deployServiceKeys = ref<string[]>([...MOLI_DEPLOY_SERVICES])
+const deployServiceKeys = ref<OperationDeployServiceOption[]>(normalizeDeployServiceKeys())
 const presetsLoading = ref(false)
 
 const uploadFile = ref<File | null>(null)
@@ -89,7 +90,7 @@ const postModeOptions = computed(() => [
 ])
 
 const activeDeployServices = computed(() =>
-  deployServiceKeys.value.length ? deployServiceKeys.value : [...MOLI_DEPLOY_SERVICES],
+  deployServiceKeys.value.length ? deployServiceKeys.value : normalizeDeployServiceKeys(),
 )
 
 async function loadPresets() {
@@ -100,9 +101,7 @@ async function loadPresets() {
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.deployCenter.presetsFailed'))
     pathPresets.value = result.data.pathPresets ?? []
     actionPresets.value = result.data.actionPresets ?? []
-    deployServiceKeys.value = result.data.serviceKeys?.length
-      ? result.data.serviceKeys
-      : [...MOLI_DEPLOY_SERVICES]
+    deployServiceKeys.value = normalizeDeployServiceKeys(result.data.serviceKeys)
     if (!uploadTarget.value && pathPresets.value.length) {
       uploadTarget.value = pathPresets.value[0]
     }
@@ -121,10 +120,10 @@ async function refreshAllStatus() {
   const sid = selectedServerId.value || undefined
   try {
     await Promise.all(
-      activeDeployServices.value.map(async (key) => {
-        const result = await getDeployStatusApi(key, sid)
+      activeDeployServices.value.map(async (svc) => {
+        const result = await getDeployStatusApi(svc.key, sid)
         if (result.code === API_SUCCESS_CODE && result.data) {
-          statusMap.value[key] = result.data
+          statusMap.value[svc.key] = result.data
         }
       }),
     )
@@ -147,7 +146,10 @@ watch(pathPresetPick, (p) => {
   if (p) uploadTarget.value = p
 })
 
-function serviceLabel(key: string) {
+function serviceLabel(svc: OperationDeployServiceOption | string) {
+  const key = typeof svc === 'string' ? svc : svc.key
+  const apiLabel = typeof svc === 'string' ? undefined : svc.label
+  if (apiLabel) return apiLabel
   const i18nKey = `operation.deployCenter.service.${key}`
   const label = t(i18nKey)
   return label === i18nKey ? key : label
@@ -334,34 +336,34 @@ async function submitRemoteCommand() {
           <div v-if="!selectedServerId" class="text-sm text-gray-400">{{ t('operation.deployCenter.selectServer') }}</div>
           <div v-else class="grid gap-4 md:grid-cols-3">
             <div
-              v-for="key in activeDeployServices"
-              :key="key"
+              v-for="svc in activeDeployServices"
+              :key="svc.key"
               class="rounded-lg border border-gray-100 p-4 dark:border-white/10"
             >
-              <div class="mb-2 font-medium">{{ serviceLabel(key) }}</div>
-              <div class="mb-3 text-sm text-gray-500">{{ runningLabel(key) }}</div>
+              <div class="mb-2 font-medium">{{ serviceLabel(svc) }}</div>
+              <div class="mb-3 text-sm text-gray-500">{{ runningLabel(svc.key) }}</div>
               <div class="flex flex-wrap gap-2">
                 <button
                   type="button"
                   class="btn-secondary text-xs"
-                  :disabled="!canDeployExec || actionLoading === `${key}:start`"
-                  @click="runDeployAction(key, 'start')"
+                  :disabled="!canDeployExec || actionLoading === `${svc.key}:start`"
+                  @click="runDeployAction(svc.key, 'start')"
                 >
                   <Play class="h-3.5 w-3.5" /> {{ t('operation.deploy.action.start') }}
                 </button>
                 <button
                   type="button"
                   class="btn-secondary text-xs"
-                  :disabled="!canDeployExec || actionLoading === `${key}:stop`"
-                  @click="runDeployAction(key, 'stop')"
+                  :disabled="!canDeployExec || actionLoading === `${svc.key}:stop`"
+                  @click="runDeployAction(svc.key, 'stop')"
                 >
                   <Square class="h-3.5 w-3.5" /> {{ t('operation.deploy.action.stop') }}
                 </button>
                 <button
                   type="button"
                   class="btn-secondary text-xs"
-                  :disabled="!canDeployExec || actionLoading === `${key}:restart`"
-                  @click="runDeployAction(key, 'restart')"
+                  :disabled="!canDeployExec || actionLoading === `${svc.key}:restart`"
+                  @click="runDeployAction(svc.key, 'restart')"
                 >
                   <RotateCcw class="h-3.5 w-3.5" /> {{ t('operation.deploy.action.restart') }}
                 </button>

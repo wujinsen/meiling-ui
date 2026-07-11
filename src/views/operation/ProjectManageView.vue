@@ -5,7 +5,7 @@ import { addProjectApi, deleteProjectApi, execDeployApi, getDeployStatusApi, get
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
-import OperationServerSelect from '@/components/operation/OperationServerSelect.vue'
+import OperationServerMultiSelect from '@/components/operation/OperationServerMultiSelect.vue'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import AppModal from '@/components/ui/AppModal.vue'
@@ -20,6 +20,7 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject, type OperationServer } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
 import { isOperationOrphan } from '@/utils/operationOrphan'
+import { entityHasServer, linkedServerCount, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { resolveDeployServiceKey } from '@/utils/operationPort'
 import { ClipboardList, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Server, Square, Trash2 } from 'lucide-vue-next'
 
@@ -45,7 +46,15 @@ const deployStatus = ref<OperationDeployStatus | null>(null)
 const canDeployExec = computed(() => assertAction(PERM.OP_DEPLOY_EXEC))
 const deployExecAvailable = computed(() => deployStatus.value?.available !== false)
 
-const serverIpLocked = computed(() => !isOperationOrphan(form.value.serverId))
+const serverIpLocked = computed(() => (form.value.serverIds?.length ?? 0) > 0 || !isOperationOrphan(form.value.serverId))
+
+const formServerIds = computed({
+  get: () => (form.value.serverIds ?? []).map(String),
+  set: (ids: string[]) => {
+    form.value.serverIds = ids
+    form.value.serverId = ids[0] ?? ''
+  },
+})
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, projectName: '', serverIp: '', environment: '' as number | '' })
 
@@ -97,7 +106,9 @@ async function openEdit(row: OperationProject) {
   try {
     const result = await getProjectApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.project.loadFailed'))
-    form.value = { ...result.data }
+    const data = result.data
+    const serverIds = resolveEntityServerIds(data.serverIds, data.serverId)
+    form.value = { ...data, serverIds, serverId: serverIds[0] ?? data.serverId ?? '' }
     modalTitle.value = t('operation.common.edit')
     modalOpen.value = true
   } catch (e) {
@@ -110,15 +121,16 @@ function closeModal() {
   form.value = createEmptyProject()
 }
 
-function onServerPick(server: OperationServer | null) {
-  if (!server) return
+function onPrimaryServerChange(server: OperationServer | null) {
+  if (!server) {
+    if (!(form.value.serverIds?.length)) {
+      form.value.serverIp = ''
+      form.value.innerIp = ''
+    }
+    return
+  }
   form.value.serverIp = server.ip || ''
   form.value.innerIp = server.innerIp || ''
-}
-
-function normalizeServerId(serverId?: string | number | null) {
-  if (serverId == null || serverId === '') return undefined
-  return serverId
 }
 
 async function submitForm() {
@@ -127,12 +139,19 @@ async function submitForm() {
     showToast('error', t('operation.project.nameRequired'))
     return
   }
+  const serverIds = normalizeServerIds(form.value.serverIds)
+  if (!serverIds?.length && !form.value.serverIp?.trim()) {
+    showToast('error', t('operation.project.serverRequired'))
+    return
+  }
   saving.value = true
   try {
+    const primaryServerId = serverIds?.[0] ?? form.value.serverId
     const payload: OperationProject = {
       ...form.value,
       projectName: form.value.projectName.trim(),
-      serverId: normalizeServerId(form.value.serverId),
+      serverId: primaryServerId === '' || primaryServerId == null ? undefined : primaryServerId,
+      serverIds,
       url: form.value.url?.trim() || undefined,
       serverIp: form.value.serverIp?.trim() || undefined,
       innerIp: form.value.innerIp?.trim() || undefined,
@@ -323,16 +342,23 @@ onMounted(loadList)
               v-else
               :key="String(row.id)"
               class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5"
-              :class="isOperationOrphan(row.serverId) && 'operation-table-row--orphan'"
+              :class="!entityHasServer(row) && 'operation-table-row--orphan'"
             >
               <td class="px-4 py-3 font-medium">
                 <div class="flex min-w-0 items-center gap-2">
                   <span class="truncate">{{ row.projectName }}</span>
-                  <OperationOrphanBadge :show="isOperationOrphan(row.serverId)" />
+                  <OperationOrphanBadge :show="!entityHasServer(row)" />
                 </div>
               </td>
               <td class="px-4 py-3"><a v-if="row.url" :href="row.url" target="_blank" class="text-brand-600 hover:underline">{{ row.url }}</a><span v-else>-</span></td>
-              <td class="px-4 py-3">{{ row.serverIp || '-' }}</td>
+              <td class="px-4 py-3">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span>{{ row.serverIp || '-' }}</span>
+                  <span v-if="linkedServerCount(row) > 1" class="operation-alias-chip operation-alias-chip--compact text-[10px]">
+                    +{{ linkedServerCount(row) - 1 }}
+                  </span>
+                </div>
+              </td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
               <td class="px-4 py-3"><PortMatchBadge :status="row.portMatchStatus" :expected-port="row.expectedPort" /></td>
               <td class="px-4 py-3">
@@ -353,8 +379,8 @@ onMounted(loadList)
                     v-if="resolveDeployServiceKey(row.projectName)"
                     type="button"
                     class="btn-action-edit"
-                    :disabled="row.serverId == null || row.serverId === ''"
-                    :title="row.serverId == null || row.serverId === '' ? t('operation.project.deployNeedsServerId') : undefined"
+                    :disabled="!entityHasServer(row)"
+                    :title="!entityHasServer(row) ? t('operation.project.deployNeedsServerId') : undefined"
                     @click="openDeployStatus(row)"
                   >
                     <Server class="h-3.5 w-3.5" />{{ t('operation.deploy.status') }}
@@ -384,12 +410,12 @@ onMounted(loadList)
           </div>
           <div class="form-grid-row">
             <FormField :label="t('operation.common.linkServer')" horizontal class="form-field-span-2">
-              <OperationServerSelect
-                v-model="form.serverId"
+              <OperationServerMultiSelect
+                v-model="formServerIds"
                 :environment="form.environment"
-                @select="onServerPick"
+                @primary-change="onPrimaryServerChange"
               />
-              <p class="mt-1 text-xs text-gray-400">{{ t('operation.common.serverIpFromServer') }}</p>
+              <p class="mt-1 text-xs text-gray-400">{{ t('operation.project.multiServerHint') }}</p>
             </FormField>
           </div>
           <div class="form-grid-row">

@@ -213,6 +213,70 @@
     @apply btn-ghost shrink-0 px-2 py-1 text-xs text-rose-600 hover:text-rose-700 dark:text-rose-400;
   }
 
+  .operation-pem-key-pick {
+    @apply relative flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-2.5 transition;
+    @apply hover:border-brand-300 hover:bg-brand-50/50 hover:shadow-sm;
+    @apply dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/35 dark:hover:bg-brand-500/10;
+  }
+
+  .operation-pem-key-pick--active {
+    @apply border-brand-400 bg-brand-50/80 shadow-inner shadow-brand-500/10;
+    @apply dark:border-brand-400 dark:bg-brand-500/15;
+  }
+
+  .operation-pem-key-pick--filled {
+    @apply border-solid border-brand-200 bg-brand-50/60 dark:border-brand-500/35 dark:bg-brand-500/10;
+  }
+
+  .operation-pem-key-pick-icon {
+    @apply inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-gray-500 shadow-sm;
+    @apply dark:bg-white/10 dark:text-gray-300;
+  }
+
+  .operation-pem-key-pick--filled .operation-pem-key-pick-icon {
+    @apply bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-200;
+  }
+
+  .operation-pem-key-pick-body {
+    @apply min-w-0 flex-1;
+  }
+
+  .operation-pem-key-pick-title {
+    @apply block text-xs font-medium text-gray-500 dark:text-gray-400;
+  }
+
+  .operation-pem-key-pick-name {
+    @apply block truncate text-sm font-medium text-gray-800 dark:text-gray-100;
+  }
+
+  .operation-pem-key-pick-action {
+    @apply btn-secondary shrink-0 px-3 py-1.5 text-xs shadow-sm;
+  }
+
+  .operation-pem-key-pick-clear {
+    @apply absolute right-1.5 top-1.5 rounded-md p-0.5 text-gray-400 transition hover:bg-white hover:text-rose-600 dark:hover:bg-white/10;
+  }
+
+  .operation-server-multi-list {
+    @apply max-h-44 space-y-1 overflow-y-auto rounded-lg border border-gray-100 p-2 dark:border-white/10;
+  }
+
+  .operation-server-multi-item {
+    @apply flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition hover:bg-gray-50 dark:hover:bg-white/5;
+  }
+
+  .operation-server-multi-item--selected {
+    @apply bg-brand-50/70 dark:bg-brand-500/10;
+  }
+
+  .operation-server-multi-primary {
+    @apply ring-1 ring-brand-300 dark:ring-brand-500/40;
+  }
+
+  .operation-server-multi-remove {
+    @apply ml-1 inline-flex h-4 w-4 items-center justify-center rounded text-gray-400 hover:bg-white hover:text-rose-600 dark:hover:bg-white/10;
+  }
+
   .btn-tree-toggle {
     @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 transition;
     @apply hover:bg-white hover:text-gray-900 hover:shadow-sm;

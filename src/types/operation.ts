@@ -9,6 +9,8 @@ export type PageQuery = {
 export type OperationProject = {
   id?: number | string
   serverId?: number | string
+  /** N:N 关联服务器；首项为主服务器（驱动 serverIp / 部署状态） */
+  serverIds?: (number | string)[]
   serverIp?: string
   innerIp?: string
   url?: string
@@ -80,6 +82,16 @@ export type OperationServerLinks = {
   componentIds?: (number | string)[]
 }
 
+export type OperationProjectLinks = {
+  projectId?: number | string
+  serverIds?: (number | string)[]
+}
+
+export type OperationComponentLinks = {
+  componentId?: number | string
+  serverIds?: (number | string)[]
+}
+
 export type OperationHealthProbeResult = {
   serversProbed?: number
   componentsProbed?: number
@@ -104,6 +116,8 @@ export type OperationPlatform = {
 export type OperationComponent = {
   id?: number | string
   serverId?: number | string
+  /** N:N 关联服务器；首项为主服务器（驱动 serverIp / 探活） */
+  serverIds?: (number | string)[]
   componentName?: string
   serverIp?: string
   account?: string
@@ -144,7 +158,7 @@ export type ComponentQuery = PageQuery & {
 }
 
 export function createEmptyProject(): OperationProject {
-  return { projectName: '', serverId: '', url: '', serverIp: '', innerIp: '', port: '', deployPath: '', environment: 1, remark: '' }
+  return { projectName: '', serverId: '', serverIds: [], url: '', serverIp: '', innerIp: '', port: '', deployPath: '', environment: 1, remark: '' }
 }
 
 export function createEmptyServer(): OperationServer {
@@ -159,6 +173,7 @@ export function createEmptyComponent(): OperationComponent {
   return {
     componentName: '',
     serverId: '',
+    serverIds: [],
     serverIp: '',
     account: '',
     password: '',
@@ -338,11 +353,16 @@ export type OperationDeployPresetItem = {
   label: string
 }
 
+export type OperationDeployServiceOption = {
+  key: string
+  label?: string
+}
+
 export type OperationDeployPresets = {
   pathPresets: string[]
   actionPresets: OperationDeployPresetItem[]
-  /** 当前服务器可用的 deploy serviceKey 列表（S9） */
-  serviceKeys?: string[]
+  /** 当前服务器可用的 deploy serviceKey 列表（S9 / SVR-20） */
+  serviceKeys?: OperationDeployServiceOption[] | string[]
 }
 
 export type OperationCommandExec = {

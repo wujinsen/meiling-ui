@@ -22,8 +22,9 @@
 | **S6** 部署中心 | `DeployCenterView` · `DeployServerPicker` · `DeployTaskDrawer` | `getDeployPresetsApi` · `createDeployTaskApi` · `uploadFileApi` | ✅ |
 | **S7** 批量探活 | `ServerManageView` · 驾驶舱 ops | `probeAllHealthApi` → `taskId` · `useProbeAllHealth` · `useOperationTaskPoll` | ✅ |
 | **S9** 动态 serviceKey | `DeployCenterView` | `getDeployPresetsApi().serviceKeys`（回退 `MOLI_DEPLOY_SERVICES`） | ✅ |
-| **S10** serverId 表单 | `ProjectManageView` · `ComponentManageView` · `OperationServerSelect` | 提交 `serverId`；IP 由台账对齐 | ✅ |
-| **S11** orphan 标记 | `OperationOrphanBadge` · `operationOrphan.ts` | 列表 `serverId` 为空时徽章 + 行底色 | ✅ |
+| **S6-b** 多选服务器 | `ProjectManageView` · `ComponentManageView` · `OperationServerMultiSelect` | 提交 `serverIds`（首项主服务器）；`GET/PUT .../project|component/{id}/links` | ✅ |
+| **S10** serverId 表单 | `ProjectManageView` · `ComponentManageView` · `OperationServerMultiSelect` | 多选 `serverIds` + 主 `serverId`；IP 由台账对齐 | ✅ |
+| **S11** orphan 标记 | `OperationOrphanBadge` · `operationOrphan.ts` · `operationServerLinks.ts` | 无关联服务器时徽章 + 行底色（含 `serverIds` 为空） | ✅ |
 | **S12** 端口矩阵 | `PortMatrixManageView` · `OperationPortMatrixAliasInput` | CRUD + 审计弹窗「管理端口矩阵」 | ✅ |
 | **S13** 任务历史 | `TaskHistoryView` · `OperationTaskStatusBadge` | `listTaskApi` 分页 + 日志抽屉 + 部署中心入口 | ✅ |
 | 公共 | `EnvironmentSelect` · `OperationPageHeader` · `AppSelect` | `src/types/operation.ts` · `src/api/operation.ts` · `operationErrors.ts` | ✅ |
@@ -478,8 +479,8 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | S6 | 部署中心 | 服务器分页选择；上传/命令/启停走任务抽屉 |
 | S7 | 批量探活 | 异步 taskId + 轮询；完成后刷新 |
 | S9 | serviceKeys | 部署中心服务列表来自 presets，非仅前端常量 |
-| S10 | serverId 表单 | 项目/组件弹窗 `OperationServerSelect`；提交 `serverId` |
-| S11 | orphan 标记 | `serverId` 为空时列表琥珀色徽章 + 行底色 |
+| S10 | 多选服务器 | 项目/组件弹窗 `OperationServerMultiSelect`；提交 `serverIds` + 主 `serverId` |
+| S11 | orphan 标记 | 无 `serverIds` 且无 `serverId` 时琥珀色徽章 + 行底色；列表 `+N` 显示额外关联数 |
 | S12 | 端口矩阵管理 | `PortMatrixManageView` · CRUD `/operation/port-matrix/*`；审计弹窗跳转 |
 | S13 | 任务历史 | `TaskHistoryView` · `GET /operation/task/list`；筛选 + 日志抽屉 |
 
@@ -504,12 +505,28 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | 新增/编辑弹窗 | `POST` / `PUT` · `OperationPortMatrixAliasInput` 别名 Tag |
 | 删除 | `DELETE /operation/port-matrix/{ids}` |
 | 端口校验 | 工具栏「端口校验」→ `PortAuditModal`（`operation:project:list`） |
+| 未执行 SQL 种子时 | `operationSupplementRoutes.ts` 补菜单 406 + 路由 `port-matrix` / `task` |
+| matrixKey 校验 | `operationPortMatrix.ts` 归一化 + `^[a-z][a-z0-9-]*$` |
 
 保存成功后**无需重启** user-center；可立即打开端口校验验证 `portMatchStatus` 变化。
 
 ### 14.2 与 S3 审计弹窗联动
 
 项目/组件管理页 `PortAuditModal` 底部「管理端口矩阵」→ `/operation/port-matrix`（需 `operation:port-matrix:list`）。审计 API 权限与矩阵 CRUD 权限分离。
+
+---
+
+## 15. 项目/组件多选服务器（S6-b / SVR-22d）
+
+| 项 | 说明 |
+|----|------|
+| 表单组件 | `OperationServerMultiSelect`（搜索 + checkbox；首项标「主」） |
+| 提交字段 | `serverIds: string[]` + 主 `serverId`（`serverIds[0]`） |
+| 列表展示 | 主服务器 IP + `+N` 徽章（额外关联数）；无关联时 orphan 行样式 |
+| 独立 links API | `GET/PUT /operation/project/{id}/links` · `GET/PUT /operation/component/{id}/links` |
+| 工具 | `src/utils/operationServerLinks.ts` |
+
+保存项目/组件时后端 `create`/`update` 会同步 N:N 关联表；前端在弹窗提交 `serverIds` 即可，无需单独调 links API。
 
 ---
 

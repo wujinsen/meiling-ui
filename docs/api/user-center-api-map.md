@@ -35,8 +35,10 @@
 - `PUT /operation/project`：`operation:project:edit` + `list`
 - `GET /operation/project/{id}`：`operation:project:list`
 - `DELETE /operation/project/{ids}`：`operation:project:remove` + `list`
+- `GET /operation/project/{id}/links`：`operation:project:list`；返回 `{ projectId, serverIds }`
+- `PUT /operation/project/{id}/links`：`operation:project:edit` + `list`；body `{ serverIds }`（create/update 亦会 sync）
 
-### 组件管理 `OperationComponentController`（前缀 `/operation/component`，7个）
+### 组件管理 `OperationComponentController`（前缀 `/operation/component`，9个）
 
 - `GET /operation/component/list`：`operation:component:list`；返回 `OperationComponentVo`（含 `status` / `lastCheckTime` / `portMatchStatus` / `expectedPort`）
 - `POST /operation/component`：`operation:component:add` + `list`
@@ -45,6 +47,8 @@
 - `GET /operation/component/{id}/secret`：`operation:secret:view`
 - `DELETE /operation/component/{ids}`：`operation:component:remove` + `list`
 - `POST /operation/component/{id}/check`：`operation:component:list`；TCP 探活，更新并返回 `OperationComponentVo`
+- `GET /operation/component/{id}/links`：`operation:component:list`；返回 `{ componentId, serverIds }`
+- `PUT /operation/component/{id}/links`：`operation:component:edit` + `list`；body `{ serverIds }`（create/update 亦会 sync）
 
 ### 端口矩阵 `OperationPortMatrixController`（前缀 `/operation/port-matrix`，5个）
 

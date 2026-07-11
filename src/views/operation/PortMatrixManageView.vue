@@ -22,6 +22,7 @@ import { PERM } from '@/constants/permissions'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyPortMatrix, type OperationPortMatrix } from '@/types/operation'
+import { isValidMatrixKey, normalizeMatrixKey } from '@/utils/operationPortMatrix'
 import { ClipboardList, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 
@@ -41,6 +42,8 @@ const isEdit = computed(() => form.value.id != null)
 const canAdd = computed(() => assertAction(PERM.OP_PORT_MATRIX_ADD))
 const canEdit = computed(() => assertAction(PERM.OP_PORT_MATRIX_EDIT))
 const canRemove = computed(() => assertAction(PERM.OP_PORT_MATRIX_REMOVE))
+const canList = computed(() => assertAction(PERM.OP_PORT_MATRIX_LIST))
+const canAudit = computed(() => assertAction(PERM.OP_PROJECT_LIST))
 
 function isValidPort(port: string) {
   const n = Number(port)
@@ -74,6 +77,7 @@ function resetQuery() {
 }
 
 async function loadList() {
+  if (!canList.value) return
   loading.value = true
   try {
     const result = await listPortMatrixApi({
@@ -123,10 +127,14 @@ function closeModal() {
 
 async function submitForm() {
   if (!guardAction(isEdit.value ? PERM.OP_PORT_MATRIX_EDIT : PERM.OP_PORT_MATRIX_ADD)) return
-  const matrixKey = form.value.matrixKey?.trim()
+  const matrixKey = normalizeMatrixKey(form.value.matrixKey ?? '')
   const expectedPort = form.value.expectedPort?.trim()
   if (!matrixKey) {
     showToast('error', t('operation.portMatrix.keyRequired'))
+    return
+  }
+  if (!isValidMatrixKey(matrixKey)) {
+    showToast('error', t('operation.portMatrix.keyInvalid'))
     return
   }
   if (!expectedPort) {
@@ -151,7 +159,12 @@ async function submitForm() {
     }
     const result = isEdit.value ? await updatePortMatrixApi(payload) : await addPortMatrixApi(payload)
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.saveFailed'))
-    showToast('success', isEdit.value ? t('operation.common.updateOk') : t('operation.common.createOk'))
+    showToast(
+      'success',
+      canAudit.value
+        ? (isEdit.value ? t('operation.portMatrix.updateAuditHint') : t('operation.portMatrix.createAuditHint'))
+        : (isEdit.value ? t('operation.common.updateOk') : t('operation.common.createOk')),
+    )
     closeModal()
     await loadList()
   } catch (e) {
@@ -175,8 +188,16 @@ async function removeRow(row: OperationPortMatrix) {
   }
 }
 
+function openPortAudit() {
+  if (!guardAction(PERM.OP_PROJECT_LIST)) return
+  auditOpen.value = true
+}
+
 watch(() => [query.pageNum, query.pageSize], loadList)
-onMounted(loadList)
+onMounted(() => {
+  if (!guardAction(PERM.OP_PORT_MATRIX_LIST)) return
+  loadList()
+})
 </script>
 
 <template>
@@ -202,7 +223,7 @@ onMounted(loadList)
           </div>
         </form>
         <div class="toolbar-actions">
-          <button type="button" class="btn-ghost shrink-0" @click="auditOpen = true">
+          <button v-if="canAudit" type="button" class="btn-ghost shrink-0" @click="openPortAudit">
             <ClipboardList class="h-4 w-4" /> {{ t('operation.port.audit') }}
           </button>
           <button v-if="canAdd" type="button" class="btn-primary shrink-0" @click="openCreate">
@@ -212,7 +233,10 @@ onMounted(loadList)
       </template>
     </OperationPageHeader>
 
-    <div class="card p-5">
+    <div v-if="!canList" class="card p-8 text-center text-sm text-gray-500">
+      {{ t('operation.portMatrix.noListPerm') }}
+    </div>
+    <div v-else class="card p-5">
       <p class="mb-4 text-sm text-gray-500">{{ t('operation.portMatrix.cacheHint') }}</p>
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
         <table class="w-full min-w-[960px] text-left text-sm">
