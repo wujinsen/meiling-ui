@@ -7,13 +7,13 @@
 
 ---
 
-## 0. meiling-ui 现状审计（2026-07-10）
+## 0. meiling-ui 现状审计（2026-07-11）
 
 | 模块 | 代码落点 | 状态 | 与目标差距 |
 |------|----------|------|------------|
 | 健康体检 · 质量 | `KnowledgeLintView.vue` | ✅ | — |
-| 健康体检 · Sync | `KbSyncOpsPanel.vue`（`KbSyncPanel` 别名） | ✅ O1–O4 | KBOPS-1/2 后端字段就绪后可自动对齐 `running` 轮询 |
-| Wiki 治理 | `KnowledgeWikiGovernView.vue` + `GovernFixPanel` | ✅ T16f 联调验收 | AI 写盘待有效 LLM Key；脚本修复待含 metadata issue 样例 |
+| 健康体检 · Sync | `KbSyncOpsPanel.vue`（`KbSyncPanel` 别名） | ✅ O1–O4 | KBOPS-1/2 后端 `running` 轮询细节可增强；前端 O1–O4 已验收 |
+| Wiki 治理 | `KnowledgeWikiGovernView.vue` + `GovernFixPanel` | ✅ T16f 联调验收 | `ai-batch-fix` E2E 写盘已通过；`script-fix` 待含 metadata issue 样例 |
 | LLM 配置 T19d | `src/views/system/kb-llm/index.vue` | ✅ 联调验收通过 | 见 [kb-llm-platform-frontend.md §14](kb-llm-platform-frontend.md#14-验收清单前端自测) |
 | Ingest 三 Tab T20f | `KnowledgeIngestWorkbenchView.vue` | ✅ UI + 直联 | Tab1 `KbRawUploadPanel`、Tab3 `KbWikiImportPanel` 排版与联调就绪；`VITE_MOCK_KB_IMPORT=false` |
 | Sync API | `src/api/knowledge.ts` | ✅ | 类型在 `src/types/knowledge.ts`；状态归一化 `src/utils/kbSyncStatus.ts` |
@@ -27,13 +27,13 @@
 
 | 优先级 | 模块 | 路由 component | 文档 | 后端 | 前端 |
 |--------|------|----------------|------|------|------|
-| **P0** | 健康体检 · Sync 增强 | `knowledge/lint/index` | **本文 §3** | 🔵 KBOPS-1/2 待修 | 🔵 **O1–O4** |
-| **P0** | Wiki 治理全链路 | `knowledge/wiki-govern/index` | [wiki-govern-frontend.md](wiki-govern-frontend.md) | ✅ | 🔵 **W2/W4/W5/W7** polish |
-| **P1** | 平台 LLM 设置 | `system/kb-llm/index` | [kb-llm-platform-frontend.md](kb-llm-platform-frontend.md) | ✅ T19 | ✅ **T19d** 联调验收（DB Key 入库待运维配 secret） |
+| **P0** | 健康体检 · Sync 增强 | `knowledge/lint/index` | **本文 §3** | ✅ 可用 · KBOPS-1/2 轮询可增强 | ✅ **O1–O4** |
+| **P0** | Wiki 治理全链路 | `knowledge/wiki-govern/index` | [wiki-govern-frontend.md](wiki-govern-frontend.md) | ✅ | ✅ **W2/W4/W5/W7** · T16f E2E |
+| **P1** | 平台 LLM 设置 | `system/kb-llm/index` | [kb-llm-platform-frontend.md](kb-llm-platform-frontend.md) | ✅ T19 | ✅ **T19d** 联调验收（新 Key 入库待 `KB_LLM_CONFIG_SECRET`） |
 | **P1** | Ingest 三 Tab | `knowledge/ingest/index` | [kb-import-entry-frontend.md](kb-import-entry-frontend.md) | ✅ T20a/b/e | ✅ **T20f** Tab1/3 UI + 直联 |
 | **P2** | 运维 Dashboard | `knowledge/ops/dashboard` | **本文 §8** | ✅ KBOPS-9 | ✅ 前端聚合 |
 
-**建议迭代顺序**：**W2/W4/W5/W7（治理闭环）→ Dashboard（P2）**；O1–O4、T20f Tab1/3、**T19d** 前端 **已完成**。
+**建议迭代顺序**：Ingest Expert LLM 降级、Tab1 `raw-prefixes` 下拉（P1 可选）→ 运维增强；**O1–O4、T16f、T20f、T19d、Dashboard 前端已完成**（`npm run kb:e2e` + `kb:e2e:extended`，`KB_BASE=8090`，2026-07-11 **18/18**）。
 
 **网关前缀**：`{VITE_API_BASE_URL}/KnowledgeServer`（开发代理 `vite.config.ts` → `http://127.0.0.1:8888`）
 
@@ -177,11 +177,11 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 
 ### 3.6 验收 O1–O4
 
-- [ ] 选空间后加载 status + 最近 10 条 log  
-- [ ] trigger 成功 → status 刷新、log 新增 success 行  
-- [ ] trigger 失败（运维配合制造）→ fail 行可见、Toast  
-- [ ] `running` 时不能重复 trigger  
-- [ ] 三空间切换后 status/logs 随 `spaceId` 刷新  
+- [x] 选空间后加载 status + 最近 10 条 log  
+- [x] trigger 成功 → status 刷新、log 新增 success 行  
+- [x] trigger 失败（运维配合制造）→ fail 行可见、Toast  
+- [x] `running` 时不能重复 trigger  
+- [x] 三空间切换后 status/logs 随 `spaceId` 刷新  
 
 ---
 
@@ -288,9 +288,9 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 | O2 | Sync | 触发按钮 + 锁 | P0 | ✅ |
 | O3 | Sync | 日志列表 | P0 | ✅ |
 | O4 | Sync | 失败展示 | P0 | ✅ |
-| W1–W8 | 治理 | 见 wiki-govern §13 | P0 |
-| T19d | LLM | 见 kb-llm-platform | P1 |
-| T20f | Ingest | 见 kb-import-entry §10 | P1 | ✅ UI |
+| W1–W8 | 治理 | 见 wiki-govern §13 | P0 | ✅ |
+| T19d | LLM | 见 kb-llm-platform | P1 | ✅ |
+| T20f | Ingest | 见 kb-import-entry §10 | P1 | ✅ |
 | D1–D4 | Dashboard | §8 四区块 | P2 | ✅ |
 
 ---
@@ -352,6 +352,7 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-11 | §1 排期表 O1–O4 / W2–W7 标 ✅；§3.6 / §10 验收勾选；E2E 复验 18/18（`KB_BASE=8090`） |
 | 2026-07-10 | **KBOPS-9** `KnowledgeOpsDashboardView` D1–D4；E2E 脚本 walkthrough + extended（12/12 + 7/7）；`13_kb_ops_dashboard_menu.sql` |
 | 2026-07-10 | O1–O4、`KbSyncOpsPanel`、T20f Tab1/3 UI 排版、治理工作流链接；验收表标 ✅ |
 | 2026-07-09 | meiling-ui 版：§0 现状审计、代码落点对齐仓库、5141 联调说明 |

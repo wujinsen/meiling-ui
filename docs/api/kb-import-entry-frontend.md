@@ -88,7 +88,7 @@ Tab2 `IngestRawPanel` 收到后：刷新 `GET /kb/ingest/raw-tree`，展开 pref
 |---|-----|------|------|------|
 | 1 | Tab1 | POST | `/kb/ingest/raw-upload` | ✅ T20a |
 | 2 | Tab1 | GET | `/kb/ingest/raw-tree` | ✅ 已有 |
-| 3 | Tab1 | GET | `/kb/ingest/raw-prefixes` | 🔵 P1 可选 |
+| 3 | Tab1 | GET | `/kb/ingest/raw-prefixes` | ⏳ P1 可选（前端未接，非阻塞） |
 | 4 | Tab3 | POST | `/kb/wiki/page/import` | ✅ T20b |
 | 5 | Tab3 | GET | `/kb/category/tree?spaceId=` | ✅ 已有 |
 | 6 | Tab3 | POST | `/kb/wiki/page/lint-preview` | ✅ 已有（可选） |
