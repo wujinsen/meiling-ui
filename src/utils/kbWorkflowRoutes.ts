@@ -24,8 +24,9 @@ export function kbWikiGovernRoute(spaceId?: string | number | null) {
   return { path: '/knowledge/wiki-govern', query }
 }
 
+/** 平台 LLM 配置（菜单 SQL：parent 900 · path kb-llm · name KbPlatformLlmSettings） */
 export function kbLlmSettingsRoute() {
-  return { path: '/system/kb-llm', query: {} as Record<string, string> }
+  return { name: 'KbPlatformLlmSettings' as const }
 }
 
 export function kbOpsDashboardRoute() {

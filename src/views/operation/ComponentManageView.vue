@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { addComponentApi, checkComponentApi, deleteComponentApi, getComponentApi, getComponentLinksApi, listComponentApi, revealComponentSecretApi, saveComponentLinksApi, updateComponentApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
+import OperationLinkedServersCell from '@/components/operation/OperationLinkedServersCell.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import OperationServerLinksModal from '@/components/operation/OperationServerLinksModal.vue'
@@ -12,6 +13,7 @@ import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import SecretManageModal from '@/components/operation/SecretManageModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
+import { useOperationServerLabelCache } from '@/composables/useOperationServerLabelCache'
 import { confirm } from '@/composables/useConfirm'
 import { assertOperationSecretEdit, guardAction, guardOperationSecretEdit } from '@/composables/useActionPermissions'
 import { PERM } from '@/constants/permissions'
@@ -21,7 +23,7 @@ import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyComponent, type OperationComponent } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
-import { entityHasServer, linkedServerCount, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
+import { entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { isOperationOrphan } from '@/utils/operationOrphan'
 import { Pencil, Plus, RefreshCw, Search, Trash2, Activity, ClipboardList, KeyRound, Link2 } from 'lucide-vue-next'
 
@@ -45,6 +47,8 @@ const linksOpen = ref(false)
 const linksSaving = ref(false)
 const linksRow = ref<OperationComponent | null>(null)
 const linksServerIds = ref<string[]>([])
+
+const { serverCache, enrichRowsWithLinks, hydrateRows } = useOperationServerLabelCache()
 
 const canManagePassword = computed(() => assertOperationSecretEdit(PERM.OP_COMPONENT_EDIT))
 
@@ -79,8 +83,13 @@ async function loadList() {
       environment: query.environment === '' ? undefined : (query.environment as 1 | 2 | 3 | 4),
     })
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.component.loadFailed'))
-    list.value = result.data.list ?? []
+    const rows = result.data.list ?? []
+    list.value = await enrichRowsWithLinks(rows, async (id) => {
+      const linksRes = await getComponentLinksApi(id)
+      return linksRes.code === API_SUCCESS_CODE ? linksRes.data?.serverIds : undefined
+    })
     total.value = result.data.total ?? 0
+    void hydrateRows(list.value)
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.component.loadFailed'))
   } finally {
@@ -328,12 +337,12 @@ onMounted(loadList)
                 </div>
               </td>
               <td class="px-4 py-3">
-                <div class="flex flex-wrap items-center gap-1.5">
-                  <span>{{ row.serverIp || '-' }}</span>
-                  <span v-if="linkedServerCount(row) > 1" class="operation-alias-chip operation-alias-chip--compact text-[10px]">
-                    +{{ linkedServerCount(row) - 1 }}
-                  </span>
-                </div>
+                <OperationLinkedServersCell
+                  :row="row"
+                  :server-cache="serverCache"
+                  clickable
+                  @click="openComponentLinks(row)"
+                />
               </td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
               <td class="px-4 py-3"><PortMatchBadge :status="row.portMatchStatus" :expected-port="row.expectedPort" /></td>

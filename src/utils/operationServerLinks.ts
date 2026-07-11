@@ -1,5 +1,23 @@
-import type { OperationComponent, OperationProject } from '@/types/operation'
+import type { LinkedServerRow, OperationComponent, OperationProject, OperationServer } from '@/types/operation'
 import { isOperationOrphan } from '@/utils/operationOrphan'
+
+export function formatOperationServerLabel(srv: Pick<OperationServer, 'serverName' | 'ip' | 'innerIp'>) {
+  const ip = srv.innerIp || srv.ip || '-'
+  return `${srv.serverName || ip} · ${ip}`
+}
+
+export function resolvePrimaryServerLabel(row: LinkedServerRow, cache?: ReadonlyMap<string, OperationServer>) {
+  const ids = resolveEntityServerIds(row.serverIds, row.serverId)
+  const primaryId = ids[0]
+  if (primaryId && cache?.has(primaryId)) {
+    return formatOperationServerLabel(cache.get(primaryId)!)
+  }
+  if (!isOperationOrphan(row.serverId) || row.serverIp || row.innerIp) {
+    const ip = row.innerIp || row.serverIp
+    if (ip) return ip
+  }
+  return null
+}
 
 export function normalizeServerIds(ids?: (string | number)[]) {
   if (!ids?.length) return undefined

@@ -237,10 +237,10 @@ onMounted(() => {
       {{ t('operation.portMatrix.noListPerm') }}
     </div>
     <div v-else class="card p-5">
-      <p class="mb-4 text-sm text-gray-500">{{ t('operation.portMatrix.cacheHint') }}</p>
+      <p class="mb-4 text-xs text-gray-400 dark:text-gray-500">{{ t('operation.portMatrix.cacheHint') }}</p>
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-        <table class="w-full min-w-[960px] text-left text-sm">
-          <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">
+        <table class="w-full min-w-[960px] text-left text-sm text-gray-700 dark:text-gray-200">
+          <thead class="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-400 dark:bg-white/5">
             <tr>
               <th class="px-4 py-3">{{ t('operation.portMatrix.matrixKey') }}</th>
               <th class="px-4 py-3">{{ t('operation.portMatrix.displayName') }}</th>
@@ -254,27 +254,27 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
-            <tr v-else-if="!list.length"><td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
+            <tr v-if="loading"><td colspan="9" class="px-4 py-10 text-center text-sm text-gray-400">{{ t('operation.common.loading') }}</td></tr>
+            <tr v-else-if="!list.length"><td colspan="9" class="px-4 py-10 text-center text-sm text-gray-400">{{ t('operation.common.empty') }}</td></tr>
             <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
-              <td class="px-4 py-3 font-mono text-xs font-medium">{{ row.matrixKey }}</td>
-              <td class="px-4 py-3">{{ row.displayName || '-' }}</td>
-              <td class="px-4 py-3 font-medium">{{ row.expectedPort }}</td>
+              <td class="px-4 py-3 font-mono text-sm text-gray-600 dark:text-gray-300">{{ row.matrixKey }}</td>
+              <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{{ row.displayName || '-' }}</td>
+              <td class="px-4 py-3 tabular-nums">{{ row.expectedPort }}</td>
               <td class="px-4 py-3">
                 <div v-if="row.aliases?.length" class="flex flex-wrap gap-1">
-                  <span v-for="alias in row.aliases.slice(0, 4)" :key="alias" class="operation-alias-chip operation-alias-chip--compact">{{ alias }}</span>
+                  <span v-for="alias in row.aliases.slice(0, 4)" :key="alias" class="operation-alias-chip">{{ alias }}</span>
                   <span v-if="row.aliases.length > 4" class="text-xs text-gray-400">+{{ row.aliases.length - 4 }}</span>
                 </div>
                 <span v-else class="text-gray-400">-</span>
               </td>
-              <td class="px-4 py-3">{{ row.sortOrder ?? 0 }}</td>
+              <td class="px-4 py-3 tabular-nums">{{ row.sortOrder ?? 0 }}</td>
               <td class="px-4 py-3">
-                <span class="badge" :class="row.enabled !== false ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-100 dark:bg-white/10'">
+                <span class="badge" :class="row.enabled !== false ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400'">
                   {{ row.enabled !== false ? t('operation.portMatrix.enabledOn') : t('operation.portMatrix.enabledOff') }}
                 </span>
               </td>
-              <td class="max-w-[140px] truncate px-4 py-3 text-xs text-gray-500" :title="row.source">{{ row.source || '-' }}</td>
-              <td class="px-4 py-3">{{ formatDateTime(row.updateTime || row.createTime) }}</td>
+              <td class="max-w-[140px] truncate px-4 py-3 text-gray-500 dark:text-gray-400" :title="row.source">{{ row.source || '-' }}</td>
+              <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ formatDateTime(row.updateTime || row.createTime) }}</td>
               <td class="px-4 py-3">
                 <div v-if="canEdit || canRemove" class="btn-action-group flex-wrap justify-end">
                   <button v-if="canEdit" type="button" class="btn-action-edit" @click="openEdit(row)">
@@ -301,7 +301,7 @@ onMounted(() => {
               <input
                 v-model="form.matrixKey"
                 type="text"
-                class="field-input font-mono"
+                class="field-input font-mono text-sm"
                 :readonly="isEdit"
                 :class="isEdit && 'opacity-70'"
                 :placeholder="t('operation.portMatrix.keyPlaceholder')"

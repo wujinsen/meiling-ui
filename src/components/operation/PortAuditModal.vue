@@ -81,19 +81,19 @@ function goManageMatrix() {
       </div>
 
       <section>
-        <h3 class="mb-2 text-sm font-semibold">{{ t('operation.port.matrixRef') }}</h3>
-        <div class="overflow-x-auto rounded border border-gray-100 dark:border-white/10">
-          <table class="w-full min-w-[480px] text-left text-xs">
-            <thead class="bg-gray-50 dark:bg-white/5">
+        <h3 class="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('operation.port.matrixRef') }}</h3>
+        <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
+          <table class="w-full min-w-[480px] text-left text-sm">
+            <thead class="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-400 dark:bg-white/5">
               <tr>
-                <th class="px-3 py-2">{{ t('operation.port.service') }}</th>
-                <th class="px-3 py-2">{{ t('operation.component.port') }}</th>
+                <th class="px-4 py-3">{{ t('operation.port.service') }}</th>
+                <th class="px-4 py-3">{{ t('operation.component.port') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in audit.matrix" :key="row.key" class="border-t border-gray-50 dark:border-white/5">
-                <td class="px-3 py-2 font-medium">{{ row.key }}</td>
-                <td class="px-3 py-2">{{ row.expectedPort }}</td>
+                <td class="px-4 py-3 font-mono text-sm text-gray-600 dark:text-gray-300">{{ row.key }}</td>
+                <td class="px-4 py-3 tabular-nums">{{ row.expectedPort }}</td>
               </tr>
             </tbody>
           </table>
@@ -101,27 +101,27 @@ function goManageMatrix() {
       </section>
 
       <section>
-        <h3 class="mb-2 text-sm font-semibold">{{ t('operation.port.auditItems') }}</h3>
-        <div class="max-h-[360px] overflow-y-auto rounded border border-gray-100 dark:border-white/10">
-          <table class="w-full min-w-[720px] text-left text-xs">
-            <thead class="sticky top-0 bg-gray-50 dark:bg-white/5">
+        <h3 class="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-100">{{ t('operation.port.auditItems') }}</h3>
+        <div class="max-h-[360px] overflow-y-auto rounded-lg border border-gray-100 dark:border-white/5">
+          <table class="w-full min-w-[720px] text-left text-sm text-gray-700 dark:text-gray-200">
+            <thead class="sticky top-0 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-400 dark:bg-white/5">
               <tr>
-                <th class="px-3 py-2">{{ t('operation.port.recordType') }}</th>
-                <th class="px-3 py-2">{{ t('operation.port.name') }}</th>
-                <th class="px-3 py-2">{{ t('operation.port.actual') }}</th>
-                <th class="px-3 py-2">{{ t('operation.port.expected') }}</th>
-                <th class="px-3 py-2">{{ t('operation.common.environment') }}</th>
-                <th class="px-3 py-2">{{ t('operation.port.status') }}</th>
+                <th class="px-4 py-3">{{ t('operation.port.recordType') }}</th>
+                <th class="px-4 py-3">{{ t('operation.port.name') }}</th>
+                <th class="px-4 py-3">{{ t('operation.port.actual') }}</th>
+                <th class="px-4 py-3">{{ t('operation.port.expected') }}</th>
+                <th class="px-4 py-3">{{ t('operation.common.environment') }}</th>
+                <th class="px-4 py-3">{{ t('operation.port.status') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="item in audit.items" :key="`${item.recordType}-${item.id}`" class="border-t border-gray-50 dark:border-white/5">
-                <td class="px-3 py-2">{{ item.recordType === 'project' ? t('operation.project.title') : t('operation.component.title') }}</td>
-                <td class="px-3 py-2 font-medium">{{ item.name }}</td>
-                <td class="px-3 py-2">{{ item.actualPort || '-' }}</td>
-                <td class="px-3 py-2">{{ item.expectedPort || '-' }}</td>
-                <td class="px-3 py-2">{{ t(environmentI18nKey(item.environment)) }}</td>
-                <td class="px-3 py-2"><PortMatchBadge :status="item.portMatchStatus" :expected-port="item.expectedPort" /></td>
+                <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ item.recordType === 'project' ? t('operation.project.title') : t('operation.component.title') }}</td>
+                <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{{ item.name }}</td>
+                <td class="px-4 py-3 tabular-nums">{{ item.actualPort || '-' }}</td>
+                <td class="px-4 py-3 tabular-nums">{{ item.expectedPort || '-' }}</td>
+                <td class="px-4 py-3">{{ t(environmentI18nKey(item.environment)) }}</td>
+                <td class="px-4 py-3"><PortMatchBadge :status="item.portMatchStatus" :expected-port="item.expectedPort" /></td>
               </tr>
             </tbody>
           </table>

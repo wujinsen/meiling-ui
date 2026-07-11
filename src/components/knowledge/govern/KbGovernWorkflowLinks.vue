@@ -2,6 +2,7 @@
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowRight, Cpu, HeartPulse, Upload } from 'lucide-vue-next'
+import type { RouteLocationRaw } from 'vue-router'
 import {
   kbIngestRoute,
   kbLintRoute,
@@ -15,9 +16,7 @@ const { spaceId } = defineProps<{
 const { t } = useI18n()
 const router = useRouter()
 
-type WorkflowRoute = { path: string; query?: Record<string, string> }
-
-function go(target: WorkflowRoute) {
+function go(target: RouteLocationRaw) {
   void router.push(target)
 }
 </script>

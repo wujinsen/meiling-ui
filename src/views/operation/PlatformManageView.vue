@@ -28,7 +28,7 @@ const modalOpen = ref(false)
 const modalTitle = ref('')
 const form = ref<OperationPlatform>(createEmptyPlatform())
 const passwordInput = ref('')
-const isEdit = computed(() => form.value.id != null)
+const isEdit = computed(() => form.value.id != null && form.value.id !== '')
 const secretOpen = ref(false)
 const secretSaving = ref(false)
 const secretRow = ref<OperationPlatform | null>(null)
@@ -99,6 +99,21 @@ function closeModal() {
   passwordInput.value = ''
 }
 
+function buildPlatformSavePayload(source: OperationPlatform, password?: string): OperationPlatform {
+  const payload: OperationPlatform = {
+    id: source.id != null && source.id !== '' ? String(source.id) : undefined,
+    platformName: source.platformName?.trim(),
+    url: source.url?.trim() || undefined,
+    account: source.account?.trim() || undefined,
+    environment: Number(source.environment ?? 1) as 1 | 2 | 3 | 4,
+    remark: source.remark?.trim() || undefined,
+  }
+  if (password?.trim()) {
+    payload.password = password.trim()
+  }
+  return payload
+}
+
 async function submitForm() {
   if (!guardAction(isEdit.value ? PERM.OP_PLATFORM_EDIT : PERM.OP_PLATFORM_ADD)) return
   if (!form.value.platformName?.trim()) {
@@ -107,14 +122,7 @@ async function submitForm() {
   }
   saving.value = true
   try {
-    const payload: OperationPlatform = {
-      ...form.value,
-      platformName: form.value.platformName.trim(),
-      url: form.value.url?.trim() || undefined,
-      account: form.value.account?.trim() || undefined,
-      environment: Number(form.value.environment ?? 1) as 1 | 2 | 3 | 4,
-      remark: form.value.remark?.trim() || undefined,
-    }
+    const payload = buildPlatformSavePayload(form.value)
     if (!isEdit.value && passwordInput.value.trim()) {
       payload.password = passwordInput.value.trim()
     }
@@ -159,7 +167,7 @@ async function savePassword(password: string) {
   if (!(await guardOperationSecretEdit(PERM.OP_PLATFORM_EDIT))) return
   secretSaving.value = true
   try {
-    const result = await updatePlatformApi({ ...secretRow.value, password })
+    const result = await updatePlatformApi(buildPlatformSavePayload(secretRow.value, password))
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.saveFailed'))
     showToast('success', t('operation.common.passwordSaveOk'))
     closePasswordManage()

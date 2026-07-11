@@ -6,6 +6,13 @@ export type PageQuery = {
   environment?: Environment | ''
 }
 
+export type LinkedServerRow = {
+  serverId?: number | string
+  serverIds?: (number | string)[]
+  serverIp?: string
+  innerIp?: string
+}
+
 export type OperationProject = {
   id?: number | string
   serverId?: number | string
