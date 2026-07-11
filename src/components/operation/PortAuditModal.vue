@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { getPortAuditApi } from '@/api/operation'
 import AppModal from '@/components/ui/AppModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
+import { assertAction, guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
+import { PERM } from '@/constants/permissions'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { OperationPortAudit } from '@/types/operation'
 import { environmentI18nKey } from '@/utils/operationEnv'
+import { Settings2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   open: boolean
@@ -18,8 +22,10 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
 const loading = ref(false)
 const audit = ref<OperationPortAudit | null>(null)
+const canManageMatrix = computed(() => assertAction(PERM.OP_PORT_MATRIX_LIST))
 
 async function load() {
   loading.value = true
@@ -39,6 +45,12 @@ async function load() {
 watch(() => props.open, (open) => {
   if (open) load()
 })
+
+function goManageMatrix() {
+  if (!guardAction(PERM.OP_PORT_MATRIX_LIST)) return
+  emit('close')
+  router.push('/operation/port-matrix')
+}
 </script>
 
 <template>
@@ -117,6 +129,15 @@ watch(() => props.open, (open) => {
       </section>
     </div>
     <template #footer>
+      <button
+        v-if="canManageMatrix"
+        type="button"
+        class="btn-secondary mr-auto"
+        @click="goManageMatrix"
+      >
+        <Settings2 class="h-4 w-4" />
+        {{ t('operation.portMatrix.manageLink') }}
+      </button>
       <button type="button" class="btn-ghost" @click="emit('close')">{{ t('operation.common.cancel') }}</button>
     </template>
   </AppModal>

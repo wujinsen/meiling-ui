@@ -19,6 +19,8 @@ import type {
   OperationTask,
   TaskQuery,
   PlatformQuery,
+  PortMatrixQuery,
+  PortMatrixSaveRequest,
   ProjectQuery,
   ServerQuery,
 } from '@/types/operation'
@@ -109,6 +111,15 @@ export const checkComponentApi = (id: number | string) =>
 
 export const getPortAuditApi = () =>
   request<OperationPortAudit>('/operation/audit/port-matrix', { method: 'GET' })
+
+const portMatrix = createCrudApi<PortMatrixSaveRequest>('/operation/port-matrix')
+
+export const listPortMatrixApi = (params?: PortMatrixQuery) =>
+  portMatrix.list(params as Record<string, string | number | undefined>)
+export const getPortMatrixApi = portMatrix.get
+export const addPortMatrixApi = portMatrix.add
+export const updatePortMatrixApi = portMatrix.update
+export const deletePortMatrixApi = portMatrix.remove
 
 export const getOperationStatsApi = () =>
   request<OperationStats>('/operation/stats', { method: 'GET' })

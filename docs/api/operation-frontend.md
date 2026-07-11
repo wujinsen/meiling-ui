@@ -23,6 +23,7 @@
 | **S9** 动态 serviceKey | `DeployCenterView` | `getDeployPresetsApi().serviceKeys`（回退 `MOLI_DEPLOY_SERVICES`） | ✅ |
 | **S10** serverId 表单 | `ProjectManageView` · `ComponentManageView` · `OperationServerSelect` | 提交 `serverId`；IP 由台账对齐 | ✅ |
 | **S11** orphan 标记 | `OperationOrphanBadge` · `operationOrphan.ts` | 列表 `serverId` 为空时徽章 + 行底色 | ✅ |
+| **S12** 端口矩阵 | `PortMatrixManageView` · `OperationPortMatrixAliasInput` | CRUD + 审计弹窗「管理端口矩阵」 | ✅ |
 | 公共 | `EnvironmentSelect` · `OperationPageHeader` · `AppSelect` | `src/types/operation.ts` · `src/api/operation.ts` · `operationErrors.ts` | ✅ |
 
 权限常量：`src/constants/permissions.ts` → `PERM.OP_*` · `OP_SECRET_VIEW` · `OP_DEPLOY_EXEC` · `OP_FILE_UPLOAD` · `OP_COMMAND_EXEC`。
@@ -473,6 +474,7 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | S9 | serviceKeys | 部署中心服务列表来自 presets，非仅前端常量 |
 | S10 | serverId 表单 | 项目/组件弹窗 `OperationServerSelect`；提交 `serverId` |
 | S11 | orphan 标记 | `serverId` 为空时列表琥珀色徽章 + 行底色 |
+| S12 | 端口矩阵管理 | `PortMatrixManageView` · CRUD `/operation/port-matrix/*`；审计弹窗跳转 |
 
 ---
 

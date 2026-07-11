@@ -198,6 +198,50 @@ export type OperationPortAudit = {
   items?: OperationPortAuditItem[]
 }
 
+export type OperationPortMatrix = {
+  id?: number | string
+  matrixKey: string
+  displayName?: string
+  expectedPort: string
+  aliases?: string[]
+  sortOrder?: number
+  enabled?: boolean
+  source?: string
+  remark?: string
+  createTime?: string | number
+  updateTime?: string | number
+}
+
+export type PortMatrixSaveRequest = {
+  id?: number | string
+  matrixKey: string
+  displayName?: string
+  expectedPort: string
+  aliases?: string[]
+  sortOrder?: number
+  enabled?: boolean
+  source?: string
+  remark?: string
+}
+
+export type PortMatrixQuery = PageQuery & {
+  matrixKey?: string
+  displayName?: string
+  enabled?: boolean
+}
+
+export function createEmptyPortMatrix(): OperationPortMatrix {
+  return {
+    matrixKey: '',
+    displayName: '',
+    expectedPort: '',
+    aliases: [],
+    sortOrder: 0,
+    enabled: true,
+    remark: '',
+  }
+}
+
 export type OperationStats = {
   projects?: number
   servers?: number

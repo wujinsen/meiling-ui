@@ -120,6 +120,14 @@ export const PERM = {
   OP_FILE_UPLOAD: 'operation:file:upload',
   /** 远程执行受控 shell 命令 */
   OP_COMMAND_EXEC: 'operation:command:exec',
+  /** 端口矩阵列表 */
+  OP_PORT_MATRIX_LIST: 'operation:port-matrix:list',
+  /** 新增端口矩阵 */
+  OP_PORT_MATRIX_ADD: 'operation:port-matrix:add',
+  /** 编辑端口矩阵 */
+  OP_PORT_MATRIX_EDIT: 'operation:port-matrix:edit',
+  /** 删除端口矩阵 */
+  OP_PORT_MATRIX_REMOVE: 'operation:port-matrix:remove',
 
   KB_SPACE_ADMIN: 'kb:space:admin',
   KB_SPACE_ADD: 'kb:space:add',

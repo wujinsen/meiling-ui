@@ -951,6 +951,29 @@
     @apply bg-amber-50/30 dark:bg-amber-500/[0.04];
   }
 
+  .operation-alias-input {
+    @apply flex min-h-[2.5rem] flex-wrap items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2 py-1.5;
+    @apply dark:border-white/10 dark:bg-white/5;
+  }
+
+  .operation-alias-input__field {
+    @apply min-w-[8rem] flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none;
+  }
+
+  .operation-alias-chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-700;
+    @apply dark:border-white/10 dark:bg-white/10 dark:text-gray-200;
+  }
+
+  .operation-alias-chip--compact {
+    @apply py-0 text-[10px];
+  }
+
+  .operation-alias-chip__remove {
+    @apply inline-flex rounded-full p-0.5 text-gray-400 transition hover:bg-gray-200 hover:text-gray-600;
+    @apply dark:hover:bg-white/10 dark:hover:text-gray-200;
+  }
+
   .cockpit-filter-bar {
     @apply flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:gap-3;
   }
