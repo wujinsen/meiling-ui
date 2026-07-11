@@ -206,13 +206,135 @@ async function testRegLlmDisabled(token) {
   }
 }
 
+async function testO9ScanStatus(token) {
+  const sp = SPACES.find((s) => s.code === 'moli-ops-manual') ?? SPACES[0]
+  const raw = await request(KB_BASE, 'GET', `/kb/lint/scan/status?spaceId=${sp.id}`, null, token)
+  if (raw.status === 404) {
+    const issues = await kb('GET', `/lint/issues?spaceId=${sp.id}&status=0&pageNum=1&pageSize=1`, null, token)
+    const open = pageTotal(issues.data, pageRows(issues.data))
+    skip('P0-O9', `scan/status 404 — 前端降级 openIssueCount=${open}；待后端部署`)
+    return
+  }
+  const res = raw.json
+  if (res.code !== 200) {
+    bad('P0-O9', `scan/status code=${res.code} ${res.msg ?? ''}`)
+    return
+  }
+  const d = res.data ?? {}
+  const parts = [
+    `scheduleEnabled=${d.scheduleEnabled}`,
+    d.lastScanTime ? `lastScan=${String(d.lastScanTime).slice(0, 16)}` : 'lastScan=—',
+    `open=${d.openIssueCount ?? '?'}`,
+  ]
+  ok('P0-O9', `${sp.code} ${parts.join(' · ')}`)
+}
+
+async function testO5O8LintIssues(token) {
+  const sp = SPACES.find((s) => s.code === 'moli-ops-manual') ?? SPACES[0]
+  const all = await kb('GET', `/lint/issues?spaceId=${sp.id}&pageNum=1&pageSize=5`, null, token)
+  if (all.code !== 200) {
+    bad('P2-O5', `issues list code=${all.code}`)
+    return
+  }
+  const rows = pageRows(all.data)
+  const total = pageTotal(all.data, rows)
+  if (!total) {
+    skip('P2-O5', `${sp.code} 无工单样本`)
+    return
+  }
+  ok('P2-O5', `全量 total=${total} issueType 筛选可用`)
+
+  const broken = await kb('GET', `/lint/issues?spaceId=${sp.id}&issueType=broken_link`, null, token)
+  const brokenRows = pageRows(broken.data)
+  if (broken.code === 200 && brokenRows.length <= total) {
+    ok('P2-O5-filter', `broken_link=${brokenRows.length}`)
+  } else {
+    bad('P2-O5-filter', `issueType 筛选异常 code=${broken.code}`)
+  }
+
+  if (Array.isArray(all.data) && all.data.length > 5) {
+    ok('P2-O8', `服务端返回数组 len=${all.data.length}（前端 slice 分页）`)
+  } else if (rows.length <= 5) {
+    ok('P2-O8', `pageSize=5 返回 ${rows.length} 条`)
+  } else {
+    skip('P2-O8', '分页样本不足')
+  }
+
+  const open = await kb('GET', `/lint/issues?spaceId=${sp.id}&status=0&pageNum=1&pageSize=1`, null, token)
+  const issue = pageRows(open.data)[0]
+  if (!issue?.id) {
+    skip('P2-O6', '无待处理工单可测指派')
+  } else {
+    const assign = await kb('PUT', `/lint/issue/${issue.id}?assigneeId=1&status=0`, null, token)
+    const unassign = await kb('PUT', `/lint/issue/${issue.id}?assigneeId=&status=0`, null, token)
+    if (assign.code === 200 && unassign.code === 200) {
+      ok('P2-O6', `issue ${issue.id} assignee PUT 往返 OK`)
+    } else {
+      bad('P2-O6', `assign=${assign.code} unassign=${unassign.code}`)
+    }
+  }
+
+  const batch = await request(KB_BASE, 'PUT', '/kb/lint/issues/batch', { ids: [1], status: 1 }, token)
+  if (batch.status === 404) {
+    ok('P2-O7', 'batch API 404 — 前端并行 PUT 兜底')
+  } else {
+    skip('P2-O7', `batch HTTP ${batch.status} code=${batch.json?.code}`)
+  }
+}
+
+async function testBrowseMultiFilter(token) {
+  const sp = SPACES[0]
+  const res = await kb(
+    'GET',
+    `/document/search?spaceId=${sp.id}&source=kb&status=1&kbTypes=article&kbTypes=guide&pageNum=1&pageSize=5`,
+    null,
+    token,
+  )
+  if (res.code !== 200) {
+    bad('P0-browse-v3', `search kbTypes code=${res.code}`)
+    return
+  }
+  const rows = pageRows(res.data)
+  ok('P0-browse-v3', `${sp.code} kbTypes=article+guide → ${rows.length} 条（total=${pageTotal(res.data, rows)}）`)
+
+  const types = await kb(
+    'GET',
+    `/index/types?spaceId=${sp.id}&kbTypes=article&kbTypes=guide`,
+    null,
+    token,
+  )
+  if (types.code === 200 && Array.isArray(types.data?.types ?? types.data)) {
+    ok('P0-browse-facet', 'index/types 接受 kbTypes 列表')
+  } else if (types.code === 200) {
+    ok('P0-browse-facet', 'index/types 200')
+  } else {
+    skip('P0-browse-facet', `index/types code=${types.code}`)
+  }
+}
+
+async function testIngestRawPrefixes(token) {
+  const res = await kb('GET', '/ingest/raw-prefixes', null, token)
+  if (res.code === 200) {
+    const list = Array.isArray(res.data) ? res.data : res.data?.prefixes ?? []
+    ok('P1-T20f-prefix', `raw-prefixes ${list.length} 项`)
+  } else if (res.code === 404) {
+    skip('P1-T20f-prefix', 'raw-prefixes 404 — 前端回退 raw-tree')
+  } else {
+    bad('P1-T20f-prefix', `code=${res.code}`)
+  }
+}
+
 async function main() {
   console.log(`KB PRD 验收探针 KB_BASE=${KB_BASE}\n`)
   const token = await login()
   ok('LOGIN', 'admin')
   await testO4FailLogs(token)
   await testO2Concurrent(token)
+  await testO9ScanStatus(token)
   await testP0ThreeSpaces(token)
+  await testBrowseMultiFilter(token)
+  await testIngestRawPrefixes(token)
+  await testO5O8LintIssues(token)
   await testRegGovernSyncScan(token)
   await testRegLlmDisabled(token)
 

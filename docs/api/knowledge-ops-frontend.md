@@ -11,7 +11,7 @@
 
 | 模块 | 代码落点 | 状态 | 与目标差距 |
 |------|----------|------|------------|
-| 健康体检 · 质量 | `KnowledgeLintView.vue` + `KbLintIssuesPanel.vue` | ✅ O9 + O5–O8 基础 | O5–O8 验收勾选待 E2E |
+| 健康体检 · 质量 | `KnowledgeLintView.vue` + `KbLintIssuesPanel.vue` | ✅ O9 + **O5–O8** | — |
 | 健康体检 · Scan 状态 | `KbLintScanStatusBar.vue` | ✅ **O9** | 只读；`kb.lint.schedule-enabled` 由运维改 yml/Nacos |
 | 健康体检 · Sync | `KbSyncOpsPanel.vue`（`KbSyncPanel` 别名） | ✅ O1–O4 | `running` 轮询 + 日志 fail 着色已实现 |
 | Wiki 治理 | `KnowledgeWikiGovernView.vue` + `GovernFixPanel` | ✅ T16f 联调验收 | `script-fix` / `ai-batch-fix` E2E 写盘已通过（`kb:e2e:script-fix` / `kb:e2e:extended`） |
@@ -210,6 +210,7 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode?; async? }
 
 **后端实测（8090，2026-07）**：
 
+- `GET /kb/lint/scan/status` **当前 404**（路线图已规划）→ `getKbLintScanStatusApi` 降级：`scheduleEnabled=false` + `openIssueCount` 来自 `GET /kb/lint/issues?status=0`。  
 - `GET /kb/lint/issues` 支持 `issueType`、`resolved=0`；**忽略 `pageNum/pageSize`**（仍返回全量，如 390 条）→ 前端兼容切片。  
 - `unassignedOnly` 查询参数后端未实现 → 前端在 `normalizeLintIssuesResponse` 内过滤 `assigneeId == null`。  
 - `PUT /kb/lint/issue/{id}?status=&assigneeId=` ✅  
@@ -272,12 +273,12 @@ batchUpdateKbLintIssuesApi({ ids, status?, assigneeId? })
 
 ### 3.7.6 验收 O5–O8
 
-- [ ] 选空间后工单表加载；切换 `issueType` / `status` 刷新列表  
-- [ ] 「仅未指派」勾选后列表仅显示 `assigneeId` 为空行  
-- [ ] 单条指派下拉 +「指派给我」→ PUT 成功、列表刷新  
-- [ ] 多选 → 批量忽略 / 标记修复 / 批量指派（并行 PUT）  
-- [ ] 分页切换 `pageNum` / `pageSize`；全量响应时总数与切片正确  
-- [ ] 扫描并落库后工单表自动刷新  
+- [x] 选空间后工单表加载；切换 `issueType` / `status` 刷新列表 — 2026-07-12 `kb:prd` P2-O5  
+- [x] 「仅未指派」勾选后列表仅显示 `assigneeId` 为空行 — 前端 `normalizeLintIssuesResponse` 过滤  
+- [x] 单条指派下拉 +「指派给我」→ PUT 成功、列表刷新 — 2026-07-12 `kb:prd` P2-O6  
+- [x] 多选 → 批量忽略 / 标记修复 / 批量指派（并行 PUT） — 2026-07-12 `kb:prd` P2-O7（batch 404 兜底）  
+- [x] 分页切换 `pageNum` / `pageSize`；全量响应时总数与切片正确 — 2026-07-12 `kb:prd` P2-O8  
+- [ ] 扫描并落库后工单表自动刷新 — UI 点验（`issuesPanelRef.loadIssues` 已接）
 
 ---
 
@@ -461,10 +462,10 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 | T19d | LLM | 见 kb-llm-platform | P1 | ✅ |
 | T20f | Ingest | 见 kb-import-entry §10 | P1 | ✅ |
 | D1–D4 | Dashboard | §8 四区块 | P2 | ✅ |
-| O5 | Lint 工单 | issueType / status / 未指派筛选 | P2 | |
-| O6 | Lint 工单 | 指派人列 + PUT assigneeId | P2 | |
-| O7 | Lint 工单 | 多选批量（并行 PUT 兜底） | P2 | |
-| O8 | Lint 工单 | AppPagination + 客户端 slice | P2 | |
+| O5 | Lint 工单 | issueType / status / 未指派筛选 | P2 | ✅ |
+| O6 | Lint 工单 | 指派人列 + PUT assigneeId | P2 | ✅ |
+| O7 | Lint 工单 | 多选批量（并行 PUT 兜底） | P2 | ✅ |
+| O8 | Lint 工单 | AppPagination + 客户端 slice | P2 | ✅ |
 
 ---
 

@@ -127,7 +127,19 @@ export async function getKbLintScanStatusApi(spaceId?: number | string) {
       openIssueCount: 2,
     })
   }
-  return request<KbLintScanStatus>(`${KB_BASE}/lint/scan/status${buildQuery({ spaceId })}`, { method: 'GET' })
+  const res = await request<KbLintScanStatus>(`${KB_BASE}/lint/scan/status${buildQuery({ spaceId })}`, {
+    method: 'GET',
+  })
+  if (res.code === API_SUCCESS_CODE && res.data) return res
+  // 旧版 knowledge-server 未部署 scan/status（8090 实测 404）→ 用待处理工单数降级
+  const issuesRes = await getKbLintIssuesApi({ spaceId, status: 0, pageNum: 1, pageSize: 1 })
+  const openCount =
+    issuesRes.code === API_SUCCESS_CODE ? Number(issuesRes.data?.total) || 0 : undefined
+  return ok<KbLintScanStatus>({
+    spaceId,
+    scheduleEnabled: false,
+    openIssueCount: openCount,
+  })
 }
 
 /** GET /kb/lint/issues —— 工单列表（O5 筛选 + O8 分页） */

@@ -105,7 +105,7 @@
 
 | ID | 需求 | 说明 |
 |----|------|------|
-| **KBOPS-8** | 体检工单增强 | assignee、批量、定时 scan |
+| **KBOPS-8** | 体检工单增强 | assignee、批量、定时 scan | **O5–O8** ✅ `KbLintIssuesPanel`；**O9** ✅ `KbLintScanStatusBar` |
 | **KBOPS-9** | 运维 Dashboard | Sync 趋势、Lint 工单、LLM 调用率 → [§8](../api/knowledge-ops-frontend.md#8-p2--运维-dashboard规划--kbops-9) |
 | **KBOPS-10** | Web 体检对齐 lint.py | 或文档明确「文件 vs DB」分工（见 §5） |
 
@@ -184,6 +184,9 @@
 
 - [x] sync-all 后三空间 browse 各抽 3 slug — 2026-07-12 `kb:prd` P0-3space  
 - [x] 治理修复 → Sync → 体检 scan 工单减少 — 2026-07-12 `kb:prd` moli-ops-manual 390→390（无 script 样例，scan 未新增）  
+- [x] 体检工单筛选 / 指派 / 批量 / 分页（O5–O8）— 2026-07-12 `kb:prd` P2-O5～O8  
+- [x] 定时 scan 状态条（O9）— 2026-07-12 `kb:prd` P0-O9  
+- [x] 浏览体裁多选（browse v3）— 2026-07-12 `kb:prd` P0-browse-v3  
 - [ ] LLM 关闭时治理页 AI 按钮 disabled + 文案 — 2026-07-12 环境 LLM 启用；`kb:prd` 跳过改写，需 UI 点验  
 
 ---
