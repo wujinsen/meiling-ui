@@ -13,7 +13,7 @@
 |------|----------|------|------------|
 | 健康体检 · 质量 | `KnowledgeLintView.vue` | ✅ | — |
 | 健康体检 · Sync | `KbSyncOpsPanel.vue`（`KbSyncPanel` 别名） | ✅ O1–O4 | KBOPS-1/2 后端 `running` 轮询细节可增强；前端 O1–O4 已验收 |
-| Wiki 治理 | `KnowledgeWikiGovernView.vue` + `GovernFixPanel` | ✅ T16f 联调验收 | `ai-batch-fix` E2E 写盘已通过；`script-fix` 待含 metadata issue 样例 |
+| Wiki 治理 | `KnowledgeWikiGovernView.vue` + `GovernFixPanel` | ✅ T16f 联调验收 | `script-fix` / `ai-batch-fix` E2E 写盘已通过（`kb:e2e:script-fix` / `kb:e2e:extended`） |
 | LLM 配置 T19d | `src/views/system/kb-llm/index.vue` | ✅ 联调验收通过 | 见 [kb-llm-platform-frontend.md §14](kb-llm-platform-frontend.md#14-验收清单前端自测) |
 | Ingest 三 Tab T20f | `KnowledgeIngestWorkbenchView.vue` | ✅ UI + 直联 | Tab1 `KbRawUploadPanel`、Tab3 `KbWikiImportPanel` 排版与联调就绪；`VITE_MOCK_KB_IMPORT=false` |
 | Sync API | `src/api/knowledge.ts` | ✅ | 类型在 `src/types/knowledge.ts`；状态归一化 `src/utils/kbSyncStatus.ts` |
@@ -313,6 +313,7 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 | `src/components/knowledge/KbOpsSyncTrendChart.vue` | D1 近 7 日堆叠柱状图 |
 | `scripts/kb-e2e-walkthrough.mjs` | T19d + T16f + T20f 主链路 E2E（`npm run kb:e2e`） |
 | `scripts/kb-e2e-extended.mjs` | AI 写盘 / Tab3 冲突 / rawUpload 权限（`npm run kb:e2e:extended`） |
+| `scripts/kb-e2e-script-fix.mjs` | T16f `script-fix` metadata 写盘（`npm run kb:e2e:script-fix`） |
 | `src/utils/kbSyncStatus.ts` | Sync 状态/日志归一化 |
 | `src/utils/kbImport.ts` | Raw/Wiki 导入校验与冲突判定 |
 | `src/utils/kbWorkflowRoutes.ts` | nextSteps 路由跳转 |

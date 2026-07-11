@@ -56,6 +56,7 @@ $env:KB_BASE = 'http://127.0.0.1:8090'   # 若改端口则同步
 $env:KB_E2E_LLM_API_KEY = '<有效智谱/DeepSeek Key>'  # 可选，默认 dev yml 占位
 npm run kb:e2e
 npm run kb:e2e:extended   # T16f AI 写盘 · Tab3 冲突 · zhangsan rawUpload 权限
+npm run kb:e2e:script-fix # T16f script-fix metadata（PUT 植入 → 写盘 → relint）
 ```
 
 覆盖：平台 LLM 测试/入库 → T16f lint/merge-hint → T20f Tab1 raw → Tab2 express+publish（`nextSteps`）→ Tab3 成品 import。扩展脚本另验 AI 写盘、`onConflict=FAIL` 冲突、`zhangsan` 无 `kb:ingest:rawUpload`。
