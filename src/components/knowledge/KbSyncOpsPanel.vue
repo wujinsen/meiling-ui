@@ -198,9 +198,22 @@ async function trigger(options?: { skipConfirm?: boolean }) {
   startPolling()
 
   try {
-    const res = await triggerKbSyncApi(params)
+    const res = await triggerKbSyncApi({ ...params, async: true })
+    await refreshAll()
+
     if (res.code === API_SUCCESS_CODE && res.data) {
       const data = res.data
+      const stillRunning =
+        syncRunning.value
+        || status.value?.running
+        || String(data.status ?? '').toLowerCase() === 'running'
+
+      if (stillRunning) {
+        showToast('success', t('knowledge.sync.triggerAsync'))
+        startPolling()
+        return
+      }
+
       const output = data.outputTail ?? data.stdoutTail ?? data.message ?? ''
       lastResult.value = { success: data.success, output }
       if (data.nextSteps?.length) nextSteps.value = data.nextSteps
@@ -210,7 +223,6 @@ async function trigger(options?: { skipConfirm?: boolean }) {
       } else {
         showToast('error', t('knowledge.sync.failCheckLogs'))
       }
-      await refreshAll()
     } else if (isKbSyncRunningLockedMessage(res.msg)) {
       showToast('error', t('knowledge.sync.runningLocked'))
       startPolling()

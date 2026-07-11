@@ -161,7 +161,7 @@ export type KbSyncTrigger = {
 ```typescript
 export async function getKbSyncStatusApi(spaceId?: number | string)
 export async function getKbSyncLogsApi(params?: { spaceId?; batchNo?; pageNum?; pageSize? })
-export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // timeoutMs: 320_000
+export async function triggerKbSyncApi(params?: { spaceId?; spaceCode?; async? })  // async=true 时 30s 超时 + 轮询
 ```
 
 无需改路径；O1–O4 主要是**消费字段**与 UI。可选拆 `src/api/knowledge/kbSync.ts` 便于治理页复用。
@@ -182,6 +182,94 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 - [x] trigger 失败（运维配合制造）→ fail 行可见、Toast  
 - [x] `running` 时不能重复 trigger  
 - [x] 三空间切换后 status/logs 随 `spaceId` 刷新  
+
+---
+
+## 3.7 P2 · 健康体检 · 工单增强（O5–O8）
+
+> **背景**：`POST /kb/lint/scan` 将问题写入 `kb_lint_issue` 表；运维需在 **健康体检 · 质量** Tab 筛选、分页、指派与批量处理工单。  
+> **组件**：`KbLintIssuesPanel.vue`（内嵌于 `KnowledgeLintView.vue` 概览卡片下方）。  
+> **API 模块**：`src/api/knowledge/kbLint.ts`（由 `knowledge.ts` re-export）。
+
+### 3.7.1 功能对照
+
+| ID | 功能 | API | UI |
+|----|------|-----|-----|
+| **O5** | 筛选 | `GET /kb/lint/issues?spaceId=&status=&issueType=&resolved=0` | 类型下拉、状态下拉、「仅未指派」勾选 |
+| **O6** | 指派 | `PUT /kb/lint/issue/{id}?assigneeId=` | 指派人列下拉（`listUserApi`）+「指派给我」 |
+| **O7** | 批量 | 后端批量 API **404** → 前端 `batchUpdateKbLintIssuesApi` 并行单条 PUT（并发 5） | 多选 + 批量忽略 / 标记修复 / 批量指派 |
+| **O8** | 分页 | 传 `pageNum` / `pageSize`；后端当前仍返回全量数组 | `AppPagination`；`normalizeLintIssuesResponse` 客户端 slice |
+
+**后端实测（8090，2026-07）**：
+
+- `GET /kb/lint/issues` 支持 `issueType`、`resolved=0`；**忽略 `pageNum/pageSize`**（仍返回全量，如 390 条）→ 前端兼容切片。  
+- `unassignedOnly` 查询参数后端未实现 → 前端在 `normalizeLintIssuesResponse` 内过滤 `assigneeId == null`。  
+- `PUT /kb/lint/issue/{id}?status=&assigneeId=` ✅  
+- `PUT /kb/lint/issues/batch` **404** → O7 用并行 PUT 兜底；后端就绪后可改调批量端点。
+
+### 3.7.2 TypeScript
+
+`src/types/knowledge.ts`：
+
+```typescript
+export type KbLintIssue = {
+  id: number | string
+  spaceId?: number | string
+  documentId?: number | string
+  issueType: string
+  detail?: string
+  status: KbLintIssueStatus  // 0 待处理 | 1 已忽略 | 2 已修复
+  assigneeId?: number | string | null
+  priority?: number
+  scanTime?: string
+  createTime?: string
+  updateTime?: string
+}
+
+export type KbLintIssueQuery = {
+  spaceId?: number | string
+  status?: KbLintIssueStatus
+  issueType?: string
+  assigneeId?: number | string
+  resolvedOnly?: boolean   // → query resolved=0
+  unassignedOnly?: boolean // 客户端过滤
+  pageNum?: number
+  pageSize?: number
+}
+```
+
+### 3.7.3 API 封装（`kbLint.ts`）
+
+```typescript
+getKbLintIssuesApi(params?)      // → MoliPage<KbLintIssue>
+updateKbLintIssueApi(id, patch)  // status 和/或 assigneeId
+batchUpdateKbLintIssuesApi({ ids, status?, assigneeId? })
+```
+
+`getKbLintIssuesApi` 统一返回 `{ records, total, current, size }`，无论后端给数组还是 `MoliPage`。
+
+### 3.7.4 权限
+
+| 场景 | 处理 |
+|------|------|
+| 查看工单 | 健康体检页进入权限（与现有 lint 菜单一致） |
+| 扫描落库 | `kb:lint:scan`（`PERM.KB_LINT_SCAN`） |
+| 更新 / 指派 / 批量 | 同单条 PUT；无单独 perm（依赖后端鉴权） |
+
+### 3.7.5 关联页面
+
+- **运维看板 D2**：`KnowledgeOpsDashboardView` 消费 `getKbLintIssuesApi({ status: 0 }).data.records`。  
+- **Wiki 编辑修复**：`KnowledgeWikiEditView` 保存后 `updateKbLintIssueApi(issueId, 2)` 仍兼容。  
+- **O9 定时 scan 状态**：`KbLintScanStatusBar` + `getKbLintScanStatusApi`（只读，独立于 O5–O8）。
+
+### 3.7.6 验收 O5–O8
+
+- [ ] 选空间后工单表加载；切换 `issueType` / `status` 刷新列表  
+- [ ] 「仅未指派」勾选后列表仅显示 `assigneeId` 为空行  
+- [ ] 单条指派下拉 +「指派给我」→ PUT 成功、列表刷新  
+- [ ] 多选 → 批量忽略 / 标记修复 / 批量指派（并行 PUT）  
+- [ ] 分页切换 `pageNum` / `pageSize`；全量响应时总数与切片正确  
+- [ ] 扫描并落库后工单表自动刷新  
 
 ---
 
@@ -239,6 +327,7 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 |------|------|--------|
 | `KbWorkflowNextSteps.vue` | 入库/Sync 后 CTA | Ingest、（待接）Sync trigger 响应 |
 | `KbSyncPanel.vue` → **`KbSyncOpsPanel.vue`** | status + trigger + logs（O1–O4） | 健康体检、治理 `GovernSyncPanel` |
+| **`KbLintIssuesPanel.vue`** | 工单筛选 / 指派 / 批量 / 分页（O5–O8） | 健康体检 · 质量 |
 | `KbSpaceSelector` | 空间选择 | 全部 KB 写操作页 |
 | `kbSyncScope.ts` | 解析 trigger 参数 | Sync 相关页 |
 
@@ -292,6 +381,10 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 | T19d | LLM | 见 kb-llm-platform | P1 | ✅ |
 | T20f | Ingest | 见 kb-import-entry §10 | P1 | ✅ |
 | D1–D4 | Dashboard | §8 四区块 | P2 | ✅ |
+| O5 | Lint 工单 | issueType / status / 未指派筛选 | P2 | |
+| O6 | Lint 工单 | 指派人列 + PUT assigneeId | P2 | |
+| O7 | Lint 工单 | 多选批量（并行 PUT 兜底） | P2 | |
+| O8 | Lint 工单 | AppPagination + 客户端 slice | P2 | |
 
 ---
 
@@ -303,6 +396,8 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 | `src/types/knowledge.ts` | `KbSyncStatus` / `KbSyncTrigger` / `KbSyncLog` |
 | `src/components/knowledge/KbSyncOpsPanel.vue` | Sync Tab O1–O4（`KbSyncPanel` 重导出） |
 | `src/components/knowledge/KbSyncPanel.vue` | 兼容别名 → `KbSyncOpsPanel` |
+| `src/api/knowledge/kbLint.ts` | Lint 工单 API（O5–O8） |
+| `src/components/knowledge/KbLintIssuesPanel.vue` | 工单表 O5–O8 |
 | `src/views/knowledge/KnowledgeLintView.vue` | 质量 + Sync 双 Tab |
 | `src/views/knowledge/KnowledgeWikiGovernView.vue` | 治理主页面 |
 | `src/components/knowledge/govern/GovernFixPanel.vue` | W2/W4/W5 |
@@ -353,6 +448,7 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode? })  // ti
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-12 | §3.7 O5–O8 工单增强：`KbLintIssuesPanel`、`kbLint.ts`；§10 增 O5–O8 验收项 |
 | 2026-07-11 | §1 排期表 O1–O4 / W2–W7 标 ✅；§3.6 / §10 验收勾选；E2E 复验 18/18（`KB_BASE=8090`） |
 | 2026-07-10 | **KBOPS-9** `KnowledgeOpsDashboardView` D1–D4；E2E 脚本 walkthrough + extended（12/12 + 7/7）；`13_kb_ops_dashboard_menu.sql` |
 | 2026-07-10 | O1–O4、`KbSyncOpsPanel`、T20f Tab1/3 UI 排版、治理工作流链接；验收表标 ✅ |

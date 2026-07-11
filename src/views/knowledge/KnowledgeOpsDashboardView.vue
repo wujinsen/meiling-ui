@@ -75,7 +75,7 @@ async function loadDashboard() {
 
     if (llmRes.code === API_SUCCESS_CODE) llmConfig.value = llmRes.data ?? null
 
-    const issues = issuesRes.code === API_SUCCESS_CODE ? issuesRes.data ?? [] : []
+    const issues = issuesRes.code === API_SUCCESS_CODE ? issuesRes.data?.records ?? [] : []
     if (issuesRes.code !== API_SUCCESS_CODE) {
       showToast('error', issuesRes.msg || t('knowledge.opsDashboard.loadIssuesFailed'))
     }

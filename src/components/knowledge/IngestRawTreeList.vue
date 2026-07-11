@@ -13,6 +13,7 @@ export type IngestRawFlatNode = {
 const props = defineProps<{
   items: IngestRawFlatNode[]
   selected: Set<string>
+  highlighted?: Set<string>
   isDirExpanded: (path: string) => boolean
   coverageForPath: (path: string) => KbRawCoverageItem | undefined
   coverageBadgeClass: (path: string) => string
@@ -88,7 +89,12 @@ watch(
         v-for="{ item, index } in visibleSlice.items"
         :key="item.node.path"
         class="absolute left-0 right-0 flex items-center gap-1.5 rounded px-1.5 text-xs hover:bg-gray-50 dark:hover:bg-white/5"
-        :class="item.node.type === 'file' ? 'no-tilt-drag cursor-pointer' : item.hasChildren ? 'no-tilt-drag cursor-pointer' : ''"
+        :class="[
+          item.node.type === 'file' ? 'no-tilt-drag cursor-pointer' : item.hasChildren ? 'no-tilt-drag cursor-pointer' : '',
+          item.node.type === 'file' && highlighted?.has(item.node.path)
+            ? 'bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-500/10 dark:ring-brand-500/30'
+            : '',
+        ]"
         :style="{
           top: `${index * ROW_HEIGHT}px`,
           height: `${ROW_HEIGHT}px`,

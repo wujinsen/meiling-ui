@@ -330,7 +330,46 @@ export type KbLintIssue = {
   issueType: string
   detail?: string
   status: KbLintIssueStatus
+  assigneeId?: number | string | null
+  priority?: number
   scanTime?: string
+  createTime?: string
+  updateTime?: string
+}
+
+/** GET /kb/lint/issues 查询参数（O5–O8） */
+export type KbLintIssueQuery = {
+  spaceId?: number | string
+  /** 0 待处理 / 1 已忽略 / 2 已修复 */
+  status?: KbLintIssueStatus
+  /** true → resolved=0（仅未关闭工单） */
+  resolvedOnly?: boolean
+  issueType?: string
+  unassignedOnly?: boolean
+  assigneeId?: number | string
+  pageNum?: number
+  pageSize?: number
+}
+
+export type KbLintIssueUpdate = {
+  status?: KbLintIssueStatus
+  assigneeId?: number | string | null
+}
+
+export type KbLintIssueBatchUpdate = {
+  ids: Array<number | string>
+  status?: KbLintIssueStatus
+  assigneeId?: number | string | null
+}
+
+/** GET /kb/lint/scan/status —— 定时 scan 开关 + 最近落库时间（O9，只读） */
+export type KbLintScanStatus = {
+  spaceId?: number | string
+  spaceCode?: string
+  scheduleEnabled: boolean
+  scheduleCron?: string
+  lastScanTime?: string
+  openIssueCount?: number
 }
 
 // ---------------------------------------------------------------------------

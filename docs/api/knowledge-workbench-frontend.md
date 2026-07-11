@@ -136,7 +136,7 @@ export interface KbWorkflowHintVo {
 | P1 | Ingest | Tab3 批量成品 import | ✅ `importWikiBatchApi` 多选 .md |
 | P1 | Wiki | Fix 结果 `pages[]` 表格；merge-hint 展示 `manualSteps` / `relatedSlugs` | ✅ |
 | P1 | Wiki | 页内旁路：跳转 Ingest / 健康体检 | ✅ `KbGovernWorkflowLinks` |
-| P2 | 共用 | `IngestRawTreeList.vue` 接入；API 文件拆分 |
+| P2 | 共用 | `IngestRawTreeList.vue` 接入；API 文件拆分 | ✅ RawTree 虚拟列表接入；`kbIngest.ts` / `kbWiki.ts` |
 
 ### 7.3 需后端确认 / 联调约定（问后端用）
 

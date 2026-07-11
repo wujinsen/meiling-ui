@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, ClipboardCopy, Folder, Loader2, Play, RefreshCw, Sparkles, Trash2, Upload, X, Zap } from 'lucide-vue-next'
+import { ArrowLeft, Check, CheckCircle2, ClipboardCopy, Loader2, Play, RefreshCw, Sparkles, Trash2, Upload, X, Zap } from 'lucide-vue-next'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
@@ -13,6 +13,7 @@ import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
 import KbImportDecisionHint from '@/components/knowledge/KbImportDecisionHint.vue'
 import KbRawUploadPanel from '@/components/knowledge/KbRawUploadPanel.vue'
 import KbWikiImportPanel from '@/components/knowledge/KbWikiImportPanel.vue'
+import IngestRawTreeList from '@/components/knowledge/IngestRawTreeList.vue'
 import IngestPlanCreateTable from '@/components/knowledge/IngestPlanCreateTable.vue'
 import {
   commitKbIngestApi,
@@ -1581,56 +1582,23 @@ onUnmounted(() => {
               }}
             </p>
           </div>
-          <div class="mt-2 h-[min(45vh,22rem)] overflow-y-auto rounded-lg border border-gray-100 p-2 dark:border-white/5">
+          <div class="mt-2 flex h-[min(45vh,22rem)] flex-col rounded-lg border border-gray-100 dark:border-white/5">
             <p v-if="rawLoading || rawCoverageLoading" class="p-3 text-xs text-gray-400">{{ t('common.loading') }}</p>
             <p v-else-if="!filteredRawFlatTree.length" class="p-3 text-xs text-gray-400">{{ t('knowledge.ingest.rawTreeEmpty') }}</p>
-            <template v-else>
-              <div
-                v-for="item in filteredRawFlatTree"
-                :key="item.node.path"
-                class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs hover:bg-gray-50 dark:hover:bg-white/5"
-                :class="[
-                  item.node.type === 'file' ? 'no-tilt-drag cursor-pointer' : item.hasChildren ? 'no-tilt-drag cursor-pointer' : '',
-                  item.node.type === 'file' && highlightedRawPaths.has(item.node.path)
-                    ? 'bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-500/10 dark:ring-brand-500/30'
-                    : '',
-                ]"
-                :style="{ paddingLeft: `${item.depth * 14 + 6}px` }"
-                @click="item.node.type === 'file' ? toggleRaw(item.node.path) : item.hasChildren && toggleRawDir(item.node.path)"
-              >
-                <template v-if="item.node.type === 'dir'">
-                  <ChevronDown
-                    v-if="item.hasChildren && isRawDirExpanded(item.node.path)"
-                    class="h-3.5 w-3.5 shrink-0 text-gray-400"
-                  />
-                  <ChevronRight
-                    v-else-if="item.hasChildren"
-                    class="h-3.5 w-3.5 shrink-0 text-gray-400"
-                  />
-                  <span v-else class="inline-block h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <Folder class="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                  <span class="truncate text-gray-500 dark:text-gray-400">{{ item.node.name }}</span>
-                </template>
-                <template v-else>
-                  <span class="inline-block h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <input
-                    type="checkbox"
-                    class="pointer-events-none h-3.5 w-3.5 shrink-0"
-                    :checked="selectedRaw.has(item.node.path)"
-                    tabindex="-1"
-                  />
-                  <span
-                    v-if="coverageForPath(item.node.path)"
-                    class="shrink-0 rounded px-1 py-0.5 text-[10px] font-medium"
-                    :class="rawCoverageBadgeClass(item.node.path)"
-                    :title="rawCoverageTitle(item.node.path)"
-                  >
-                    {{ rawCoverageBadgeLabel(item.node.path) }}
-                  </span>
-                  <span class="truncate text-gray-700 dark:text-gray-200">{{ item.node.name }}</span>
-                </template>
-              </div>
-            </template>
+            <IngestRawTreeList
+              v-else
+              class="min-h-0 flex-1"
+              :items="filteredRawFlatTree"
+              :selected="selectedRaw"
+              :highlighted="highlightedRawPaths"
+              :is-dir-expanded="isRawDirExpanded"
+              :coverage-for-path="coverageForPath"
+              :coverage-badge-class="rawCoverageBadgeClass"
+              :coverage-badge-label="rawCoverageBadgeLabel"
+              :coverage-title="rawCoverageTitle"
+              @toggle-file="toggleRaw"
+              @toggle-dir="toggleRawDir"
+            />
           </div>
 
           <div class="mt-4 space-y-3 border-t border-gray-100 pt-4 dark:border-white/5">
