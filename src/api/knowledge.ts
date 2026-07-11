@@ -75,9 +75,12 @@ import type {
 import type {
   RawUploadConflict,
   RawUploadResultVo,
+  WikiImportBatchForm,
+  WikiImportBatchResultVo,
   WikiImportForm,
   WikiImportResultVo,
 } from '@/types/kbImport'
+import { extractRawPrefixSuggestions } from '@/utils/kbImport'
 import { getToken } from '@/utils/authSession'
 import { buildEntityQuery, jsonEntityBody, toEntityId } from '@/utils/id'
 
@@ -1945,6 +1948,55 @@ export function validateRawUploadFiles(files: File[]): string | null {
   return null
 }
 
+/** GET /kb/ingest/raw-prefixes —— 已有 prefix 下拉；404 时回退 raw-tree 一级目录 */
+export async function getRawPrefixSuggestionsApi(): Promise<string[]> {
+  if (USE_MOCK_KB_IMPORT) {
+    await delay(120)
+    return ['test-walkthrough', 'school/fe', 'design']
+  }
+  const res = await request<string[] | { prefixes?: string[] }>(`${KB_BASE}/ingest/raw-prefixes`, {
+    method: 'GET',
+  })
+  if (res.code === API_SUCCESS_CODE && res.data) {
+    if (Array.isArray(res.data)) return res.data.filter(Boolean)
+    const nested = (res.data as { prefixes?: string[] }).prefixes
+    if (Array.isArray(nested)) return nested.filter(Boolean)
+  }
+  const tree = await getKbIngestRawTreeApi()
+  if (tree.code === API_SUCCESS_CODE && tree.data?.length) {
+    return extractRawPrefixSuggestions(tree.data)
+  }
+  return []
+}
+
+/** POST /kb/ingest/raw-upload/zip —— T20c zip 解压投喂 */
+export async function uploadRawZipApi(
+  spaceId: number | string,
+  prefix: string,
+  zipFile: File,
+  onConflict: RawUploadConflict = 'SKIP',
+) {
+  const trimmedPrefix = prefix.trim().replace(/^\/+|\/+$/g, '')
+  if (USE_MOCK_KB_IMPORT) {
+    await delay(400)
+    return ok<RawUploadResultVo>({
+      uploaded: [{ path: `${trimmedPrefix}/from-zip.md`, size: zipFile.size, overwritten: false }],
+      skipped: [],
+      renamed: [],
+    })
+  }
+  const form = new FormData()
+  form.append('spaceId', String(spaceId))
+  form.append('prefix', trimmedPrefix)
+  form.append('onConflict', onConflict)
+  form.append('file', zipFile)
+  return request<RawUploadResultVo>(`${KB_BASE}/ingest/raw-upload/zip`, {
+    method: 'POST',
+    body: form,
+    timeoutMs: 120_000,
+  })
+}
+
 /** POST /kb/wiki/page/import —— T20b Wiki 成品导入 */
 export async function importWikiPageApi(payload: WikiImportForm) {
   if (USE_MOCK_KB_IMPORT) {
@@ -1994,6 +2046,62 @@ export async function importWikiPageApi(payload: WikiImportForm) {
       lintWarnings: res.data.lintWarnings ?? [],
       sync: res.data.sync ?? { triggered: syncRequested, success: false },
       nextSteps: normalizeWorkflowHints(res.data.nextSteps as Array<Record<string, unknown>> | undefined),
+    }
+  }
+  return res
+}
+
+/** POST /kb/wiki/page/import/batch —— T20c 批量成品导入（整批一次 Sync） */
+export async function importWikiBatchApi(payload: WikiImportBatchForm) {
+  if (USE_MOCK_KB_IMPORT) {
+    await delay(400)
+    const imported = payload.files.map((f, i) => {
+      const stem = f.name.replace(/\.md$/i, '')
+      const slug = `ops/${stem}`
+      return {
+        slug,
+        spaceId: payload.spaceId,
+        relativePath: `wiki-moli/${slug}.md`,
+        created: true,
+        contentHash: `mock-${i}`,
+        lintWarnings: [] as string[],
+        sync: { triggered: false, success: false },
+        nextSteps: [] as KbWorkflowHintVo[],
+      } satisfies WikiImportResultVo
+    })
+    const syncRequested = payload.sync !== false
+    return ok<WikiImportBatchResultVo>({
+      imported,
+      failed: [],
+      sync: { triggered: syncRequested, success: syncRequested, documentId: '900123' },
+    })
+  }
+  const form = new FormData()
+  form.append('spaceId', String(payload.spaceId))
+  form.append('categoryId', String(payload.categoryId))
+  payload.files.forEach((f) => form.append('file', f))
+  form.append('onConflict', payload.onConflict ?? 'FAIL')
+  form.append('lintPreview', String(payload.lintPreview === true))
+  const syncRequested = payload.sync !== false
+  form.append('sync', String(syncRequested))
+  const res = await request<WikiImportBatchResultVo & { imported?: Array<WikiImportResultVo & { nextSteps?: unknown[] }> }>(
+    `${KB_BASE}/wiki/page/import/batch`,
+    {
+      method: 'POST',
+      body: form,
+      timeoutMs: syncRequested ? 320_000 : 120_000,
+    },
+  )
+  if (res.code === API_SUCCESS_CODE && res.data) {
+    res.data = {
+      imported: (res.data.imported ?? []).map((item) => ({
+        ...item,
+        lintWarnings: item.lintWarnings ?? [],
+        sync: item.sync ?? { triggered: false, success: false },
+        nextSteps: normalizeWorkflowHints(item.nextSteps as Array<Record<string, unknown>> | undefined),
+      })),
+      failed: res.data.failed ?? [],
+      sync: res.data.sync ?? { triggered: syncRequested, success: false },
     }
   }
   return res

@@ -130,10 +130,12 @@ export interface KbWorkflowHintVo {
 |--------|------|-----|
 | P0 | Ingest | `commit` / `publish` 后渲染 `nextSteps`（组件已有） | ✅ |
 | P0 | Ingest | commit/raw 冲突专用错误区（不只 toast） | ✅ |
-| P0 | Ingest | Expert `generate` / `draft/regenerate` 传 `useLlmGenerate`（与模板 checkbox 联动） |
-| P1 | Ingest | LLM 不可用自动降级模板模式 + Toast |
-| P1 | Wiki | Fix 结果 `pages[]` 表格；merge-hint 展示 `manualSteps` / `relatedSlugs` |
-| P1 | Wiki | 页内旁路：跳转 Ingest / 健康体检 |
+| P0 | Ingest | Expert `generate` / `draft/regenerate` 传 `useLlmGenerate`（与模板 checkbox 联动） | ✅ |
+| P1 | Ingest | LLM 不可用自动降级模板模式 + Toast | ✅ `templateModeActive` + `llmFallbackToast` |
+| P1 | Ingest | Tab1 prefix 下拉 + zip 投喂 | ✅ `getRawPrefixSuggestionsApi` + Zip 模式 |
+| P1 | Ingest | Tab3 批量成品 import | ✅ `importWikiBatchApi` 多选 .md |
+| P1 | Wiki | Fix 结果 `pages[]` 表格；merge-hint 展示 `manualSteps` / `relatedSlugs` | ✅ |
+| P1 | Wiki | 页内旁路：跳转 Ingest / 健康体检 | ✅ `KbGovernWorkflowLinks` |
 | P2 | 共用 | `IngestRawTreeList.vue` 接入；API 文件拆分 |
 
 ### 7.3 需后端确认 / 联调约定（问后端用）

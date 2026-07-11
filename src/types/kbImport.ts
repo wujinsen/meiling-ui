@@ -57,6 +57,26 @@ export type WikiImportForm = {
   sync?: boolean
 }
 
+export type WikiImportBatchFailVo = {
+  fileName: string
+  reason: string
+}
+
+export type WikiImportBatchResultVo = {
+  imported: WikiImportResultVo[]
+  failed: WikiImportBatchFailVo[]
+  sync: WikiImportSyncVo
+}
+
+export type WikiImportBatchForm = {
+  spaceId: number | string
+  categoryId: number | string
+  files: File[]
+  onConflict?: WikiImportConflict
+  lintPreview?: boolean
+  sync?: boolean
+}
+
 export type IngestRawHighlightPayload = {
   highlightRawPaths: string[]
   expandPrefix?: string

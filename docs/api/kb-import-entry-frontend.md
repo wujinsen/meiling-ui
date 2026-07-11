@@ -88,13 +88,15 @@ Tab2 `IngestRawPanel` 收到后：刷新 `GET /kb/ingest/raw-tree`，展开 pref
 |---|-----|------|------|------|
 | 1 | Tab1 | POST | `/kb/ingest/raw-upload` | ✅ T20a |
 | 2 | Tab1 | GET | `/kb/ingest/raw-tree` | ✅ 已有 |
-| 3 | Tab1 | GET | `/kb/ingest/raw-prefixes` | ⏳ P1 可选（前端未接，非阻塞） |
+| 3 | Tab1 | GET | `/kb/ingest/raw-prefixes` | ✅ datalist（API 不可用时回退 raw-tree） |
 | 4 | Tab3 | POST | `/kb/wiki/page/import` | ✅ T20b |
 | 5 | Tab3 | GET | `/kb/category/tree?spaceId=` | ✅ 已有 |
 | 6 | Tab3 | POST | `/kb/wiki/page/lint-preview` | ✅ 已有（可选） |
 | 7 | Tab3 | POST | `/kb/sync/trigger` | ✅ 已有（import 内嵌或手动） |
+| 8 | Tab1 | POST | `/kb/ingest/raw-upload/zip` | ✅ T20c · `KbRawUploadPanel` Zip 模式 |
+| 9 | Tab3 | POST | `/kb/wiki/page/import/batch` | ✅ T20c · 多选 .md 批量导入 |
 
-P1（本期可不接）：`POST /kb/ingest/raw-upload/zip`、`POST /kb/wiki/page/import/batch`。
+P1 增强 UI **已完成**（2026-07-11）。后端 zip/batch 见 T20c。
 
 ---
 

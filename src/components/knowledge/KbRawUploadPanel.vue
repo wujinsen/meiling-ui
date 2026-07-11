@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowRight, Loader2, Upload } from 'lucide-vue-next'
+import { ArrowRight, FileArchive, Loader2, Upload } from 'lucide-vue-next'
 import FormField from '@/components/ui/FormField.vue'
-import { uploadRawApi, validateRawUploadFiles } from '@/api/knowledge'
+import SegmentControl from '@/components/ui/SegmentControl.vue'
+import { getRawPrefixSuggestionsApi, uploadRawApi, uploadRawZipApi, validateRawUploadFiles } from '@/api/knowledge'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import {
   collectRawHighlightPaths,
   validateRawUploadPrefix,
+  validateRawUploadZip,
 } from '@/utils/kbImport'
 import type { IngestRawHighlightPayload, RawUploadConflict, RawUploadResultVo } from '@/types/kbImport'
+
+type UploadMode = 'files' | 'zip'
 
 const props = defineProps<{
   spaceId?: string
@@ -24,12 +28,21 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+const uploadMode = ref<UploadMode>('files')
 const prefix = ref('')
+const prefixSuggestions = ref<string[]>([])
+const prefixLoading = ref(false)
 const onConflict = ref<RawUploadConflict>('SKIP')
 const files = ref<File[]>([])
+const zipFile = ref<File | null>(null)
 const uploading = ref(false)
 const result = ref<RawUploadResultVo | null>(null)
 const dragOver = ref(false)
+
+const uploadModeOptions = computed(() => [
+  { value: 'files' as const, label: t('knowledge.ingest.rawUpload.modeFiles') },
+  { value: 'zip' as const, label: t('knowledge.ingest.rawUpload.modeZip') },
+])
 
 const conflictOptions = computed(() => [
   { value: 'SKIP' as const, label: t('knowledge.ingest.rawUpload.conflictSkip') },
@@ -37,11 +50,37 @@ const conflictOptions = computed(() => [
   { value: 'RENAME' as const, label: t('knowledge.ingest.rawUpload.conflictRename') },
 ])
 
-const canSubmit = computed(
-  () => props.canUpload && Boolean(props.spaceId) && prefix.value.trim().length > 0 && files.value.length > 0 && !uploading.value,
-)
+const canSubmit = computed(() => {
+  if (!props.canUpload || !props.spaceId || !prefix.value.trim() || uploading.value) return false
+  if (uploadMode.value === 'zip') return Boolean(zipFile.value)
+  return files.value.length > 0
+})
 
 const highlightPaths = computed(() => (result.value ? collectRawHighlightPaths(result.value) : []))
+
+async function loadPrefixSuggestions() {
+  if (!props.canUpload) {
+    prefixSuggestions.value = []
+    return
+  }
+  prefixLoading.value = true
+  try {
+    prefixSuggestions.value = await getRawPrefixSuggestionsApi()
+  } catch {
+    prefixSuggestions.value = []
+  } finally {
+    prefixLoading.value = false
+  }
+}
+
+watch(
+  () => props.canUpload,
+  () => void loadPrefixSuggestions(),
+)
+
+onMounted(() => {
+  void loadPrefixSuggestions()
+})
 
 function addFiles(list: FileList | File[]) {
   const next = [...files.value]
@@ -57,17 +96,46 @@ function onFileChange(event: Event) {
   input.value = ''
 }
 
+function onZipChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const f = input.files?.[0] ?? null
+  input.value = ''
+  if (!f) return
+  const err = validateRawUploadZip(f)
+  if (err) {
+    showToast('error', t(`knowledge.ingest.rawUpload.error.${err}`))
+    return
+  }
+  zipFile.value = f
+}
+
 function onDrop(event: DragEvent) {
   dragOver.value = false
   if (!props.canUpload) return
   const list = event.dataTransfer?.files
-  if (list?.length) addFiles(list)
+  if (!list?.length) return
+  if (uploadMode.value === 'zip') {
+    const f = list[0]
+    if (!f) return
+    const err = validateRawUploadZip(f)
+    if (err) {
+      showToast('error', t(`knowledge.ingest.rawUpload.error.${err}`))
+      return
+    }
+    zipFile.value = f
+    return
+  }
+  addFiles(list)
 }
 
 function removeFile(index: number) {
   const next = [...files.value]
   next.splice(index, 1)
   files.value = next
+}
+
+function clearZip() {
+  zipFile.value = null
 }
 
 async function submitUpload() {
@@ -77,15 +145,25 @@ async function submitUpload() {
     showToast('error', t(`knowledge.ingest.rawUpload.error.${prefixErr}`))
     return
   }
-  const err = validateRawUploadFiles(files.value)
-  if (err) {
-    showToast('error', t(`knowledge.ingest.rawUpload.error.${err}`))
-    return
-  }
   uploading.value = true
   result.value = null
   try {
-    const res = await uploadRawApi(props.spaceId, prefix.value.trim(), files.value, onConflict.value)
+    let res
+    if (uploadMode.value === 'zip') {
+      const zipErr = validateRawUploadZip(zipFile.value)
+      if (zipErr) {
+        showToast('error', t(`knowledge.ingest.rawUpload.error.${zipErr}`))
+        return
+      }
+      res = await uploadRawZipApi(props.spaceId, prefix.value.trim(), zipFile.value!, onConflict.value)
+    } else {
+      const err = validateRawUploadFiles(files.value)
+      if (err) {
+        showToast('error', t(`knowledge.ingest.rawUpload.error.${err}`))
+        return
+      }
+      res = await uploadRawApi(props.spaceId, prefix.value.trim(), files.value, onConflict.value)
+    }
     if (res.code !== API_SUCCESS_CODE || !res.data) {
       showToast('error', res.msg || t('knowledge.ingest.opFailed'))
       return
@@ -119,16 +197,24 @@ function goIngest() {
 
     <div class="grid gap-4 lg:grid-cols-2">
       <div class="grid gap-3">
+        <SegmentControl v-model="uploadMode" :options="uploadModeOptions" :disabled="!canUpload" />
+
         <FormField :label="t('knowledge.ingest.rawUpload.prefix')" horizontal>
           <input
             v-model="prefix"
             type="text"
             class="field-input"
+            list="kb-raw-prefix-suggestions"
             :placeholder="t('knowledge.ingest.rawUpload.prefixPlaceholder')"
             :disabled="!canUpload"
           />
+          <datalist id="kb-raw-prefix-suggestions">
+            <option v-for="p in prefixSuggestions" :key="p" :value="p" />
+          </datalist>
         </FormField>
-        <p class="text-xs text-gray-400">{{ t('knowledge.ingest.rawUpload.prefixHint') }}</p>
+        <p class="text-xs text-gray-400">
+          {{ prefixLoading ? t('knowledge.ingest.rawUpload.prefixLoading') : t('knowledge.ingest.rawUpload.prefixHint') }}
+        </p>
 
         <div class="kb-raw-upload-conflict-block">
           <p class="kb-raw-upload-conflict-label">{{ t('knowledge.ingest.rawUpload.conflict') }}</p>
@@ -146,6 +232,7 @@ function goIngest() {
         </div>
 
         <div
+          v-if="uploadMode === 'files'"
           class="app-upload-dropzone"
           :class="[
             dragOver && 'app-upload-dropzone--active',
@@ -164,12 +251,37 @@ function goIngest() {
           </label>
         </div>
 
-        <ul v-if="files.length" class="space-y-1 rounded-lg border border-gray-100 p-2 text-xs dark:border-white/5">
+        <div
+          v-else
+          class="app-upload-dropzone"
+          :class="[
+            dragOver && 'app-upload-dropzone--active',
+            !canUpload && 'app-upload-dropzone--disabled',
+          ]"
+          @dragover.prevent="dragOver = canUpload"
+          @dragleave.prevent="dragOver = false"
+          @drop.prevent="onDrop"
+        >
+          <FileArchive class="app-upload-dropzone-icon" />
+          <p class="app-upload-dropzone-hint">{{ t('knowledge.ingest.rawUpload.zipDropHint') }}</p>
+          <p class="text-xs text-gray-400">{{ t('knowledge.ingest.rawUpload.zipLimit') }}</p>
+          <label class="btn-upload-pick" :class="!canUpload && 'is-disabled'">
+            {{ t('knowledge.ingest.rawUpload.pickZip') }}
+            <input type="file" class="sr-only" accept=".zip,application/zip" :disabled="!canUpload" @change="onZipChange" />
+          </label>
+        </div>
+
+        <ul v-if="uploadMode === 'files' && files.length" class="space-y-1 rounded-lg border border-gray-100 p-2 text-xs dark:border-white/5">
           <li v-for="(f, i) in files" :key="`${f.name}-${f.size}`" class="flex items-center justify-between gap-2">
             <span class="truncate text-gray-700 dark:text-gray-200">{{ f.name }}</span>
             <button type="button" class="btn-ghost shrink-0 px-1 py-0 text-rose-600" :disabled="!canUpload" @click="removeFile(i)">×</button>
           </li>
         </ul>
+
+        <div v-else-if="uploadMode === 'zip' && zipFile" class="flex items-center justify-between gap-2 rounded-lg border border-gray-100 p-2 text-xs dark:border-white/5">
+          <span class="truncate text-gray-700 dark:text-gray-200">{{ zipFile.name }}</span>
+          <button type="button" class="btn-ghost shrink-0 px-1 py-0 text-rose-600" :disabled="!canUpload" @click="clearZip">×</button>
+        </div>
 
         <button type="button" class="btn-primary text-sm" :disabled="!canSubmit" @click="submitUpload">
           <Loader2 v-if="uploading" class="h-4 w-4 animate-spin" />
