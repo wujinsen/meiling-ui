@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "kb:e2e": "node scripts/kb-e2e-walkthrough.mjs",
     "kb:e2e:extended": "node scripts/kb-e2e-extended.mjs",
-    "kb:e2e:script-fix": "node scripts/kb-e2e-script-fix.mjs"
+    "kb:e2e:script-fix": "node scripts/kb-e2e-script-fix.mjs",
+    "kb:prd": "node scripts/kb-prd-acceptance.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",

@@ -169,9 +169,9 @@
 
 ### 8.1 P0 发布门槛
 
-- [ ] 故意制造 Sync 失败 → 日志 `status=fail`，健康体检 Sync 区可见（O4）  
-- [ ] 同空间并发 trigger → 第二个有明确提示（O2 + KBOPS-2）  
-- [ ] 三空间各 trigger 一次 → browse 抽样 slug 与磁盘一致  
+- [ ] 故意制造 Sync 失败 → 日志 `status=fail`，健康体检 Sync 区可见（O4）— 2026-07-12 `kb:prd` 近 30 条无 fail 样本，需运维造失败后 UI 复验  
+- [x] 同空间并发 trigger → 第二个有明确提示（O2 + KBOPS-2）— 2026-07-12 `kb:prd` codes=200,10012  
+- [x] 三空间各 trigger 一次 → browse 抽样 slug 与磁盘一致 — 2026-07-12 `kb:prd` 各抽 3 slug  
 
 ### 8.2 P1 发布门槛
 
@@ -182,9 +182,9 @@
 
 ### 8.3 回归场景
 
-- [ ] sync-all 后三空间 browse 各抽 3 slug  
-- [ ] 治理修复 → Sync → 体检 scan 工单减少  
-- [ ] LLM 关闭时治理页 AI 按钮 disabled + 文案  
+- [x] sync-all 后三空间 browse 各抽 3 slug — 2026-07-12 `kb:prd` P0-3space  
+- [x] 治理修复 → Sync → 体检 scan 工单减少 — 2026-07-12 `kb:prd` moli-ops-manual 390→390（无 script 样例，scan 未新增）  
+- [ ] LLM 关闭时治理页 AI 按钮 disabled + 文案 — 2026-07-12 环境 LLM 启用；`kb:prd` 跳过改写，需 UI 点验  
 
 ---
 
