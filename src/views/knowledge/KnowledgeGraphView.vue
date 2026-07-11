@@ -14,11 +14,18 @@ import KbDocPreviewModal from '@/components/knowledge/KbDocPreviewModal.vue'
 import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppCheckbox from '@/components/ui/AppCheckbox.vue'
-import { getKbGraphApi, getKbGraphEgoApi } from '@/api/knowledge'
+import { getKbGraphApi, getKbGraphEgoApi, getKbWikiGraphApi } from '@/api/knowledge'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { KbGraph, KbGraphMeta, KbGraphMode } from '@/types/knowledge'
+import {
+  KB_DASHED_RELATIONS,
+  isEdgesJsonlType,
+  relationColor,
+} from '@/utils/kbGraphTheme'
 
 use([CanvasRenderer, GraphChart, TooltipComponent, TitleComponent, GraphicComponent])
+
+type GraphDataSource = 'relation' | 'wikiFile'
 
 const { t } = useI18n()
 const { isDark } = useTheme()
@@ -28,19 +35,19 @@ const loading = ref(false)
 const expanding = ref(false)
 const graph = ref<KbGraph>({ nodes: [], links: [] })
 const meta = ref<KbGraphMeta | null>(null)
-/** 已通过 ego 展开过的中心节点，避免重复请求 */
 const expandedIds = ref<Set<string>>(new Set())
 
 const previewOpen = ref(false)
 const previewDocId = ref<number | string>()
+const previewSlug = ref<string>()
 
 const query = ref('')
-/** 默认环形布局，大图下力导向会持续计算导致卡顿 */
 const layout = ref<'force' | 'circular'>('circular')
 const graphMode = ref<KbGraphMode>('summary')
 const coreOnly = ref(false)
-/** 被隐藏的 kb_type（图例点击切换），其余默认显示 */
+const dataSource = ref<GraphDataSource>('relation')
 const mutedTypes = ref<string[]>([])
+const mutedRelationTypes = ref<string[]>([])
 
 const layoutOptions = computed(() => [
   { value: 'force', label: t('knowledge.graph.layoutForce') },
@@ -52,38 +59,35 @@ const modeOptions = computed(() => [
   { value: 'full', label: t('knowledge.graph.modeFull') },
 ])
 
-/** 超过该节点数视为大图：关掉持续力导画、关掉入场动画、强制环形布局 */
+const sourceOptions = computed(() => [
+  { value: 'relation', label: t('knowledge.graph.sourceRelation') },
+  { value: 'wikiFile', label: t('knowledge.graph.sourceWikiFile') },
+])
+
+const isWikiFileMode = computed(() => dataSource.value === 'wikiFile')
+
 const BIG_GRAPH = 140
-/** summary / full 客户端兜底裁剪上限（后端未升级时） */
 const SUMMARY_CAP = 50
 const FULL_CAP = 300
-/** 「仅核心节点」时按度数保留的上限 */
 const CORE_LIMIT = 60
-/** 勾选「仅核心节点」时传给后端的最低度数（过滤孤立点） */
 const CORE_MIN_DEG = 1
-/** 最多同时显示这么多标签，避免文字糊成一团 */
 const LABEL_LIMIT = 28
 
 const NODE_PALETTE = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#14b8a6']
-
-/** 关系类型 → 边颜色 */
-const RELATION_COLOR: Record<string, string> = {
-  links_to: '#60a5fa',
-  related: '#34d399',
-  same_tag: '#fbbf24',
-  depends_on: '#a78bfa',
-  ref: '#22d3ee',
-  contradiction: '#f87171',
-  inference: '#c084fc',
-}
-/** 推断 / 矛盾关系用虚线区分 */
-const DASHED_RELATIONS = new Set(['contradiction', 'inference'])
 
 function nodeType(type?: string) {
   return type ?? 'other'
 }
 
+function linkType(type?: string) {
+  return type ?? 'related'
+}
+
 const allTypes = computed(() => [...new Set(graph.value.nodes.map((n) => nodeType(n.type)))])
+
+const allRelationTypes = computed(() => [
+  ...new Set(graph.value.links.map((l) => linkType(l.type))),
+])
 
 const typeColor = computed<Record<string, string>>(() => {
   const map: Record<string, string> = {}
@@ -94,6 +98,10 @@ const typeColor = computed<Record<string, string>>(() => {
 })
 
 const activeTypes = computed(() => allTypes.value.filter((tp) => !mutedTypes.value.includes(tp)))
+
+const activeRelationTypes = computed(() =>
+  allRelationTypes.value.filter((tp) => !mutedRelationTypes.value.includes(tp)),
+)
 
 const visibleNodes = computed(() => {
   const active = new Set(activeTypes.value)
@@ -107,10 +115,14 @@ const visibleNodes = computed(() => {
 const visibleIds = computed(() => new Set(visibleNodes.value.map((n) => n.id)))
 
 const visibleLinks = computed(() =>
-  graph.value.links.filter((l) => visibleIds.value.has(l.source) && visibleIds.value.has(l.target)),
+  graph.value.links.filter(
+    (l) =>
+      visibleIds.value.has(l.source) &&
+      visibleIds.value.has(l.target) &&
+      activeRelationTypes.value.includes(linkType(l.type)),
+  ),
 )
 
-/** 度数阈值：只给度数最高的 LABEL_LIMIT 个节点显示标签 */
 const labelDegThreshold = computed(() => {
   const degs = visibleNodes.value.map((n) => n.deg ?? 0).sort((a, b) => b - a)
   if (degs.length <= LABEL_LIMIT) return -Infinity
@@ -125,7 +137,6 @@ const matchedIds = computed(() => {
 
 const isBig = computed(() => visibleNodes.value.length > BIG_GRAPH)
 
-/** 大图强制环形，避免力导向持续物理仿真 */
 const effectiveLayout = computed(() => (isBig.value ? 'circular' : layout.value))
 
 const truncatedHint = computed(() => {
@@ -136,16 +147,46 @@ const truncatedHint = computed(() => {
   })
 })
 
+const sourceBanner = computed(() => {
+  const src = meta.value?.source
+  if (!src) return ''
+  if (src === 'wiki_file') return t('knowledge.graph.sourceBannerWikiFile')
+  if (src === 'runtime') return t('knowledge.graph.sourceBannerRuntime')
+  return t('knowledge.graph.sourceBannerRelation')
+})
+
+const edgesJsonlCount = computed(
+  () => visibleLinks.value.filter((l) => isEdgesJsonlType(l.type)).length,
+)
+
 function toggleType(type: string) {
   const muted = new Set(mutedTypes.value)
   if (muted.has(type)) {
     muted.delete(type)
+  } else if (activeTypes.value.length <= 1) {
+    return
   } else {
-    // 至少保留一种类型可见
-    if (activeTypes.value.length <= 1) return
     muted.add(type)
   }
   mutedTypes.value = allTypes.value.filter((tp) => muted.has(tp))
+}
+
+function toggleRelationType(type: string) {
+  const muted = new Set(mutedRelationTypes.value)
+  if (muted.has(type)) {
+    muted.delete(type)
+  } else if (activeRelationTypes.value.length <= 1) {
+    return
+  } else {
+    muted.add(type)
+  }
+  mutedRelationTypes.value = allRelationTypes.value.filter((tp) => muted.has(tp))
+}
+
+function relationLabel(type: string) {
+  const key = `knowledge.graph.relation.${type}`
+  const translated = t(key)
+  return translated === key ? type : translated
 }
 
 const option = computed(() => {
@@ -181,17 +222,17 @@ const option = computed(() => {
   })
 
   const links = visibleLinks.value.map((l) => {
-    const type = l.type ?? 'related'
+    const type = linkType(l.type)
     const related = matched ? matched.has(l.source) || matched.has(l.target) : true
     return {
       source: l.source,
       target: l.target,
-      name: type,
+      name: relationLabel(type),
       lineStyle: {
-        color: RELATION_COLOR[type] ?? (dark ? '#3f4252' : '#cbd5e1'),
-        type: DASHED_RELATIONS.has(type) ? 'dashed' : 'solid',
-        width: 1.3,
-        opacity: matched ? (related ? 0.7 : 0.05) : 0.5,
+        color: relationColor(type, dark),
+        type: KB_DASHED_RELATIONS.has(type) ? 'dashed' : 'solid',
+        width: isEdgesJsonlType(type) ? 1.8 : 1.3,
+        opacity: matched ? (related ? 0.75 : 0.05) : 0.55,
         curveness: 0.12,
       },
     }
@@ -225,7 +266,6 @@ const option = computed(() => {
   }
 })
 
-/** 旧后端无 meta 时客户端按度数裁剪，避免一次渲染全库 */
 function normalizeLoadedGraph(data: KbGraph, mode: KbGraphMode, maxNodes?: number): KbGraph {
   const nodes = data.nodes ?? []
   const links = data.links ?? []
@@ -247,11 +287,28 @@ function normalizeLoadedGraph(data: KbGraph, mode: KbGraphMode, maxNodes?: numbe
       returnedLinks: croppedLinks.length,
       truncated: true,
       mode,
+      source: isWikiFileMode.value ? 'wiki_file' : 'relation',
     },
   }
 }
 
+function applyGraphData(data: KbGraph, mode: KbGraphMode, maxNodes: number) {
+  const normalized = normalizeLoadedGraph(data, mode, maxNodes)
+  graph.value = { nodes: normalized.nodes, links: normalized.links }
+  meta.value = normalized.meta ?? null
+  expandedIds.value = new Set()
+  mutedTypes.value = []
+  mutedRelationTypes.value = []
+  if (normalized.nodes.length > BIG_GRAPH) layout.value = 'circular'
+}
+
 async function loadGraph() {
+  if (isWikiFileMode.value && selectedSpaceId.value == null) {
+    graph.value = { nodes: [], links: [] }
+    meta.value = null
+    return
+  }
+
   loading.value = true
   try {
     const maxNodes = coreOnly.value
@@ -259,26 +316,44 @@ async function loadGraph() {
       : graphMode.value === 'summary'
         ? SUMMARY_CAP
         : FULL_CAP
+    const minDeg = coreOnly.value ? CORE_MIN_DEG : undefined
+
+    if (isWikiFileMode.value) {
+      const res = await getKbWikiGraphApi({
+        spaceId: selectedSpaceId.value!,
+        mode: graphMode.value,
+        maxNodes,
+        minDeg,
+      })
+      if (res.code === API_SUCCESS_CODE && res.data) {
+        applyGraphData(res.data, graphMode.value, maxNodes)
+      } else {
+        showToast('error', res.msg || t('knowledge.graph.wikiFileFailed'))
+      }
+      return
+    }
+
     const res = await getKbGraphApi({
       spaceId: kbQuerySpaceId(),
       mode: graphMode.value,
       maxNodes,
-      minDeg: coreOnly.value ? CORE_MIN_DEG : undefined,
+      minDeg,
     })
     if (res.code === API_SUCCESS_CODE && res.data) {
-      const normalized = normalizeLoadedGraph(res.data, graphMode.value, maxNodes)
-      graph.value = { nodes: normalized.nodes, links: normalized.links }
-      meta.value = normalized.meta ?? null
-      expandedIds.value = new Set()
-      mutedTypes.value = []
-      if (normalized.nodes.length > BIG_GRAPH) layout.value = 'circular'
+      applyGraphData(res.data, graphMode.value, maxNodes)
+    }
+  } catch (e) {
+    if (isWikiFileMode.value) {
+      const msg = e instanceof Error ? e.message : ''
+      showToast('error', msg.includes('404') || msg.includes('Invalid response')
+        ? t('knowledge.graph.wikiFileFailed')
+        : (msg || t('knowledge.graph.wikiFileFailed')))
     }
   } finally {
     loading.value = false
   }
 }
 
-/** 合并 ego 返回的子图，返回新增节点数 */
 function mergeGraph(incoming: KbGraph): number {
   const nodeMap = new Map(graph.value.nodes.map((n) => [n.id, { ...n }]))
   let added = 0
@@ -307,6 +382,10 @@ function mergeGraph(incoming: KbGraph): number {
 }
 
 async function expandNode(id: string) {
+  if (isWikiFileMode.value) {
+    showToast('success', t('knowledge.graph.wikiFileNoEgo'))
+    return
+  }
   if (expanding.value || expandedIds.value.has(id)) return
   expanding.value = true
   try {
@@ -337,7 +416,6 @@ function onChartClick(params: unknown) {
   const p = params as { dataType?: string; data?: { id?: string } }
   if (p.dataType !== 'node' || !p.data?.id) return
   const id = p.data.id
-  // 单击：展开邻居；双击：打开文档预览（用定时器区分）
   if (clickTimer) clearTimeout(clickTimer)
   clickTimer = setTimeout(() => {
     void expandNode(id)
@@ -352,13 +430,14 @@ function onChartDblClick(params: unknown) {
     clearTimeout(clickTimer)
     clickTimer = null
   }
-  previewDocId.value = p.data.id
+  previewDocId.value = isWikiFileMode.value ? undefined : p.data.id
+  previewSlug.value = isWikiFileMode.value ? p.data.id : undefined
   previewOpen.value = true
 }
 
 watch(graphMode, () => loadGraph())
-
 watch(coreOnly, () => loadGraph())
+watch(dataSource, () => loadGraph())
 
 watch(
   () => visibleNodes.value.length,
@@ -377,11 +456,33 @@ watch(selectedSpaceId, () => loadGraph())
 
 <template>
   <div class="page-stack">
+    <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('knowledge.graph.subtitle') }}</p>
+
     <div class="flex flex-wrap items-center gap-2">
-      <KbSpaceSelector />
+      <KbSpaceSelector :hide-all-option="isWikiFileMode" />
+      <SegmentControl
+        :model-value="dataSource"
+        :options="sourceOptions"
+        @update:model-value="dataSource = $event as GraphDataSource"
+      />
       <button type="button" class="btn-ghost shrink-0" @click="loadGraph">
         <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.graph.refresh') }}
       </button>
+    </div>
+
+    <div
+      v-if="sourceBanner"
+      class="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200"
+    >
+      <Info class="mt-0.5 h-4 w-4 shrink-0" />
+      <span>{{ sourceBanner }}</span>
+    </div>
+
+    <div
+      v-if="isWikiFileMode && selectedSpaceId == null"
+      class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300"
+    >
+      {{ t('knowledge.graph.pickSpaceForWikiFile') }}
     </div>
 
     <div class="card flex flex-wrap items-center gap-3 p-3">
@@ -421,6 +522,7 @@ watch(selectedSpaceId, () => loadGraph())
     </div>
 
     <div v-if="allTypes.length" class="flex flex-wrap items-center gap-2">
+      <span class="text-xs text-gray-400">{{ t('knowledge.graph.nodeTypes') }}</span>
       <button
         v-for="type in allTypes"
         :key="type"
@@ -438,6 +540,28 @@ watch(selectedSpaceId, () => loadGraph())
       </button>
     </div>
 
+    <div v-if="allRelationTypes.length" class="flex flex-wrap items-center gap-2">
+      <span class="text-xs text-gray-400">{{ t('knowledge.graph.relationTypes') }}</span>
+      <button
+        v-for="type in allRelationTypes"
+        :key="type"
+        type="button"
+        class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition"
+        :class="
+          activeRelationTypes.includes(type)
+            ? 'border-transparent bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'
+            : 'border-gray-200 text-gray-400 opacity-60 dark:border-gray-700'
+        "
+        @click="toggleRelationType(type)"
+      >
+        <span
+          class="h-2.5 w-2.5 rounded-full"
+          :style="{ backgroundColor: relationColor(type, isDark) }"
+        />
+        {{ relationLabel(type) }}
+      </button>
+    </div>
+
     <div class="card p-2">
       <div class="relative h-[64vh] w-full">
         <div
@@ -448,9 +572,10 @@ watch(selectedSpaceId, () => loadGraph())
         </div>
         <p
           v-else-if="!graph.nodes.length"
-          class="absolute inset-0 flex items-center justify-center text-sm text-gray-400"
+          class="absolute inset-0 flex flex-col items-center justify-center gap-1 px-6 text-center text-sm text-gray-400"
         >
-          {{ t('knowledge.graph.empty') }}
+          <span>{{ isWikiFileMode ? t('knowledge.graph.emptyWikiFile') : t('knowledge.graph.empty') }}</span>
+          <span v-if="!isWikiFileMode" class="text-xs">{{ t('knowledge.graph.emptySyncHint') }}</span>
         </p>
         <VChart
           v-else
@@ -470,12 +595,19 @@ watch(selectedSpaceId, () => loadGraph())
     </div>
 
     <p class="text-xs text-gray-400">
-      {{ t('knowledge.graph.stats', { nodes: visibleNodes.length, links: visibleLinks.length }) }} · {{ t('knowledge.graph.tip') }}
+      {{ t('knowledge.graph.stats', { nodes: visibleNodes.length, links: visibleLinks.length }) }}
+      <template v-if="edgesJsonlCount > 0">
+        · {{ t('knowledge.graph.edgesJsonlStats', { count: edgesJsonlCount }) }}
+      </template>
+      · {{ isWikiFileMode ? t('knowledge.graph.tipWikiFile') : t('knowledge.graph.tip') }}
     </p>
 
     <KbDocPreviewModal
       :open="previewOpen"
       :doc-id="previewDocId"
+      :slug="previewSlug"
+      :space-id="selectedSpaceId ?? undefined"
+      :wiki-file="isWikiFileMode"
       @close="previewOpen = false"
     />
   </div>

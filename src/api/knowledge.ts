@@ -17,6 +17,7 @@ import type {
   KbGraphEgoParams,
   KbGraphNode,
   KbGraphParams,
+  KbWikiGraphParams,
   KbIndex,
   KbLintIssue,
   KbLintIssueStatus,
@@ -889,6 +890,62 @@ export async function getKbGraphEgoApi(docId: number | string, params: KbGraphEg
       spaceId: params.spaceId,
       depth: params.depth,
       maxNodes: params.maxNodes,
+    })}`,
+    { method: 'GET' },
+  )
+}
+
+/** Wiki 文件直读图谱：wikilink + related + graph/edges.jsonl（对齐 serve.py /api/graph） */
+function mockWikiGraph(params: KbWikiGraphParams): KbGraph {
+  const slugs = [
+    'guides/本地启动指南',
+    'guides/登录与鉴权指南',
+    'develop/用户中心',
+    'develop/网关',
+    'concepts/分布式锁',
+    'articles/redis分布式锁实现',
+  ]
+  const allNodes: KbGraphNode[] = slugs.map((slug) => ({
+    id: slug,
+    title: slug.split('/').pop() ?? slug,
+    type: slug.split('/')[0],
+    deg: 0,
+  }))
+  const allLinks: KbGraph['links'] = [
+    { source: slugs[0], target: slugs[2], type: 'relates_to' },
+    { source: slugs[0], target: slugs[1], type: 'depends_on' },
+    { source: slugs[1], target: slugs[2], type: 'relates_to' },
+    { source: slugs[2], target: slugs[3], type: 'relates_to' },
+    { source: slugs[4], target: slugs[5], type: 'part_of' },
+    { source: slugs[5], target: slugs[4], type: 'derived_from' },
+  ]
+  const deg = new Array(allNodes.length).fill(0)
+  allLinks.forEach((l) => {
+    const si = slugs.indexOf(l.source)
+    const ti = slugs.indexOf(l.target)
+    if (si >= 0) deg[si] += 1
+    if (ti >= 0) deg[ti] += 1
+  })
+  allNodes.forEach((n, i) => (n.deg = deg[i]))
+  const cropped = cropGraph(allNodes, allLinks, {
+    mode: params.mode ?? 'summary',
+    maxNodes: params.maxNodes ?? (params.mode === 'summary' ? 50 : 300),
+    minDeg: params.minDeg ?? 0,
+  })
+  return { ...cropped, meta: { ...cropped.meta!, source: 'wiki_file' } }
+}
+
+export async function getKbWikiGraphApi(params: KbWikiGraphParams) {
+  if (USE_MOCK) {
+    await delay(280)
+    return ok<KbGraph>(mockWikiGraph(params))
+  }
+  return request<KbGraph>(
+    `${KB_BASE}/wiki/graph${buildQuery({
+      spaceId: params.spaceId,
+      mode: params.mode,
+      maxNodes: params.maxNodes,
+      minDeg: params.minDeg,
     })}`,
     { method: 'GET' },
   )

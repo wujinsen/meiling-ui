@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { addProjectApi, deleteProjectApi, execDeployApi, getDeployStatusApi, getProjectApi, getProjectLinksApi, listProjectApi, saveProjectLinksApi, updateProjectApi } from '@/api/operation'
+import { addProjectApi, createDeployTaskApi, deleteProjectApi, getDeployStatusApi, getProjectApi, getProjectLinksApi, listProjectApi, saveProjectLinksApi, updateProjectApi } from '@/api/operation'
+import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
@@ -10,6 +11,7 @@ import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
+import { useOperationTaskPoll } from '@/composables/useOperationTaskPoll'
 import { confirm } from '@/composables/useConfirm'
 import { assertAction, guardAction, guardActionWithRefresh } from '@/composables/useActionPermissions'
 import { PERM } from '@/constants/permissions'
@@ -41,7 +43,17 @@ const deployExecuting = ref(false)
 const deployTitle = ref('')
 const deployServiceKey = ref<string | null>(null)
 const deployServerId = ref<string | number | null>(null)
+const deployProjectId = ref<string | number | null>(null)
 const deployStatus = ref<OperationDeployStatus | null>(null)
+
+const {
+  drawerOpen: taskDrawerOpen,
+  task: taskDetail,
+  logText: taskLogText,
+  polling: taskPolling,
+  openTask,
+  closeDrawer: closeTaskDrawer,
+} = useOperationTaskPoll()
 const linksOpen = ref(false)
 const linksSaving = ref(false)
 const linksRow = ref<OperationProject | null>(null)
@@ -237,6 +249,7 @@ async function openDeployStatus(row: OperationProject) {
   deployTitle.value = row.projectName || serviceKey
   deployServiceKey.value = serviceKey
   deployServerId.value = row.serverId
+  deployProjectId.value = row.id ?? null
   deployStatus.value = null
   try {
     await loadDeployStatus(serviceKey, deployServerId.value)
@@ -245,6 +258,7 @@ async function openDeployStatus(row: OperationProject) {
     deployOpen.value = false
     deployServiceKey.value = null
     deployServerId.value = null
+    deployProjectId.value = null
   } finally {
     deployLoading.value = false
   }
@@ -254,6 +268,7 @@ function closeDeployModal() {
   deployOpen.value = false
   deployServiceKey.value = null
   deployServerId.value = null
+  deployProjectId.value = null
   deployStatus.value = null
 }
 
@@ -286,12 +301,28 @@ async function execDeploy(action: DeployExecAction) {
 
   deployExecuting.value = true
   try {
-    const result = await execDeployApi(deployServiceKey.value, action, deployServerId.value ?? undefined)
-    if (result.code !== API_SUCCESS_CODE || !result.data) {
+    const result = await createDeployTaskApi(
+      deployServiceKey.value,
+      action,
+      deployServerId.value ?? undefined,
+      deployProjectId.value ?? undefined,
+    )
+    if (result.code !== API_SUCCESS_CODE || result.data == null) {
       throw new Error(result.msg || t('operation.deploy.execFailed'))
     }
-    deployStatus.value = result.data
-    showToast('success', t('operation.deploy.execOk'))
+    openTask(result.data, {
+      onFinished: async () => {
+        if (deployServiceKey.value) {
+          try {
+            await loadDeployStatus(deployServiceKey.value, deployServerId.value)
+          } catch {
+            /* ignore refresh errors after task */
+          }
+        }
+        await loadList()
+      },
+    })
+    showToast('success', t('operation.task.started'))
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.deploy.execFailed'))
   } finally {
@@ -561,5 +592,13 @@ onMounted(loadList)
         <button type="button" class="btn-ghost" @click="closeDeployModal">{{ t('operation.common.cancel') }}</button>
       </template>
     </AppModal>
+
+    <DeployTaskDrawer
+      :open="taskDrawerOpen"
+      :task="taskDetail"
+      :log-text="taskLogText"
+      :polling="taskPolling"
+      @close="closeTaskDrawer"
+    />
   </div>
 </template>

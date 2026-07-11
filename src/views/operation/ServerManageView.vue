@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerLinksApi, getServerTopologyApi, listComponentApi, listProjectApi, listServerApi, saveServerLinksApi, updateServerApi } from '@/api/operation'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
@@ -23,6 +24,7 @@ import { environmentI18nKey } from '@/utils/operationEnv'
 import { Activity, GitBranch, KeyRound, Link2, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -204,7 +206,17 @@ async function removeRow(row: OperationServer) {
   if (!(await confirm({ message: t('operation.server.deleteConfirm', { name: row.serverName }) }))) return
   try {
     const result = await deleteServerApi(row.id!)
-    if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.deleteFailed'))
+    if (result.code === OPERATION_ERR_SERVER_TASK_RUNNING) {
+      showToast('error', resolveErrorMessage(result.code, result.msg))
+      if (
+        row.id != null
+        && (await confirm({ message: t('operation.server.gotoTaskListConfirm') }))
+      ) {
+        router.push({ path: '/operation/task', query: { serverId: String(row.id) } })
+      }
+      return
+    }
+    if (result.code !== API_SUCCESS_CODE) throw new Error(resolveErrorMessage(result.code, result.msg) || t('operation.common.deleteFailed'))
     showToast('success', t('operation.common.deleteOk'))
     await loadList()
   } catch (e) {

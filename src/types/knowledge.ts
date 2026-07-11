@@ -257,8 +257,8 @@ export type KbGraphMeta = {
   returnedLinks: number
   /** 为 true 表示后端按度数裁剪过，还有更多节点未返回 */
   truncated: boolean
-  /** relation=读已落库边；runtime=回退运行时解析 */
-  source?: 'relation' | 'runtime'
+  /** relation=读已落库边；runtime=回退运行时解析；wiki_file=直读 wiki+edges.jsonl */
+  source?: 'relation' | 'runtime' | 'wiki_file'
   mode?: 'full' | 'summary' | 'ego'
 }
 
@@ -281,6 +281,14 @@ export interface KbGraphEgoParams {
   spaceId?: number | string
   depth?: number
   maxNodes?: number
+}
+
+/** Wiki 文件直读图谱 GET /kb/wiki/graph（wikilink + related + edges.jsonl） */
+export interface KbWikiGraphParams {
+  spaceId: number | string
+  mode?: KbGraphMode
+  maxNodes?: number
+  minDeg?: number
 }
 
 // ---------------------------------------------------------------------------

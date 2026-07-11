@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ExternalLink } from 'lucide-vue-next'
 import AppModal from '@/components/ui/AppModal.vue'
-import { getKbDocumentApi, getKbPageApi } from '@/api/knowledge'
+import { getKbDocumentApi, getKbPageApi, getKbWikiPageApi } from '@/api/knowledge'
 import { useKbMarkdownRender } from '@/composables/useKbMarkdownRender'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { renderMarkdown } from '@/utils/markdown'
@@ -15,6 +15,8 @@ const props = defineProps<{
   slug?: string
   docId?: number | string
   spaceId?: number | string
+  /** 为 true 时按 slug 读 wiki 磁盘文件（图谱 Wiki 文件模式） */
+  wikiFile?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -43,6 +45,20 @@ async function load() {
   page.value = null
   try {
     if (props.slug) {
+      if (props.wikiFile) {
+        const res = await getKbWikiPageApi(props.slug, props.spaceId)
+        if (res.code === API_SUCCESS_CODE && res.data?.exists) {
+          const w = res.data
+          page.value = {
+            docId: w.slug,
+            spaceId: w.spaceId,
+            slug: w.slug,
+            title: w.slug.split('/').pop() ?? w.slug,
+            content: w.content,
+          }
+        }
+        return
+      }
       const res = await getKbPageApi(props.slug, props.spaceId)
       if (res.code === API_SUCCESS_CODE) page.value = res.data ?? null
       return

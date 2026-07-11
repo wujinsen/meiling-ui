@@ -150,8 +150,12 @@ export const createDeployTaskApi = (
   serviceKey: string,
   action: DeployExecAction,
   serverId?: number | string | null,
+  projectId?: number | string | null,
 ) => {
-  const qs = serverId != null && serverId !== '' ? `?serverId=${serverId}` : ''
+  const params = new URLSearchParams()
+  if (serverId != null && serverId !== '') params.set('serverId', String(serverId))
+  if (projectId != null && projectId !== '') params.set('projectId', String(projectId))
+  const qs = params.toString() ? `?${params.toString()}` : ''
   return request<number>(`/operation/deploy/${serviceKey}/${action}/task${qs}`, { method: 'POST', timeoutMs: 15_000 })
 }
 
