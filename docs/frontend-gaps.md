@@ -21,7 +21,8 @@
 | **SVR-28e** | `OperationEntityLink` · `OperationRelationDrawerHost` | 部署中心 · 任务历史 · 端口审计 · 平台同环境抽屉 |
 | **SVR-28f** | `OperationTopologyGraphView` | 实体搜索分组下拉 · `?focus=s-{id}` 深链高亮 |
 
-契约与验收：[api/operation-frontend.md](api/operation-frontend.md) §5.3 · §16 · §10。
+契约与验收：[api/operation-frontend.md](api/operation-frontend.md) §5.3 · §16 · §10。  
+**给后端**：[api/operation-frontend-handoff.md](api/operation-frontend-handoff.md)（交付对照 + 联调待办 §4）。
 
 ### 1.2 剩余（联调 / 后端）
 

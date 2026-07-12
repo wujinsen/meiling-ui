@@ -18,7 +18,8 @@
 - [docs/api/kb-import-entry-frontend.md](docs/api/kb-import-entry-frontend.md)
 - Agent Skill：`.cursor/skills/meiling-kb-ingest-tab/SKILL.md`
 
-后端仓库：`../moli-project-single`（moli-admin，模块名 `moli-server`）。
+后端仓库：`../moli-project-single`（moli-admin，模块名 `moli-server`）。  
+运营管理 **前端交付给后端**：[docs/api/operation-frontend-handoff.md](docs/api/operation-frontend-handoff.md)
 
 ## 技术约定
 

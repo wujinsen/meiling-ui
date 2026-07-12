@@ -134,4 +134,5 @@
 - 表结构：`moli-project-distribute/docs/sql/USER_CENTER_SCHEMA.md` §2.3
 - API 地图：[user-center-api-map.md](../api/user-center-api-map.md) §4
 - **前端对接**：[operation-frontend.md](../api/operation-frontend.md)（枚举、TypeScript、联调 checklist、验收 S0–S13 · **§16 SVR-25/28**）
+- **给后端 · 前端交付**：[operation-frontend-handoff.md](../api/operation-frontend-handoff.md)
 - 加密参考：`moli-project-distribute/docs/design/kb-llm-platform-settings.md` §3.3

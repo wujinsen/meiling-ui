@@ -1,8 +1,23 @@
 # 用户中心 HTTP API 地图（meiling-ui · 运维域摘要）
 
 > **全量 ~70 接口**见 [`moli-project-distribute/docs/api/user-center-api-map.md`](../../moli-project-distribute/docs/api/user-center-api-map.md)（登录、RBAC、字典、日志等）。  
-> **前端对接专稿**：[operation-frontend.md](operation-frontend.md)（排期 S0–S9、枚举、UI 要点、验收表）。  
+> **前端对接专稿**：[operation-frontend.md](operation-frontend.md)（排期 S0–S16、枚举、UI 要点、验收表）。  
+> **给后端 · 前端交付**：[operation-frontend-handoff.md](operation-frontend-handoff.md)（SVR-25/26/28 ✅，§4 联调待办）。  
 > 本文 **§4** 为 meiling-ui 运营管理页联调的 HTTP 权威索引。
+
+---
+
+## 4.0 前端交付状态（2026-07-13）
+
+| 范围 | 前端 | 后端联调 |
+|------|------|----------|
+| S0–S13 · 部署中心 · 端口矩阵 · 任务历史 | ✅ | 已联调 |
+| **SVR-25** 全局拓扑 + 抽屉增强 | ✅ | `GET /operation/topology` · relations 字段 |
+| **SVR-26b** 项目组件依赖弹窗 | ✅ | `GET/PUT .../component-links` |
+| **SVR-28** 关联 chips · 导航 · 深链 | ✅ | relations · list 反向 query |
+| links / create `serverIds` | UI ✅ | **待后端** 见 handoff §4 |
+
+详情：[operation-frontend-handoff.md](operation-frontend-handoff.md)
 
 ---
 
@@ -25,6 +40,8 @@
 - `GET /operation/server/{id}`：`operation:server:list`
 - `DELETE /operation/server/{ids}`：`operation:server:remove` + `list`
 - ~~`GET /operation/server/{id}/topology`~~：**已删除**（2026-07）→ 改用 `GET /operation/relations/server/{id}`
+- `GET /operation/server/{id}/links`：`operation:server:list`；返回 `{ serverId, projectIds?, componentIds? }`（以实际 VO 为准）
+- `PUT /operation/server/{id}/links`：`operation:server:edit` + `list`；**SVR-28d** 前端 `OperationServerRelationLinksModal`
 - `POST /operation/server/{id}/check`：`operation:server:list`；TCP 探活（异步任务化时可能返回 `code=10107` + `data=taskId`）
 - `POST /operation/health/probe-all`：`operation:server:list`；**返回 `data=taskId`**，非同步 `{ serversProbed, ... }`
 
@@ -45,6 +62,8 @@
 - `DELETE /operation/project/{ids}`：`operation:project:remove` + `list`
 - `GET /operation/project/{id}/links`：`operation:project:list`；返回 `{ projectId, serverIds }`
 - `PUT /operation/project/{id}/links`：`operation:project:edit` + `list`；body `{ serverIds }`（create/update 亦会 sync）
+- `GET /operation/project/{id}/component-links`：`operation:project:list`；返回 `{ projectId, componentIds }`（**SVR-26b** 前端已接）
+- `PUT /operation/project/{id}/component-links`：`operation:project:edit` + `list`；body `{ componentIds }`
 
 ### 组件管理 `OperationComponentController`（前缀 `/operation/component`，9个）
 

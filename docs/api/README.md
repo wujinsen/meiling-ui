@@ -3,12 +3,22 @@
 > **本目录**：前端同学联调入口；**HTTP 契约权威**仍在 `moli-project-distribute/docs/api/`（随后端演进）。  
 > 改接口 → 先改 distribute 契约，再同步本目录摘要（若适用）。
 
+## 给后端（user-center / knowledge-server）
+
+| 文档 | 用途 |
+|------|------|
+| **[operation-frontend-handoff.md](operation-frontend-handoff.md)** | **运营管理 SVR-25/26/28 前端已交付 + 联调待办** |
+| [user-center-api-map.md](user-center-api-map.md) §4 | `/operation/*` HTTP 索引 |
+| [kb-browse-multi-select-filter.md](../kb-browse-multi-select-filter.md) | 浏览多选 facet（KB，已落地） |
+| [per-system-menu-isolation.md](../per-system-menu-isolation.md) | 按系统隔离菜单（待后端） |
+
 ## 平台 v1
 
 | 文档 | 范围 |
 |------|------|
 | [sso-frontend-dev-guide.md](../sso-frontend-dev-guide.md) | 登录 · 门户 · 多系统 SSO |
-| **[operation-frontend.md](operation-frontend.md)** | **服务器运维 · 运营管理 · meiling-ui 对接（S0–S5）** |
+| **[operation-frontend.md](operation-frontend.md)** | **服务器运维 · 运营管理 · meiling-ui 对接（S0–S16）** |
+| **[operation-frontend-handoff.md](operation-frontend-handoff.md)** | **给后端：SVR-25/26/28 前端交付 + 联调清单** |
 | [user-center-api-map.md](user-center-api-map.md) | 用户中心运维域 §4（`/operation/*` 路径与权限） |
 | [server-ops-module-roadmap.md](../design/server-ops-module-roadmap.md) | 运维模块后端路线图 |
 | distribute [user-center-api-map.md](../../moli-project-distribute/docs/api/user-center-api-map.md) | 用户中心 ~70 HTTP 全量 |

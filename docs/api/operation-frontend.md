@@ -1,6 +1,7 @@
 # 服务器运维 · 运营管理 · 前端对接说明（meiling-ui）
 
 > **读者**：meiling-ui 前端（菜单「运营管理」· 驾驶舱 ops 页）。  
+> **给后端**：前端交付与联调待办见 **[operation-frontend-handoff.md](operation-frontend-handoff.md)**（SVR-25/26/28 ✅）。  
 > **技术规划**：[server-ops-module-roadmap.md](../design/server-ops-module-roadmap.md)  
 > **HTTP 契约索引**：[user-center-api-map.md](user-center-api-map.md) §4（接口路径与权限以该节为准）  
 > **端口矩阵权威**：[`moli-project-distribute` production-checklist §2](../../moli-project-distribute/docs/ops/production-checklist.md)  
