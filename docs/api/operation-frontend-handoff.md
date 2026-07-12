@@ -1,8 +1,8 @@
 # 运营管理 · 前端交付说明（给 moli-server / user-center 后端）
 
-> **读者**：`moli-project-single`（模块 `moli-server`）后端、联调同学。  
-> **更新**：2026-07-13  
-> **前端仓库**：`meiling-ui` · 分支 `main`（领先 origin 若干 commit，含 SVR-25/26/28 交付）  
+> **读者**：meiling-ui 前端、联调同学。  
+> **更新**：2026-07-13 · **后端已全部就绪**（见 §1 · [`moli-project-distribute` 联调通知](../../moli-project-distribute/docs/api/operation-backend-handoff.md)）  
+> **前端仓库**：`meiling-ui` · 分支 `main`  
 > **HTTP 索引**：[user-center-api-map.md](user-center-api-map.md) §4 · **UI 细节**：[operation-frontend.md](operation-frontend.md) §16
 
 ---
@@ -13,8 +13,8 @@
 |----|------|
 | **SVR-25 / SVR-26b / SVR-28 前端** | ✅ **已全部落地**，可联调验收 |
 | **S0–S13 / SVR-21d 前端** | ✅ 此前已完成 |
-| **阻塞后端的开发项** | **无**（接口已按 25a/26a/28a/28b 消费） |
-| **剩余** | 见 §4「需后端联调/增强」— 多为 **links 同步** 与 **create 带 serverIds** |
+| **后端 API（user-center）** | ✅ **2026-07-13 联调通过**；无阻塞项 |
+| **前端待改（Breaking）** | **`POST` project/component 返回 `number` id**（见 §4.1） |
 
 前端缺口清单（全仓）：[frontend-gaps.md](../frontend-gaps.md) §1.1（已完成）· §1.2（后端项）。
 
@@ -84,16 +84,44 @@
 
 ---
 
-## 4. 需后端联调 / 增强（前端在等）
+## 4. 后端已就绪 · 前端必改
 
-| 优先级 | 项 | 前端期望 | 验证方式 |
-|--------|-----|----------|----------|
-| **P1** | create 带 `serverIds` | `POST /operation/project` · `POST /operation/component` body 含 `serverIds` + 主 `serverId`，写入 N:N | 新增项目/组件后列表关联列立即正确 |
-| **P1** | links 与主字段同步 | `GET/PUT .../links` 有序 `serverIds`；`PUT` 后同步 `serverId` / `serverIp` / `innerIp` | 改关联后列表主服务器名·IP 与 `+N` 一致 |
-| P2 | create 返回 `id` | 当前 `add` 仅 `boolean`；有 `id` 可补 create 失败时 `PUT links` | 可选增强 |
-| — | 菜单 407 | DBA 执行 `docs/sql/28_operation_topology_menu.sql` | 侧栏出现「拓扑图」 |
+### 4.1 Breaking · `POST` create 返回 id（2026-07-13）
 
-详细契约：[operation-frontend.md](operation-frontend.md) §15.1。
+| API | 旧 `data` | 新 `data` |
+|-----|-----------|-----------|
+| `POST /operation/project` | `true` | **`number`**（新建 id） |
+| `POST /operation/component` | `true` | **`number`**（新建 id） |
+
+```typescript
+// src/api/operation.ts — 请更新
+export const addProjectApi = (body: OperationProjectSave) =>
+  request<number>(`${OP}/project`, { method: 'POST', data: body })
+export const addComponentApi = (body: OperationComponentSave) =>
+  request<number>(`${OP}/component`, { method: 'POST', data: body })
+```
+
+### 4.2 后端已验收（无需再等）
+
+| 项 | 状态 | 说明 |
+|----|------|------|
+| create 带 `serverIds` | ✅ | 写入 N:N；主 `serverId` = `serverIds[0]` |
+| `PUT/GET .../links` 同步 | ✅ | 主表 `serverId` / `serverIp` / `innerIp` 一致 |
+| L7/L8 关联回归 | ✅ | 单选 1 台无幽灵计数 |
+| `presets.serviceKeys` | ✅ | 含 order、bi |
+| `serverCount` | ⚠️ | **仅 list** 有；`GET /{id}` 无——chips 用 list 或 relations |
+
+权威说明：[`moli-project-distribute/docs/api/operation-backend-handoff.md`](../../moli-project-distribute/docs/api/operation-backend-handoff.md)
+
+### 4.3 环境
+
+| 项 | 值 |
+|----|-----|
+| 后端 | `http://127.0.0.1:8888` |
+| 前端 dev | `http://127.0.0.1:5141`（proxy `/operation` → 8888） |
+| 登录 | `admin` / `123456` |
+
+~~§4 旧「需后端联调」P1/P2 项均已关闭。~~
 
 ---
 
@@ -144,4 +172,4 @@ POST /operation/file/upload  (multipart)
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-13 | 初版：SVR-25/26/28 前端交付对照 + 后端联调待办 |
+| 2026-07-13 | 后端联调通过：create 返回 id · links 同步 · order/bi；前端改 `addProjectApi`/`addComponentApi` 返回 `number` |

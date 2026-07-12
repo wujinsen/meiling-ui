@@ -24,13 +24,16 @@
 契约与验收：[api/operation-frontend.md](api/operation-frontend.md) §5.3 · §16 · §10。  
 **给后端**：[api/operation-frontend-handoff.md](api/operation-frontend-handoff.md)（交付对照 + 联调待办 §4）。
 
-### 1.2 剩余（联调 / 后端）
+### 1.2 剩余（联调 / 前端 Breaking）
 
 | 类型 | 项 | 负责方 |
 |------|-----|--------|
-| 联调 | `POST` create 接受 `serverIds` 并写 N:N | **后端** |
-| 联调 | `PUT/GET .../links` 顺序与主 `serverId`/`serverIp` 同步 | **后端** |
-| 可选 | `POST` 返回新建 `id`，便于失败时补调 `PUT links` | 后端增强 |
+| **Breaking** | `addProjectApi` / `addComponentApi` 返回 `number` id（非 `boolean`） | **前端** · 见 handoff §4.1 |
+| 点验 | 浏览器走查 §5 清单 | 前端 + 后端 |
+| 可选 | 菜单 407 SQL（老库未执行时 supplement 路由兜底） | DBA |
+
+~~create serverIds / links 同步~~ → **后端 ✅**（2026-07-13）。详见 [operation-frontend-handoff.md](api/operation-frontend-handoff.md) §4 · [distribute 联调通知](../../moli-project-distribute/docs/api/operation-backend-handoff.md)。
+| 可选 | 部署中心 DC-2 后续：远程命令「追加台账服务器」（覆盖纯服务器场景）；后端批量编排（滚动重启/失败中断），见 [design/deploy-center-project-first.md](design/deploy-center-project-first.md) §5 | 前端/后端 |
 
 设计文档（镜像 distribute）：[`design/server-topology-visualization.md`](design/server-topology-visualization.md) · [`design/operation-relations-navigation.md`](design/operation-relations-navigation.md)
 

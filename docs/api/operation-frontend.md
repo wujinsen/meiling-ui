@@ -26,7 +26,7 @@
 | **S4** 部署 | `ProjectManageView` 进程状态弹窗 | `getDeployStatusApi(serverId)` · `execDeployApi` · `resolveDeployServiceKey()` | ✅ |
 | **S5** 驾驶舱 | `CandlelightDragon/cockpit/index` · `useCockpit` | `getOperationStatsApi`（`cockpit.ts`） | ✅ |
 | **S5-4** envBreakdown | `CockpitOpsEnvChart` | ops 页环境分布饼图 · 点击钻取 | ✅ |
-| **S6** 部署中心 | `DeployCenterView` · `DeployServerPicker` · `DeployTaskDrawer` | `getDeployPresetsApi` · `createDeployTaskApi` · `uploadFileApi` | ✅ |
+| **S6** 部署中心（DC-2 项目优先） | `DeployCenterView` · `DeployBatchTaskPanel` · `DeployTaskDrawer` | `getProjectLinksApi` + 服务器多选扇出 `createDeployTaskApi` / `uploadFileApi` / `createCommandTaskApi`；见 [deploy-center-project-first.md](../design/deploy-center-project-first.md) | ✅ |
 | **S7** 批量探活 | `ServerManageView` · 驾驶舱 ops | `probeAllHealthApi` → `taskId` · `useProbeAllHealth` · `useOperationTaskPoll` | ✅ |
 | **S9** 动态 serviceKey | `DeployCenterView` | `getDeployPresetsApi().serviceKeys`（回退 `MOLI_DEPLOY_SERVICES`） | ✅ |
 | **S6-b** 多选服务器 | `ProjectManageView` · `ComponentManageView` · `OperationServerLinksModal` | 列表行「关联服务器」；分页搜索多选；`PUT .../links` | ✅ |
@@ -423,9 +423,9 @@ POST /operation/command/exec/task
 
 | ID | UI |
 |----|-----|
-| **S6-1** | `DeployServerPicker`：搜索 / 环境筛选 / 分页（百台级服务器） |
-| **S6-2** | 文件发布：`app-upload-dropzone` + 任务抽屉 |
-| **S9-1** | moli 服务卡片按 `presets.serviceKeys` 渲染，无则回退 `MOLI_DEPLOY_SERVICES` |
+| **S6-1（DC-2）** | 项目优先：选项目 → `getProjectLinksApi` 服务器多选（默认全选，SSH 未配置禁选）→ 批量扇出；1 台走 `DeployTaskDrawer`，N 台走 `DeployBatchTaskPanel`（`useDeployBatchTasks`）。设计：[deploy-center-project-first.md](../design/deploy-center-project-first.md) |
+| **S6-2** | 文件发布：`app-upload-dropzone` + 任务抽屉/批量面板 |
+| **S9-1** | 服务控制区按 `resolveDeployServiceKey(projectName)` 显示；运行状态按 (serviceKey, serverId) 行内展示 |
 
 ### 6.5 驾驶舱 ops KPI（S5）
 
@@ -561,7 +561,7 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | S3 | 端口 | 弹窗汇总与明细正确；组件/项目列 badge 展示 `expectedPort`（后端矩阵） |
 | S4 | 部署 | `getDeployStatusApi` 带 `serverId`；无 serverId 禁用按钮 |
 | S5 | 驾驶舱 | ops KPI 使用真实 stats，非纯 Mock |
-| S6 | 部署中心 | 服务器分页选择；上传/命令/启停走任务抽屉 |
+| S6 | 部署中心 | 项目优先 + 服务器多选；单台任务抽屉、多台批量面板（独立进度/日志/重试） |
 | S7 | 批量探活 | 异步 taskId + 轮询；完成后刷新 |
 | S9 | serviceKeys | 部署中心服务列表来自 presets，非仅前端常量 |
 | S10 | 表单 + 多选服务器 | 新增/编辑 `OperationLinkedServersFormSection`；`OperationServerLinksModal`；`serverIds` + 主 `serverId`；列表 **名称 · IP** + `+N` |
@@ -621,7 +621,7 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 |--------|------|
 | `GET .../links` | 返回有序 `serverIds`（首项=主）；无关联返回 `[]` |
 | `PUT .../links` | 写 N:N 表并同步 `serverId` / `serverIp` / `innerIp`（主服务器） |
-| `POST .../project` · `POST .../component` | 接受 body 内 `serverIds`，create 时同步关联（`add` API 当前仅返回 `boolean`，无 `id` 回传） |
+| `POST .../project` · `POST .../component` | 接受 body 内 `serverIds`；**响应 `data` 为新建 `id`（Long/number）** — 非 `boolean` |
 | `GET /operation/server/{id}` | 列表/弹窗解析 `serverName` · IP 用 |
 
 列表/弹窗改关联后若 UI 不变：优先查 `GET links` 顺序与 `PUT` 后主字段是否同步。
