@@ -280,11 +280,32 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 - `scriptFix.fixedPages` / `aiFix.fixedPages` / 失败明细 `pages[].message`
 - 若勾选 Sync：`syncAfter: true` 或单独调 `POST /kb/sync/trigger?spaceId=`
 
-### 8.3 LLM 不可用
+### 8.3 LLM 不可用（REG-llm-off）
 
-- **脚本修复**：照常可用
-- **AI 修复 / 一键（含 aiFix）**：按钮 disabled + 文案「请配置 kb.llm」
-- **一键**：可仅 `scriptFix: true, aiFix: false` 降级
+> **验收用例 ID**：`REG-llm-off` · 详细步骤见 [§13.1](#131-reg-llm-off-llm-关闭时-②-批量修复)。
+
+**数据源**：进入页时 `GET /kb/wiki/govern/options`（`KnowledgeWikiGovernView` → `loadGovernOptions()`，**仅拉一次**；改平台 LLM 配置后需**刷新治理页**）。
+
+**展示位置**：`GovernFixPanel`（② 批量修复）内容区顶部，在「请在上方 Lint 结果中勾选…」**之上**；**不依赖**是否已 Lint、是否勾选条目。
+
+| 条件 | UI |
+|------|-----|
+| `canEdit` + `optionsLoading=false` + `llmAvailable=false` | 黄色提示条：`kb.llm 未配置，AI 修复不可用` + 可点链接 **平台 LLM 配置**（`kbLlmSettingsRoute()`） |
+| `canEdit=false` | 显示 **只读，无法修复**（`readOnlyHint`），**不显示** LLM 黄条 |
+| `optionsLoading=true` | 黄条暂不显示（加载完成后按 `llmAvailable` 决定） |
+
+**按钮**（标签不变，仅 `disabled`）：
+
+| 控件 | LLM 关闭时 |
+|------|------------|
+| **脚本修复** | ✅ 仍可点（有勾选且 kind 可 script 时） |
+| **AI 修复**（✨） | 灰掉，文案仍为「AI 修复」 |
+| **一键修复** | 灰掉（无 script 可修且 AI 路径不可用时）；仅有 script 目标时仍可点 |
+| **模型下拉** | 灰掉 |
+
+**与顶部运维链接区分**：`KbGovernWorkflowLinks` 里的「平台 LLM 配置」是**常驻跳转**，不是禁用态 AI 按钮，也没有「LLM 已关闭」类文案。
+
+**与单篇 Wiki 编辑页区分**：编辑页 AI 协助在侧边栏展示 `knowledge.wikiEdit.aiDisabled`，AI 按钮用 `title` 提示；**治理页 REG-llm-off 只看 ② 黄条 + 上述按钮变灰**。
 
 ### 8.4 dup_slug
 
@@ -325,10 +346,13 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 
 | 控件 | 行为 |
 |------|------|
-| 模型下拉 | `options.models`；默认 `defaultModel`；仅 AI / 一键需要 |
+| **LLM 黄条** | `canEdit && !optionsLoading && !llmAvailable` → `knowledge.wikiGovern.llmUnavailable` + `openLlmSettings` 链接 |
+| 模型下拉 | `options.models`；默认 `defaultModel`；`disabled` 当 `!llmReady` |
 | Sync 勾选 | 映射 `auto-fix.syncAfter` 或修复后单独 trigger |
 | 进度 | auto-fix 为**单次 HTTP**（后端串行）；显示 loading + 完成后汇总 |
 | 结果表格 | `pages[]`：slug / status / kinds / message |
+
+**代码**：`src/components/knowledge/govern/GovernFixPanel.vue` · `llmReady = llmOptions?.llmAvailable === true`
 
 **移除**（若旧代码存在）：批量 enrich、Cloud Agent、治理页内单独 relint+sync 多步向导（一键已含 relint）。
 
@@ -362,7 +386,10 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 | `fix.result` | 已修 {fixed} 页，跳过 {skipped}，失败 {failed} |
 | `fix.relint` | 问题数 {before} → {after} |
 | `kind.manual` | 需手动处理 |
-| `llm.unavailable` | LLM 未配置，仅可使用脚本修复 |
+| `llmUnavailable` | kb.llm 未配置，AI 修复不可用 |
+| `openLlmSettings` | 平台 LLM 配置 |
+| `fixNoSelection` | 请在上方 Lint 结果中勾选要修复的条目 |
+| `readOnlyHint` | 只读，无法修复 |
 
 ---
 
@@ -376,7 +403,7 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 | **AI 修复** 断链等 | ✅ | `scripts/kb-e2e-extended.mjs`：`ai-batch-fix` 写盘 `fixed=1`（GLM `glm-4-flash` + DB Key） |
 | **一键修复** `issuesBefore` → `issuesAfter` | ✅ | `moli-ops-manual`：1→218；含 `relint` 嵌套结果 |
 | `syncAfter=true` 后 DB 与文件一致 | ✅ | `auto-fix` 返回 `sync.success=true`；`POST /kb/sync/trigger` 亦通 |
-| `llmAvailable=false` 时 AI disabled，脚本可用 | ✅ | Fix 面板 + 一键可 `aiFix:false` 降级 |
+| `llmAvailable=false` 时 AI disabled，脚本可用 | ✅ | 见 **§13.1 REG-llm-off** |
 | `dup_slug` 仅手动，不进批量 API | ✅ | manual badge + 编辑页跳转 |
 | `slug_mismatch` 走 script 非 manual | ✅ | `kbWikiGovern.ts` + options 兜底 |
 | merge-hint 复制指令 | ✅ | `cursorPrompt` + `manualSteps` 完整 |
@@ -388,6 +415,60 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 
 **联调记录（2026-07-11）**：`enterprise-kb` `PUT /kb/wiki/page` 植入 `missing_source`+`slug_mismatch`+`missing_dates` → `script-fix` `fixedPages=1`（kinds 全修）→ relint 复检 0（`npm run kb:e2e:script-fix`）。**2026-07-10**：`moli-ops-manual` 218 issues；`merge-hint` / `sync` / `auto-fix+syncAfter` 通过。**AI 写盘**：`ai-batch-fix` `fixedPages=1`（`kb:e2e:extended`）。
 
+### 13.1 REG-llm-off（LLM 关闭时 ② 批量修复）
+
+**目的**：运维关闭 `kb.llm`（或平台 LLM 未配置 Key）后，空间编辑者进入 Wiki 治理页应**立即**知晓 AI 批量修复不可用，且仍可走脚本修复。
+
+#### 前置条件
+
+1. 联调环境 `VITE_USE_MOCK_KNOWLEDGE=false`（mock 固定 `llmAvailable: true`，**看不到黄条**）。
+2. 后端 `GET /kb/wiki/govern/options` 返回 `llmAvailable: false`（判定一般为 `enabled && apiKey` 均有；仅关开关但 yml 仍有 key 兜底时可能仍为 `true`）。
+3. 当前空间 `canEdit=true`（`KbSpaceSelector` 选可编辑空间）。
+
+#### 操作步骤
+
+1. 平台 LLM 页关闭启用，或清空/不配置 API Key；保存后**刷新** Wiki 治理页。
+2. 打开 DevTools → Network → 确认 `GET .../kb/wiki/govern/options` 响应 `data.llmAvailable === false`。
+3. **无需**点「开始 Lint」、**无需**勾选 issue，直接看 ② 批量修复区域。
+
+#### 预期 UI（全部满足才算通过）
+
+| # | 检查项 | 预期 |
+|---|--------|------|
+| R1 | 黄条位置 | ② 标题下方；在 `fixNoSelection`（「请在上方 Lint 结果中勾选…」）**上方** |
+| R2 | 黄条文案 | `kb.llm 未配置，AI 修复不可用`（en/ja 见 i18n `llmUnavailable`） |
+| R3 | 配置链接 | 黄条内 **平台 LLM 配置** 可点，跳转 `system/kb-llm/index`（或 supplement 等价路由） |
+| R4 | AI 修复按钮 | 标签仍为「AI 修复」+ ✨ 图标；`disabled`，**无**额外「LLM 已关闭」类按钮文案 |
+| R5 | 一键修复 | 无勾选时本就 disabled；有仅-AI 类勾选时 disabled；有 script 类勾选时仍可点 |
+| R6 | 模型下拉 | `disabled` |
+| R7 | 脚本修复 | Lint 并勾选 script 类 issue 后**仍可点** |
+| R8 | 空状态 | 未 Lint 时也应看到 R1–R3（黄条），其下为勾选提示 |
+
+#### 负例 / 易混淆
+
+| 现象 | 原因 |
+|------|------|
+| 看不到黄条，AI 可点 | `llmAvailable` 仍为 `true`；查后端 enabled + apiKey / yml 兜底 |
+| 看不到黄条，显示只读 | 当前空间无编辑权 → `readOnlyHint`，非 REG-llm-off |
+| Mock 开发 | `VITE_USE_MOCK_KNOWLEDGE=true` → 永远 `llmAvailable: true` |
+| 改 LLM 后 UI 未变 | 未刷新治理页（options 仅 `onMounted` 拉一次） |
+| 顶部「平台 LLM 配置」 | `KbGovernWorkflowLinks` 常驻链接，**不能**替代 R1–R3 黄条验收 |
+
+#### 对比：单篇 Wiki 编辑（非本用例）
+
+| 页面 | LLM 关闭 |
+|------|----------|
+| `KnowledgeWikiEditView` | 侧边栏 `knowledge.wikiEdit.aiDisabled`；AI 按钮 `title` 提示 |
+| **Wiki 治理 REG-llm-off** | 仅验 ② `GovernFixPanel` 黄条 + R4–R7 |
+
+#### 实现落点
+
+```text
+KnowledgeWikiGovernView.vue  onMounted → loadGovernOptions() → getKbWikiGovernOptionsApi()
+GovernFixPanel.vue           v-else-if="!optionsLoading && !llmReady" → 黄条
+                             canAi / canAuto / model select → llmReady
+```
+
 ---
 
 ## 14. 前端实现落点（meiling-ui · 2026-06-28）
@@ -397,7 +478,7 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 | 页面 | `src/views/knowledge/KnowledgeWikiGovernView.vue` |
 | 子组件 | `GovernLintPanel` / `GovernFixPanel` / `GovernRelintBar` |
 | 工具 | `src/utils/kbWikiGovern.ts` |
-| API | `src/api/knowledge.ts`（`lintWikiSpaceApi`、`wikiGovern*Api`、`getKbWikiGovernOptionsApi`） |
+| API | `src/api/knowledge/kbWiki.ts`（`getKbWikiGovernOptionsApi`、`wikiGovern*Api`）；`knowledge.ts` re-export |
 | 未接入 | ~~`GovernSyncPanel.vue`~~ | **已挂载**（④ Sync 入库，复检通过后可用） |
 
 ### 14.1 与本文档的差异
@@ -442,6 +523,7 @@ export function wikiGovernMergeHintApi(data: { spaceId: number; issues: KbWikiLi
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-12 | 新增 **§13.1 REG-llm-off**；§8.3 / §10 / §12 对齐 `GovernFixPanel` 黄条与按钮 disabled 实现 |
 | 2026-07-10 | T16f 后端联调验收：lint/fix/merge-hint/sync/auto-fix+syncAfter |
 | 2026-06-28 | 代码审计：§13 验收改状态表；新增 §14 落点、§15 后端确认 |
 | 2026-06-28 | 对齐总览；补 manualOnlyKinds、merge-hint 类型、代码落点 |
