@@ -247,11 +247,19 @@ async function saveComponentLinks(ids: string[]) {
     })
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.component.linksSaveFailed'))
     showToast('success', t('operation.component.linksSaveOk'))
-    if (modalOpen.value && form.value.id != null && String(form.value.id) === String(linksRow.value.id)) {
-      await applyFormServerLinks(form.value.id, form.value)
-    }
     closeComponentLinks()
-    await loadList()
+    if (modalOpen.value && form.value.id != null && String(form.value.id) === String(linksRow.value.id)) {
+      try {
+        await applyFormServerLinks(form.value.id, form.value)
+      } catch {
+        /* 保存已成功；刷新表单关联失败不阻断关弹窗 */
+      }
+    }
+    try {
+      await loadList()
+    } catch {
+      /* loadList 内部已 toast */
+    }
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.component.linksSaveFailed'))
   } finally {
