@@ -5,6 +5,7 @@ import { addProjectApi, createDeployTaskApi, deleteProjectApi, getDeployStatusAp
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
+import OperationLinkedServersFormSection from '@/components/operation/OperationLinkedServersFormSection.vue'
 import OperationLinkedServersCell from '@/components/operation/OperationLinkedServersCell.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
@@ -26,7 +27,6 @@ import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject } from '@/types/operation'
-import { isOperationOrphan } from '@/utils/operationOrphan'
 import { entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { resolveDeployServiceKey } from '@/utils/operationPort'
 import { ClipboardList, Link2, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Server, Square, Trash2 } from 'lucide-vue-next'
@@ -78,9 +78,22 @@ const linksServerIds = ref<string[]>([])
 const canDeployExec = computed(() => assertAction(PERM.OP_DEPLOY_EXEC))
 const deployExecAvailable = computed(() => deployStatus.value?.available !== false)
 
-const serverIpLocked = computed(() => !isOperationOrphan(form.value.serverId))
-
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, projectName: '', serverIp: '', environment: '' as number | '' })
+
+async function applyFormServerLinks(projectId: string | number, detail?: OperationProject) {
+  const linksRes = await getProjectLinksApi(projectId)
+  const base = detail ?? form.value
+  const serverIds = resolveEntityServerIds(
+    linksRes.code === API_SUCCESS_CODE ? linksRes.data?.serverIds : undefined,
+    base.serverId,
+  )
+  form.value = {
+    ...base,
+    serverIds: serverIds.length ? serverIds : undefined,
+    serverId: serverIds[0] ?? base.serverId ?? '',
+  }
+  await hydrateRows([form.value])
+}
 
 function search() {
   if (query.pageNum === 1) loadList()
@@ -129,16 +142,28 @@ function openCreate() {
 async function openEdit(row: OperationProject) {
   if (!guardAction(PERM.OP_PROJECT_EDIT)) return
   try {
-    const result = await getProjectApi(row.id!)
-    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.project.loadFailed'))
-    const data = result.data
-    const serverIds = resolveEntityServerIds(data.serverIds, data.serverId)
+    const [detailRes, linksRes] = await Promise.all([
+      getProjectApi(row.id!),
+      getProjectLinksApi(row.id!),
+    ])
+    if (detailRes.code !== API_SUCCESS_CODE || !detailRes.data) throw new Error(detailRes.msg || t('operation.project.loadFailed'))
+    const data = detailRes.data
+    const serverIds = resolveEntityServerIds(linksRes.data?.serverIds ?? data.serverIds, data.serverId)
     form.value = { ...data, serverIds, serverId: serverIds[0] ?? data.serverId ?? '' }
     modalTitle.value = t('operation.common.edit')
     modalOpen.value = true
+    await hydrateRows([form.value])
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.project.loadFailed'))
   }
+}
+
+function openFormLinks() {
+  if (!isEdit.value || form.value.id == null) return
+  if (!guardAction(PERM.OP_PROJECT_EDIT)) return
+  linksRow.value = { ...form.value }
+  linksServerIds.value = resolveEntityServerIds(form.value.serverIds, form.value.serverId).map(String)
+  linksOpen.value = true
 }
 
 function closeModal() {
@@ -185,6 +210,9 @@ async function saveProjectLinks(ids: string[]) {
     })
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.project.linksSaveFailed'))
     showToast('success', t('operation.project.linksSaveOk'))
+    if (modalOpen.value && form.value.id != null && String(form.value.id) === String(linksRow.value.id)) {
+      await applyFormServerLinks(form.value.id, form.value)
+    }
     closeProjectLinks()
     await loadList()
   } catch (e) {
@@ -491,14 +519,17 @@ onMounted(loadList)
             </FormField>
           </div>
           <div class="form-grid-row">
-            <FormField :label="t('operation.project.serverIp')" horizontal class="form-field-span-2">
-              <input v-model="form.serverIp" class="field-input" :readonly="serverIpLocked" />
-              <p class="mt-1 text-xs text-gray-400">{{ t('operation.project.linkServersEditHint') }}</p>
-            </FormField>
-          </div>
-          <div class="form-grid-row">
-            <FormField :label="t('operation.project.innerIp')" horizontal class="form-field-span-2">
-              <input v-model="form.innerIp" class="field-input" :readonly="serverIpLocked" />
+            <FormField :label="t('operation.common.linkServer')" horizontal class="form-field-span-2">
+              <OperationLinkedServersFormSection
+                :row="form"
+                :server-cache="serverCache"
+                :is-edit="isEdit"
+                entity-type="project"
+                show-inner-ip
+                v-model:server-ip="form.serverIp"
+                v-model:inner-ip="form.innerIp"
+                @manage-links="openFormLinks"
+              />
             </FormField>
           </div>
           <div class="form-grid-row">

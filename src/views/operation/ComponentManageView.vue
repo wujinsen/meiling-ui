@@ -5,6 +5,7 @@ import { addComponentApi, checkComponentApi, deleteComponentApi, getComponentApi
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
+import OperationLinkedServersFormSection from '@/components/operation/OperationLinkedServersFormSection.vue'
 import OperationLinkedServersCell from '@/components/operation/OperationLinkedServersCell.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
@@ -27,7 +28,6 @@ import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyComponent, type OperationComponent } from '@/types/operation'
 import { entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
-import { isOperationOrphan } from '@/utils/operationOrphan'
 import { Pencil, Plus, RefreshCw, Search, Trash2, Activity, ClipboardList, KeyRound, Link2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -65,9 +65,22 @@ const {
 
 const canManagePassword = computed(() => assertOperationSecretEdit(PERM.OP_COMPONENT_EDIT))
 
-const serverIpLocked = computed(() => !isOperationOrphan(form.value.serverId))
-
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, componentName: '', serverIp: '', environment: '' as number | '' })
+
+async function applyFormServerLinks(componentId: string | number, detail?: OperationComponent) {
+  const linksRes = await getComponentLinksApi(componentId)
+  const base = detail ?? form.value
+  const serverIds = resolveEntityServerIds(
+    linksRes.code === API_SUCCESS_CODE ? linksRes.data?.serverIds : undefined,
+    base.serverId,
+  )
+  form.value = {
+    ...base,
+    serverIds: serverIds.length ? serverIds : undefined,
+    serverId: serverIds[0] ?? base.serverId ?? '',
+  }
+  await hydrateRows([form.value])
+}
 
 function search() {
   if (query.pageNum === 1) loadList()
@@ -117,17 +130,29 @@ function openCreate() {
 async function openEdit(row: OperationComponent) {
   if (!guardAction(PERM.OP_COMPONENT_EDIT)) return
   try {
-    const result = await getComponentApi(row.id!)
-    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.component.loadFailed'))
-    const data = result.data
-    const serverIds = resolveEntityServerIds(data.serverIds, data.serverId)
+    const [detailRes, linksRes] = await Promise.all([
+      getComponentApi(row.id!),
+      getComponentLinksApi(row.id!),
+    ])
+    if (detailRes.code !== API_SUCCESS_CODE || !detailRes.data) throw new Error(detailRes.msg || t('operation.component.loadFailed'))
+    const data = detailRes.data
+    const serverIds = resolveEntityServerIds(linksRes.data?.serverIds ?? data.serverIds, data.serverId)
     form.value = { ...data, serverIds, serverId: serverIds[0] ?? data.serverId ?? '' }
     passwordInput.value = ''
     modalTitle.value = t('operation.common.edit')
     modalOpen.value = true
+    await hydrateRows([form.value])
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.component.loadFailed'))
   }
+}
+
+function openFormLinks() {
+  if (!isEdit.value || form.value.id == null) return
+  if (!guardAction(PERM.OP_COMPONENT_EDIT)) return
+  linksRow.value = { ...form.value }
+  linksServerIds.value = resolveEntityServerIds(form.value.serverIds, form.value.serverId).map(String)
+  linksOpen.value = true
 }
 
 function closeModal() {
@@ -175,6 +200,9 @@ async function saveComponentLinks(ids: string[]) {
     })
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.component.linksSaveFailed'))
     showToast('success', t('operation.component.linksSaveOk'))
+    if (modalOpen.value && form.value.id != null && String(form.value.id) === String(linksRow.value.id)) {
+      await applyFormServerLinks(form.value.id, form.value)
+    }
     closeComponentLinks()
     await loadList()
   } catch (e) {
@@ -400,9 +428,15 @@ onMounted(loadList)
             </FormField>
           </div>
           <div class="form-grid-row">
-            <FormField :label="t('operation.component.serverIp')" horizontal class="form-field-span-2">
-              <input v-model="form.serverIp" class="field-input" :readonly="serverIpLocked" />
-              <p class="mt-1 text-xs text-gray-400">{{ t('operation.component.linkServersEditHint') }}</p>
+            <FormField :label="t('operation.common.linkServer')" horizontal class="form-field-span-2">
+              <OperationLinkedServersFormSection
+                :row="form"
+                :server-cache="serverCache"
+                :is-edit="isEdit"
+                entity-type="component"
+                v-model:server-ip="form.serverIp"
+                @manage-links="openFormLinks"
+              />
             </FormField>
           </div>
           <div class="form-grid-row">
