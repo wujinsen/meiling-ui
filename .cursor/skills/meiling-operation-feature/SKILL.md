@@ -10,9 +10,9 @@ description: >-
 
 ## 必读（动手前）
 
-1. [docs/api/operation-frontend.md](../../docs/api/operation-frontend.md) §0 代码落点
+1. [docs/api/operation-frontend.md](../../docs/api/operation-frontend.md) §0 代码落点 · §16 SVR-25/28
 2. [docs/api/user-center-api-map.md](../../docs/api/user-center-api-map.md) §4 HTTP 索引
-3. [docs/frontend-gaps.md](../../docs/frontend-gaps.md) §1 缺口
+3. [docs/frontend-gaps.md](../../docs/frontend-gaps.md) §1.1（SVR-25/28 已完成）· §1.2（剩余联调）
 4. 后端仓库：`../moli-project-single`（联调 `http://127.0.0.1:8888`）
 
 ## 技术约定（勿违反）

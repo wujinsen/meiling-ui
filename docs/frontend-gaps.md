@@ -1,26 +1,29 @@
 # meiling-ui 前端缺口清单
 
-> 更新：2026-07-12（晚）· 汇总各模块文档与 PRD 验收项。  
-> **运营关联服务器**（列表 + 新增/编辑弹窗）前端已完成，依赖后端 §15.1 契约。
+> 更新：2026-07-13 · 汇总各模块文档与 PRD 验收项。  
+> **运营关联服务器**（列表 + 新增/编辑弹窗）前端已完成，依赖后端 §15.1 契约。  
+> **SVR-25 / SVR-28 / SVR-26b** 前端已全部落地（见 §1.1）。
 
 ---
 
 ## 1. 运营管理（`operation_*`）
 
-| 状态 | 说明 |
-|------|------|
-| 🟢 **SVR-25 / SVR-28 已完成** | 28d 去旧拓扑弹窗、25d 抽屉增强、平台同环境 tab 已接 |
+### 1.1 已完成（SVR-25 / SVR-28 / SVR-26b）
 
-| 优先级 | 项 | 前端 | 后端 / 菜单 |
-|--------|-----|------|-------------|
-| **P1** | **SVR-25b** `TopologyGraphView` | ✅ `OperationTopologyGraphView`（ECharts + 筛选 + 详情） | `GET /operation/topology` ✅ |
-| **P1** | **SVR-25c** 拓扑菜单 | supplement 路由已注册 | 执行 `docs/sql/28_operation_topology_menu.sql` 后重新登录 |
-| **P1** | **SVR-28c** `RelationDrawer` | ✅ chips + URL 过滤 chip + 反向 list 参数 | `GET /operation/relations/{type}/{id}` ✅ |
-| P2 | **SVR-25d** 拓扑弹窗增强 | ✅ RelationDrawer：部署状态徽章、任务行→DeployTaskDrawer | topology VO 补字段 |
-| P2 | **SVR-28d** 服务器拓扑按钮 | ✅ RelationDrawer + `OperationServerRelationLinksModal` 编辑关联 | — |
-| P2 | **SVR-28e** 部署/任务/端口矩阵/平台 | ✅ 部署中心·任务历史·端口审计·平台同环境抽屉 | — |
-| P2 | **SVR-28f** 拓扑页实体搜索下拉 | ✅ 分组下拉 + `?focus=` 深链 | — |
-| P2 | **SVR-26b** 项目组件依赖维护 | ✅ `OperationProjectComponentLinksModal` | `component-links` API ✅ |
+| 任务 ID | 前端落点 | 说明 |
+|---------|----------|------|
+| **SVR-25b** | `OperationTopologyGraphView` · `operation/topology/index` | ECharts 力导向全图；环境/角色/标签筛选 |
+| **SVR-25c** | 菜单 407 · `docs/sql/28_operation_topology_menu.sql` | supplement 路由已注册；DB 执行 SQL 后重新登录 |
+| **SVR-25d** | `RelationDrawer` | `deployRunning` · `PortMatchBadge` · `recentTasks` → `DeployTaskDrawer` |
+| **SVR-26b** | `OperationProjectComponentLinksModal` | 项目行「组件依赖」· `GET/PUT .../component-links` |
+| **SVR-28c** | `OperationRelationChips` · `RelationDrawer` | 服务器/项目/组件三管理页关联列 + URL 反向过滤 chip |
+| **SVR-28d** | `ServerManageView` | 旧拓扑弹窗已移除；`OperationServerRelationLinksModal` 编辑关联 |
+| **SVR-28e** | `OperationEntityLink` · `OperationRelationDrawerHost` | 部署中心 · 任务历史 · 端口审计 · 平台同环境抽屉 |
+| **SVR-28f** | `OperationTopologyGraphView` | 实体搜索分组下拉 · `?focus=s-{id}` 深链高亮 |
+
+契约与验收：[api/operation-frontend.md](api/operation-frontend.md) §5.3 · §16 · §10。
+
+### 1.2 剩余（联调 / 后端）
 
 | 类型 | 项 | 负责方 |
 |------|-----|--------|
@@ -28,7 +31,7 @@
 | 联调 | `PUT/GET .../links` 顺序与主 `serverId`/`serverIp` 同步 | **后端** |
 | 可选 | `POST` 返回新建 `id`，便于失败时补调 `PUT links` | 后端增强 |
 
-设计文档：[`design/server-topology-visualization.md`](design/server-topology-visualization.md) · [`design/operation-relations-navigation.md`](design/operation-relations-navigation.md)（镜像自 distribute）
+设计文档（镜像 distribute）：[`design/server-topology-visualization.md`](design/server-topology-visualization.md) · [`design/operation-relations-navigation.md`](design/operation-relations-navigation.md)
 
 详见 [api/operation-frontend.md](api/operation-frontend.md) §0 · §15 · §15.1。
 
@@ -77,4 +80,4 @@
 1. **Sync fail 点验**（P0 O4）
 2. **LLM 关闭态 / 平台 LLM DB Key** 点验（P1）
 
-**运营模块**：SVR-25/28 首版已可联调；完整验收见设计文档 §验收用例。
+**运营模块**：SVR-25/28/26b 前端已完成；完整验收见 [operation-frontend.md](api/operation-frontend.md) §10 · §16。

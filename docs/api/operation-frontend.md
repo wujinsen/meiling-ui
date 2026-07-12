@@ -8,14 +8,19 @@
 
 ---
 
-## 0. meiling-ui 代码落点（2026-07-12）
+## 0. meiling-ui 代码落点（2026-07-13）
 
 | 任务 | 页面 / 组件 | API / 工具 | 状态 |
 |------|-------------|------------|------|
 | **S0** 凭据 | `PlatformManageView` · `ComponentManageView` · `SecretManageModal` | `revealPlatformSecretApi` · `revealComponentSecretApi` | ✅ |
 | **S1** 探测 | `ServerManageView` · `ComponentManageView` · `HealthStatusBadge` | `checkServerApi` · `checkComponentApi` · `operationHealth.ts` | ✅ |
-| **S2** 单机关联 | `RelationDrawer` · `ServerManageView` | `getServerRelationsApi` / `getRelationsApi` | ✅ |
-| **S2a** 全局拓扑图 | `OperationTopologyGraphView` | `getTopologyGraphApi` → `GET /operation/topology` | ✅ |
+| **S2** 单机关联 | `RelationDrawer` · 三管理页 `OperationRelationChips` | `getServerRelationsApi` / `getRelationsApi` | ✅ **SVR-28c/25d** |
+| **S2a** 全局拓扑图 | `OperationTopologyGraphView` | `getTopologyGraphApi` → `GET /operation/topology` | ✅ **SVR-25b/28f** |
+| **S2b** 关联导航 | `OperationEntityLink` · `OperationRelationDrawerHost` | — | ✅ **SVR-28e** |
+| **S2c** 拓扑菜单 | 菜单 407 · `operationSupplementRoutes.ts` | `docs/sql/28_operation_topology_menu.sql` | ✅ **SVR-25c** |
+| **S2d** 服务器关联编辑 | `OperationServerRelationLinksModal` | `getServerLinksApi` / `saveServerLinksApi` | ✅ **SVR-28d** |
+| **S2e** 项目组件依赖 | `OperationProjectComponentLinksModal` | `getProjectComponentLinksApi` / `saveProjectComponentLinksApi` | ✅ **SVR-26b** |
+| **S2f** URL 反向过滤 | `OperationRelationFilterChips` · `useOperationRelationListFilter` | list query `serverId` / `projectId` / `componentId` | ✅ **SVR-28c** |
 | **S3** 端口 | `PortAuditModal` · `PortMatchBadge` | `getPortAuditApi` · `operationPort.ts` | ✅ |
 | **S4** 部署 | `ProjectManageView` 进程状态弹窗 | `getDeployStatusApi(serverId)` · `execDeployApi` · `resolveDeployServiceKey()` | ✅ |
 | **S5** 驾驶舱 | `CandlelightDragon/cockpit/index` · `useCockpit` | `getOperationStatsApi`（`cockpit.ts`） | ✅ |
@@ -33,7 +38,7 @@
 
 权限常量：`src/constants/permissions.ts` → `PERM.OP_*` · `OP_SECRET_VIEW` · `OP_DEPLOY_EXEC` · `OP_FILE_UPLOAD` · `OP_COMMAND_EXEC`。
 
-**运营管理前端缺口**：**无**（S0–S13 / SVR-21d 均已落地）。全仓缺口见 [frontend-gaps.md](../frontend-gaps.md)。
+**运营管理前端缺口**：**无**（S0–S13 / SVR-21d / **SVR-25·26b·28** 均已落地）。全仓剩余项见 [frontend-gaps.md](../frontend-gaps.md) §1.2。
 
 ---
 
@@ -47,6 +52,9 @@
 | **P2** | 端口矩阵校验 | `operation/project/index`、`operation/component/index` | ✅ SVR-7 | **S3** 端口校验弹窗 + 组件列 badge |
 | **P2** | 部署进程状态 | `operation/project/index` | ✅ SVR-8 | **S4** 进程状态（只读） |
 | **P2** | 驾驶舱 ops KPI | `CandlelightDragon/cockpit/index`（tab=ops） | ✅ SVR-9 | **S5** 合并 `/operation/stats` |
+| **P1** | 全局拓扑图 | `operation/topology/index` | ✅ SVR-25a/b | **S2a** ECharts 全图 + 筛选 + 搜索深链 |
+| **P1** | 关联导航 | 三管理页 + 部署/任务/端口/平台 | ✅ SVR-28b/c/e | **S2** `RelationDrawer` + chips + URL 过滤 |
+| **P2** | 项目组件依赖 | `operation/project/index` | ✅ SVR-26b | **S2e** `component-links` 弹窗 |
 
 **建议迭代顺序**：**S0 → S1/S2 → S3 → S4 → S5**
 
@@ -73,6 +81,7 @@
 | 组件管理 | `operation/component/index` | `operation:component:list` | 同上 |
 | 任务历史 | `operation/task/index` | `operation:server:list` | 只读列表 + 日志抽屉（与部署中心同权） |
 | 端口矩阵 | `operation/port-matrix/index` | `operation:port-matrix:list` | `add` / `edit` / `remove` + **list** |
+| 拓扑图 | `operation/topology/index` | `operation:server:list` | 只读全图（菜单 id **407** · SVR-25c） |
 
 **跨域权限**（非菜单 perms，需角色 `sys_action` 绑定）：
 
@@ -296,8 +305,12 @@ export type OperationRelations = {
 
 | ID | UI |
 |----|-----|
-| **S2-1** | 服务器行「拓扑」/ 关联 chips → `RelationDrawer`（`getServerRelationsApi`） |
-| **S2-2** | 抽屉内项目行：部署状态 + `PortMatchBadge`；组件行：`HealthStatusBadge` + 端口；任务行 → `DeployTaskDrawer` |
+| **S2-1** | 服务器/项目/组件行「关联」chips → `RelationDrawer`（`getRelationsApi`） |
+| **S2-2** | 抽屉内项目行：`deployRunning` 徽章 + `PortMatchBadge`；组件行：`HealthStatusBadge` + 端口 |
+| **S2-3** | 任务 Tab：`recentTasks` 行 → `DeployTaskDrawer`；底部「在拓扑图中定位」→ `?focus=` |
+| **S2-4** | 平台行：同 `environment` 下服务器/项目 Tab（`listServerApi` + `listProjectApi`）· **SVR-28e** |
+| **S2-5** | 三管理页 URL 反向过滤：`useOperationRelationListFilter` + `OperationRelationFilterChips` |
+| **S2-6** | 服务器「编辑关联」→ `OperationServerRelationLinksModal`（**SVR-28d**，已移除旧 topology 弹窗） |
 
 **种子 smoke**：`GET /operation/relations/server/201` 应含关联项目/组件（以库内 seed 为准）。
 
@@ -312,7 +325,8 @@ GET /operation/topology
 | ID | UI |
 |----|-----|
 | **S2a-1** | `OperationTopologyGraphView` 加载全图；环境/角色/标签筛选 |
-| **S2a-2** | 实体搜索在**已加载全量图**内内存匹配；`?focus=s-{id}` 深链高亮 |
+| **S2a-2** | 实体搜索分组下拉；在已加载全量图内内存匹配 |
+| **S2a-3** | `?focus=s-{id}` / `p-{id}` / `c-{id}` 深链高亮；节点点击可开 `RelationDrawer` |
 
 ---
 
@@ -523,6 +537,10 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | 8 | 驾驶舱 ops：`/operation/stats` 计数与库内台账一致 |
 | 9 | 批量探活：返回 `taskId`，抽屉轮询至 `finished`，列表自动刷新 |
 | 10 | 项目进程状态：有 `serverId` 的项目可查询；部署中心 `serviceKeys` 与 presets 一致 |
+| 11 | 拓扑图：`GET /operation/topology` 渲染；`?focus=s-201` 高亮对应节点 |
+| 12 | 关联抽屉：`GET /operation/relations/server/201` 含 `deployRunning` / `portMatchStatus` / `recentTasks` |
+| 13 | 部署中心/任务历史/端口审计：实体名可点 → `RelationDrawer`（`showEditLinks=false`） |
+| 14 | 项目行「组件依赖」弹窗：`GET/PUT /operation/project/{id}/component-links` |
 
 ---
 
@@ -532,8 +550,13 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 |----|------|----------|
 | S0 | 密码 | 列表无明文；reveal 受权限控制；空密码更新保留原值 |
 | S1 | 探测 | 行内探测更新状态灯；失败 Toast |
-| S2 | 单机关联 | `RelationDrawer` 展示 projects/components/tasks；空列表友好提示 |
-| S2a | 全局拓扑图 | `OperationTopologyGraphView` 加载 `/operation/topology` 全图 |
+| S2 | 单机关联 | `RelationDrawer` 展示 projects/components/tasks；`deployRunning` + 端口徽章；空列表友好提示 |
+| S2a | 全局拓扑图 | `OperationTopologyGraphView` 加载 `/operation/topology`；筛选 + 搜索 + `?focus=` 深链 |
+| S2b | 关联导航 | 部署中心/任务历史/端口审计/平台：实体名可点开抽屉 |
+| S2c | 拓扑菜单 | 菜单 407 或 supplement 路由；`operation:server:list` |
+| S2d | 服务器关联编辑 | `OperationServerRelationLinksModal`；无旧 topology API |
+| S2e | 项目组件依赖 | `OperationProjectComponentLinksModal` · `component-links` CRUD |
+| S2f | URL 反向过滤 | chips 点击 → 列表 query 过滤 + 可清除 chip |
 | S3 | 端口 | 弹窗汇总与明细正确；组件/项目列 badge 展示 `expectedPort`（后端矩阵） |
 | S4 | 部署 | `getDeployStatusApi` 带 `serverId`；无 serverId 禁用按钮 |
 | S5 | 驾驶舱 | ops KPI 使用真实 stats，非纯 Mock |
@@ -601,6 +624,48 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | `GET /operation/server/{id}` | 列表/弹窗解析 `serverName` · IP 用 |
 
 列表/弹窗改关联后若 UI 不变：优先查 `GET links` 顺序与 `PUT` 后主字段是否同步。
+
+---
+
+## 16. 拓扑与关联导航（SVR-25 / SVR-28 / SVR-26b）
+
+> 设计镜像：`moli-project-distribute/docs/design/server-topology-visualization.md` · `operation-relations-navigation.md`  
+> 缺口状态：[frontend-gaps.md](../frontend-gaps.md) §1.1（前端 ✅）· §1.2（后端联调项）
+
+### 16.1 任务对照（前端 meiling-ui）
+
+| 任务 ID | 路由 / 组件 | HTTP | 状态 |
+|---------|-------------|------|------|
+| **SVR-25b** | `operation/topology/index` → `OperationTopologyGraphView` | `GET /operation/topology` | ✅ |
+| **SVR-25c** | 菜单 407 · `operationSupplementRoutes.ts` | — | ✅（执行 `docs/sql/28_operation_topology_menu.sql`） |
+| **SVR-25d** | `RelationDrawer` 增强字段展示 | `GET /operation/relations/{type}/{id}` | ✅ |
+| **SVR-26b** | `OperationProjectComponentLinksModal` | `GET/PUT /operation/project/{id}/component-links` | ✅ |
+| **SVR-28c** | `OperationRelationChips` + `OperationRelationFilterChips` | relations + list 反向 query | ✅ |
+| **SVR-28d** | `ServerManageView` · `OperationServerRelationLinksModal` | `GET/PUT /operation/server/{id}/links` | ✅ |
+| **SVR-28e** | `OperationEntityLink` · `OperationRelationDrawerHost` | 部署中心/任务/端口审计/平台 | ✅ |
+| **SVR-28f** | 拓扑页实体搜索 + `?focus=` | 客户端全图匹配 | ✅ |
+
+### 16.2 三接口（勿混）
+
+| 接口 | 用途 | 前端 |
+|------|------|------|
+| `GET /operation/relations/{type}/{id}` | 单实体关联 + deploy/port/tasks | `getRelationsApi` → `RelationDrawer` |
+| `GET /operation/topology` | 全局 ECharts 全图 | `getTopologyGraphApi` → `OperationTopologyGraphView` |
+| ~~`GET /operation/server/{id}/topology`~~ | **已删** | 勿再调用 |
+
+### 16.3 关键组件
+
+| 组件 | 路径 |
+|------|------|
+| `RelationDrawer` | `src/components/operation/RelationDrawer.vue` |
+| `OperationRelationChips` | 三管理页关联列 |
+| `OperationEntityLink` | 导航页可点击实体名 |
+| `OperationRelationDrawerHost` | 导航页抽屉宿主（`showEditLinks=false`） |
+| `OperationServerRelationLinksModal` | 服务器 N:N 关联编辑 |
+| `OperationProjectComponentLinksModal` | 项目↔组件依赖 |
+| `useOperationRelationListFilter` | URL ↔ 列表反向过滤 |
+
+工具：`src/utils/operationTopologyGraph.ts`（ECharts option · focus 解析）
 
 ---
 

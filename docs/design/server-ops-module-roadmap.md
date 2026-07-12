@@ -1,6 +1,6 @@
 # 服务器运维模块 · 演进规划（技术端运维）
 
-> 更新：2026-07-12 · 状态：**P0–P2 已落地**；**SVR-21d** ✅；**S6-b+ 关联服务器（列表+表单）** ✅  
+> 更新：2026-07-13 · 状态：**P0–P2 已落地**；**SVR-21d** ✅；**S6-b+ 关联服务器（列表+表单）** ✅；**SVR-25/26b/28 拓扑与关联导航** ✅  
 > 归属：`moli-user-center` · `operation_*` 表 · 菜单「运营/运维管理」(id 400)  
 > 边界：**只管服务器/基础设施资产运维**；知识库内容管道运维见 [knowledge-ops-frontend.md](../api/knowledge-ops-frontend.md)（另一条独立路线，互不重叠）  
 > **浏览镜像**：工程契约权威仍在 `moli-project-distribute/docs/design/server-ops-module-roadmap.md`；改设计请先改 distribute 再同步本文件。
@@ -94,6 +94,21 @@
 | **SVR-21d** | meiling-ui `operation/port-matrix/index` | ✅ · [operation-frontend.md](../api/operation-frontend.md) §14 |
 | **SVR-21e** | SQL 迁移 + production-checklist 加注 | ✅ distribute |
 
+### P3 —— 拓扑可视化与关联导航（SVR-25 / SVR-26 / SVR-28）
+
+| 任务 | 内容 | 状态 |
+|------|------|------|
+| **SVR-25a** | `GET /operation/topology` 全图 VO | ✅ 后端 |
+| **SVR-25b** | meiling-ui `operation/topology/index` ECharts 力导向图 | ✅ · [operation-frontend.md](../api/operation-frontend.md) §16 |
+| **SVR-25c** | 菜单 407 + `28_operation_topology_menu.sql` | ✅ |
+| **SVR-25d** | `RelationDrawer`：`deployRunning` / `portMatch` / `recentTasks` | ✅ |
+| **SVR-26b** | 项目 `component-links` 维护弹窗 | ✅ |
+| **SVR-28b** | `GET /operation/relations/{type}/{id}` | ✅ 后端 |
+| **SVR-28c** | 三管理页关联 chips + URL 反向过滤 | ✅ |
+| **SVR-28d** | 服务器关联编辑；移除旧 `server/{id}/topology` | ✅ |
+| **SVR-28e** | 部署/任务/端口/平台实体名 → `RelationDrawer` | ✅ |
+| **SVR-28f** | 拓扑页实体搜索 + `?focus=` 深链 | ✅ |
+
 ---
 
 ## 6. 表与权限增量
@@ -118,5 +133,5 @@
 
 - 表结构：`moli-project-distribute/docs/sql/USER_CENTER_SCHEMA.md` §2.3
 - API 地图：[user-center-api-map.md](../api/user-center-api-map.md) §4
-- **前端对接**：[operation-frontend.md](../api/operation-frontend.md)（枚举、TypeScript、联调 checklist、验收 S0–S9）
+- **前端对接**：[operation-frontend.md](../api/operation-frontend.md)（枚举、TypeScript、联调 checklist、验收 S0–S13 · **§16 SVR-25/28**）
 - 加密参考：`moli-project-distribute/docs/design/kb-llm-platform-settings.md` §3.3
