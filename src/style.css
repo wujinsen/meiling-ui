@@ -346,6 +346,30 @@
     @apply cursor-default text-gray-500 no-underline hover:text-gray-500 hover:no-underline dark:text-gray-400;
   }
 
+  .operation-relation-filter-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300;
+  }
+
+  .operation-relation-filter-chip__clear {
+    @apply inline-flex h-4 w-4 items-center justify-center rounded-full text-brand-500 transition hover:bg-brand-100 hover:text-brand-700 dark:hover:bg-brand-500/20;
+  }
+
+  .operation-topology-entity-search {
+    @apply absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-100 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-gray-900;
+  }
+
+  .operation-topology-entity-search__group {
+    @apply px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400;
+  }
+
+  .operation-topology-entity-search__item {
+    @apply flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition hover:bg-gray-50 dark:hover:bg-white/5;
+  }
+
+  .operation-topology-entity-search__empty {
+    @apply px-3 py-3 text-sm text-gray-400;
+  }
+
   .btn-tree-toggle {
     @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 transition;
     @apply hover:bg-white hover:text-gray-900 hover:shadow-sm;

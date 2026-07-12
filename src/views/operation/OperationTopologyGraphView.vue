@@ -22,9 +22,11 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import type { OperationTopologyGraph } from '@/types/operation'
 import {
   buildTopologyEchartsData,
+  buildTopologyEntitySearchHits,
   filterTopologyGraph,
   parseTopologyFocus,
   topologyStats,
+  type TopologyEntitySearchHit,
   type TopologyGraphFilters,
 } from '@/utils/operationTopologyGraph'
 
@@ -36,13 +38,28 @@ const route = useRoute()
 
 const loading = ref(false)
 const rawGraph = ref<OperationTopologyGraph>({ servers: [], projects: [], components: [], links: [] })
-const keyword = ref('')
+const entitySearch = ref('')
 const environment = ref<number | ''>('')
 const serverRole = ref<string | ''>('')
 const tag = ref<string | ''>('')
 const layout = ref<'force' | 'circular'>('force')
 const tagOptions = ref<string[]>([])
 const focusId = ref('')
+const entitySearchOpen = ref(false)
+
+const entitySearchHits = computed(() => buildTopologyEntitySearchHits(rawGraph.value, entitySearch.value))
+
+const groupedEntityHits = computed(() => {
+  const groups: Record<'server' | 'project' | 'component', TopologyEntitySearchHit[]> = {
+    server: [],
+    project: [],
+    component: [],
+  }
+  for (const hit of entitySearchHits.value) groups[hit.kind].push(hit)
+  return groups
+})
+
+const showEntitySearch = computed(() => entitySearchOpen.value && entitySearch.value.trim().length > 0)
 
 const relationOpen = ref(false)
 const relationType = ref<'server' | 'project' | 'component'>('server')
@@ -52,7 +69,6 @@ const serverDetailOpen = ref(false)
 const serverDetailId = ref<number | string | null>(null)
 
 const filters = computed<TopologyGraphFilters>(() => ({
-  keyword: keyword.value,
   environment: environment.value,
   serverRole: serverRole.value,
   tag: tag.value,
@@ -140,7 +156,12 @@ function onChartClick(params: unknown) {
   const data = (params as { data?: { id?: string } })?.data
   const id = data?.id
   if (!id) return
+  focusEntity(id)
+}
+
+function focusEntity(id: string) {
   focusId.value = id
+  entitySearchOpen.value = false
   if (id.startsWith('s-')) {
     const numericId = id.slice(2)
     serverDetailId.value = numericId
@@ -159,6 +180,27 @@ function onChartClick(params: unknown) {
     relationOpen.value = true
   }
 }
+
+function entityGroupLabel(kind: 'server' | 'project' | 'component') {
+  if (kind === 'server') return t('operation.topology.entityGroupServer')
+  if (kind === 'project') return t('operation.topology.entityGroupProject')
+  return t('operation.topology.entityGroupComponent')
+}
+
+function onEntitySearchBlur() {
+  window.setTimeout(() => {
+    entitySearchOpen.value = false
+  }, 150)
+}
+
+function onEntitySearchPick(hit: TopologyEntitySearchHit) {
+  entitySearch.value = hit.label
+  focusEntity(hit.id)
+}
+
+watch(entitySearch, (value) => {
+  entitySearchOpen.value = Boolean(value.trim())
+})
 
 watch(
   () => route.query.focus,
@@ -188,7 +230,32 @@ onMounted(() => {
           <span>{{ t('operation.common.search') }}</span>
           <div class="relative">
             <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input v-model="keyword" type="search" class="field-input pl-9" :placeholder="t('operation.topology.searchPlaceholder')" />
+            <input
+              v-model="entitySearch"
+              type="search"
+              class="field-input pl-9"
+              :placeholder="t('operation.topology.searchPlaceholder')"
+              @focus="entitySearchOpen = Boolean(entitySearch.trim())"
+              @blur="onEntitySearchBlur"
+            />
+            <div v-if="showEntitySearch" class="operation-topology-entity-search">
+              <template v-for="kind in (['server', 'project', 'component'] as const)" :key="kind">
+                <template v-if="groupedEntityHits[kind].length">
+                  <div class="operation-topology-entity-search__group">{{ entityGroupLabel(kind) }}</div>
+                  <button
+                    v-for="hit in groupedEntityHits[kind]"
+                    :key="hit.id"
+                    type="button"
+                    class="operation-topology-entity-search__item"
+                    @mousedown.prevent="onEntitySearchPick(hit)"
+                  >
+                    <span class="font-medium text-gray-800 dark:text-gray-100">{{ hit.label }}</span>
+                    <span v-if="hit.sublabel" class="text-xs text-gray-400">{{ hit.sublabel }}</span>
+                  </button>
+                </template>
+              </template>
+              <p v-if="!entitySearchHits.length" class="operation-topology-entity-search__empty">{{ t('operation.topology.searchEmpty') }}</p>
+            </div>
           </div>
         </label>
         <div class="operation-filter-field">
@@ -225,6 +292,7 @@ onMounted(() => {
       :open="relationOpen"
       :entity-type="relationType"
       :entity-id="relationId"
+      :show-edit-links="false"
       @close="relationOpen = false"
       @edit-links="relationOpen = false"
     />

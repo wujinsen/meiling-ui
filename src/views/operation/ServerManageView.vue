@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
-import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerLinksApi, getServerTagOptionsApi, getServerTopologyApi, listComponentApi, listProjectApi, listServerApi, saveServerLinksApi, updateServerApi } from '@/api/operation'
+import { useRoute, useRouter } from 'vue-router'
+import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerTagOptionsApi, listServerApi, updateServerApi } from '@/api/operation'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
@@ -14,6 +14,8 @@ import AppSelect from '@/components/ui/AppSelect.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import OperationRelationChips from '@/components/operation/OperationRelationChips.vue'
+import OperationRelationFilterChips from '@/components/operation/OperationRelationFilterChips.vue'
+import OperationServerRelationLinksModal from '@/components/operation/OperationServerRelationLinksModal.vue'
 import RelationDrawer, { type RelationDrawerTab } from '@/components/operation/RelationDrawer.vue'
 import ServerSshModal from '@/components/operation/ServerSshModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
@@ -25,13 +27,15 @@ import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
+import { useOperationRelationListFilter } from '@/composables/useOperationRelationListFilter'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { OPERATION_ERR_SERVER_TASK_RUNNING } from '@/constants/operationErrors'
-import { createEmptyServer, type OperationComponent, type OperationProject, type OperationServer, type OperationServerTopology } from '@/types/operation'
-import { Activity, GitBranch, KeyRound, Link2, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { createEmptyServer, type OperationServer } from '@/types/operation'
+import { Activity, GitBranch, KeyRound, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -42,56 +46,25 @@ const modalTitle = ref('')
 const form = ref<OperationServer>(createEmptyServer())
 const isEdit = computed(() => form.value.id != null)
 const checkingId = ref<string | number | null>(null)
-const topologyOpen = ref(false)
-const topologyLoading = ref(false)
-const topologyTitle = ref('')
-const topology = ref<OperationServerTopology | null>(null)
-const topologyServerId = ref<string | number | null>(null)
 const relationOpen = ref(false)
 const relationRow = ref<OperationServer | null>(null)
 const relationTab = ref<RelationDrawerTab>('projects')
-const linksEditing = ref(false)
-const linksLoading = ref(false)
-const linksSaving = ref(false)
-const linkProjectIds = ref<string[]>([])
-const linkComponentIds = ref<string[]>([])
-const allProjects = ref<OperationProject[]>([])
-const allComponents = ref<OperationComponent[]>([])
-const linkProjectSearch = ref('')
-const linkComponentSearch = ref('')
+const linksModalOpen = ref(false)
+const linksServerId = ref<string | number | null>(null)
+const linksServerName = ref('')
 const sshModalOpen = ref(false)
 const sshServerId = ref<string | number | null>(null)
 const sshServerName = ref('')
 const tagOptions = ref<string[]>([])
 
-const canEditLinks = computed(() => assertAction(PERM.OP_SERVER_EDIT))
 const canSshManage = computed(() => assertAction(PERM.OP_SSH_MANAGE))
 
-function matchesLinkSearch(keyword: string, ...fields: Array<string | undefined | null>) {
-  const q = keyword.trim().toLowerCase()
-  if (!q) return true
-  return fields.some((field) => field?.toLowerCase().includes(q))
-}
+const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, serverName: '', ip: '', environment: '' as number | '', serverRole: '' as string, tag: '' as string, projectId: '', componentId: '' })
 
-const filteredLinkProjects = computed(() => {
-  const selected = new Set(linkProjectIds.value)
-  return allProjects.value.filter((item) => {
-    const id = item.id != null ? String(item.id) : ''
-    if (selected.has(id)) return true
-    return matchesLinkSearch(linkProjectSearch.value, item.projectName, item.serverIp, item.port)
-  })
+const { activeFilters, applyQueryFromRoute, clearFilter } = useOperationRelationListFilter('server', query, route, router, () => {
+  if (query.pageNum !== 1) query.pageNum = 1
+  else void loadList()
 })
-
-const filteredLinkComponents = computed(() => {
-  const selected = new Set(linkComponentIds.value)
-  return allComponents.value.filter((item) => {
-    const id = item.id != null ? String(item.id) : ''
-    if (selected.has(id)) return true
-    return matchesLinkSearch(linkComponentSearch.value, item.componentName, item.serverIp, item.port)
-  })
-})
-
-const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, serverName: '', ip: '', environment: '' as number | '', serverRole: '' as string, tag: '' as string })
 
 const tagFilterOptions = computed(() => [
   { value: '', label: t('operation.serverTags.all') },
@@ -126,6 +99,8 @@ function resetQuery() {
   query.environment = ''
   query.serverRole = ''
   query.tag = ''
+  query.projectId = ''
+  query.componentId = ''
   search()
 }
 
@@ -140,6 +115,8 @@ async function loadList() {
       environment: query.environment === '' ? undefined : (query.environment as 1 | 2 | 3 | 4),
       serverRole: query.serverRole || undefined,
       tag: query.tag || undefined,
+      projectId: query.projectId || undefined,
+      componentId: query.componentId || undefined,
     })
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.loadFailed'))
     list.value = result.data.list ?? []
@@ -273,113 +250,20 @@ async function openRelationDrawer(row: OperationServer, tab: RelationDrawerTab =
   relationOpen.value = true
 }
 
-async function onRelationEditLinks() {
+function onRelationEditLinks() {
   relationOpen.value = false
   if (relationRow.value?.id == null) return
-  topologyServerId.value = relationRow.value.id
-  topologyTitle.value = relationRow.value.serverName || String(relationRow.value.id)
-  topologyOpen.value = true
-  topology.value = null
-  await startEditLinks()
+  linksServerId.value = relationRow.value.id
+  linksServerName.value = relationRow.value.serverName || String(relationRow.value.id)
+  linksModalOpen.value = true
+}
+
+function onLinksSaved() {
+  void loadList()
 }
 
 async function openTopology(row: OperationServer) {
   await openRelationDrawer(row, 'projects')
-}
-
-async function reloadTopology() {
-  if (topologyServerId.value == null) return
-  topologyLoading.value = true
-  try {
-    const result = await getServerTopologyApi(topologyServerId.value)
-    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.topologyFailed'))
-    topology.value = result.data
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('operation.server.topologyFailed'))
-  } finally {
-    topologyLoading.value = false
-  }
-}
-
-function toggleLinkId(ids: string[], id: string | number | undefined, checked: boolean) {
-  if (id == null) return
-  const key = String(id)
-  if (checked) {
-    if (!ids.includes(key)) ids.push(key)
-  } else {
-    const idx = ids.indexOf(key)
-    if (idx >= 0) ids.splice(idx, 1)
-  }
-}
-
-function isLinkSelected(ids: string[], id: string | number | undefined) {
-  return id != null && ids.includes(String(id))
-}
-
-async function startEditLinks() {
-  if (!guardAction(PERM.OP_SERVER_EDIT) || topologyServerId.value == null) return
-  linksEditing.value = true
-  linksLoading.value = true
-  linkProjectSearch.value = ''
-  linkComponentSearch.value = ''
-  linkProjectIds.value = []
-  linkComponentIds.value = []
-  allProjects.value = []
-  allComponents.value = []
-  try {
-    const [linksRes, projectsRes, componentsRes] = await Promise.all([
-      getServerLinksApi(topologyServerId.value),
-      listProjectApi({ pageNum: 1, pageSize: 500 }),
-      listComponentApi({ pageNum: 1, pageSize: 500 }),
-    ])
-    if (linksRes.code !== API_SUCCESS_CODE || !linksRes.data) throw new Error(linksRes.msg || t('operation.server.linksLoadFailed'))
-    if (projectsRes.code !== API_SUCCESS_CODE || !projectsRes.data) throw new Error(projectsRes.msg || t('operation.project.loadFailed'))
-    if (componentsRes.code !== API_SUCCESS_CODE || !componentsRes.data) throw new Error(componentsRes.msg || t('operation.component.loadFailed'))
-    linkProjectIds.value = (linksRes.data.projectIds ?? []).map(String)
-    linkComponentIds.value = (linksRes.data.componentIds ?? []).map(String)
-    allProjects.value = projectsRes.data.list ?? []
-    allComponents.value = componentsRes.data.list ?? []
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('operation.server.linksLoadFailed'))
-    linksEditing.value = false
-  } finally {
-    linksLoading.value = false
-  }
-}
-
-function cancelEditLinks() {
-  linksEditing.value = false
-  linkProjectSearch.value = ''
-  linkComponentSearch.value = ''
-}
-
-async function saveLinks() {
-  if (!guardAction(PERM.OP_SERVER_EDIT) || topologyServerId.value == null) return
-  linksSaving.value = true
-  try {
-    const result = await saveServerLinksApi(topologyServerId.value, {
-      serverId: topologyServerId.value,
-      projectIds: linkProjectIds.value,
-      componentIds: linkComponentIds.value,
-    })
-    if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.server.linksSaveFailed'))
-    showToast('success', t('operation.server.linksSaveOk'))
-    linksEditing.value = false
-    await reloadTopology()
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('operation.server.linksSaveFailed'))
-  } finally {
-    linksSaving.value = false
-  }
-}
-
-function closeTopology() {
-  topologyOpen.value = false
-  topology.value = null
-  topologyServerId.value = null
-  linksEditing.value = false
-  linkProjectSearch.value = ''
-  linkComponentSearch.value = ''
 }
 
 async function loadTagOptions() {
@@ -395,6 +279,7 @@ async function loadTagOptions() {
 
 watch(() => [query.pageNum, query.pageSize], loadList)
 onMounted(() => {
+  applyQueryFromRoute()
   loadTagOptions()
   loadList()
 })
@@ -441,6 +326,7 @@ onMounted(() => {
     </OperationPageHeader>
 
     <div class="card p-5">
+      <OperationRelationFilterChips :filters="activeFilters" @clear="clearFilter" />
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
         <table class="w-full min-w-[1180px] text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">
@@ -556,109 +442,13 @@ onMounted(() => {
       </template>
     </AppModal>
 
-    <AppModal :open="topologyOpen" :title="t('operation.server.topologyTitle', { name: topologyTitle })" wide @close="closeTopology">
-      <div v-if="topologyLoading" class="py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</div>
-      <div v-else-if="linksEditing" class="space-y-6">
-        <p class="text-sm text-gray-500">{{ t('operation.server.editLinksHint') }}</p>
-        <div v-if="linksLoading" class="py-8 text-center text-gray-400">{{ t('operation.common.loading') }}</div>
-        <template v-else>
-          <section>
-            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 class="text-sm font-semibold">
-                {{ t('operation.server.topologyProjects') }}
-                <span class="font-normal text-gray-400">({{ linkProjectIds.length }}/{{ allProjects.length }})</span>
-              </h3>
-              <input
-                v-model="linkProjectSearch"
-                type="search"
-                class="field-input max-w-xs text-sm"
-                :placeholder="t('operation.server.linkSearchPlaceholder')"
-              />
-            </div>
-            <div v-if="!allProjects.length" class="text-sm text-gray-400">{{ t('operation.common.empty') }}</div>
-            <div v-else-if="!filteredLinkProjects.length" class="text-sm text-gray-400">{{ t('operation.server.linkSearchEmpty') }}</div>
-            <div v-else class="max-h-48 space-y-2 overflow-y-auto rounded border border-gray-100 p-3 dark:border-white/10">
-              <label v-for="p in filteredLinkProjects" :key="String(p.id)" class="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  :checked="isLinkSelected(linkProjectIds, p.id)"
-                  @change="toggleLinkId(linkProjectIds, p.id, ($event.target as HTMLInputElement).checked)"
-                />
-                <span>{{ p.projectName }}</span>
-                <span class="text-gray-400">· {{ p.serverIp || '-' }} · {{ p.port || '-' }}</span>
-              </label>
-            </div>
-          </section>
-          <section>
-            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 class="text-sm font-semibold">
-                {{ t('operation.server.topologyComponents') }}
-                <span class="font-normal text-gray-400">({{ linkComponentIds.length }}/{{ allComponents.length }})</span>
-              </h3>
-              <input
-                v-model="linkComponentSearch"
-                type="search"
-                class="field-input max-w-xs text-sm"
-                :placeholder="t('operation.server.linkSearchPlaceholder')"
-              />
-            </div>
-            <div v-if="!allComponents.length" class="text-sm text-gray-400">{{ t('operation.common.empty') }}</div>
-            <div v-else-if="!filteredLinkComponents.length" class="text-sm text-gray-400">{{ t('operation.server.linkSearchEmpty') }}</div>
-            <div v-else class="max-h-48 space-y-2 overflow-y-auto rounded border border-gray-100 p-3 dark:border-white/10">
-              <label v-for="c in filteredLinkComponents" :key="String(c.id)" class="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  :checked="isLinkSelected(linkComponentIds, c.id)"
-                  @change="toggleLinkId(linkComponentIds, c.id, ($event.target as HTMLInputElement).checked)"
-                />
-                <span>{{ c.componentName }}</span>
-                <span class="text-gray-400">· {{ c.serverIp || '-' }} · {{ c.port || '-' }}</span>
-              </label>
-            </div>
-          </section>
-        </template>
-      </div>
-      <div v-else-if="topology" class="space-y-6">
-        <div class="rounded-lg border border-gray-100 p-4 dark:border-white/10">
-          <HealthStatusBadge :status="topology.server?.status" />
-          <p class="mt-2 text-sm text-gray-500">{{ topology.server?.ip }} · {{ topology.server?.port || '-' }}</p>
-        </div>
-        <section>
-          <h3 class="mb-2 text-sm font-semibold">{{ t('operation.server.topologyProjects') }} ({{ topology.projects?.length ?? 0 }})</h3>
-          <div v-if="!topology.projects?.length" class="text-sm text-gray-400">{{ t('operation.common.empty') }}</div>
-          <ul v-else class="space-y-2 text-sm">
-            <li v-for="p in topology.projects" :key="String(p.id)" class="rounded border border-gray-100 px-3 py-2 dark:border-white/10">
-              <span class="font-medium">{{ p.projectName }}</span>
-              <span class="text-gray-400"> · {{ p.port || '-' }} · {{ p.deployPath || '-' }}</span>
-            </li>
-          </ul>
-        </section>
-        <section>
-          <h3 class="mb-2 text-sm font-semibold">{{ t('operation.server.topologyComponents') }} ({{ topology.components?.length ?? 0 }})</h3>
-          <div v-if="!topology.components?.length" class="text-sm text-gray-400">{{ t('operation.common.empty') }}</div>
-          <ul v-else class="space-y-2 text-sm">
-            <li v-for="c in topology.components" :key="String(c.id)" class="flex items-center justify-between rounded border border-gray-100 px-3 py-2 dark:border-white/10">
-              <span><span class="font-medium">{{ c.componentName }}</span> · {{ c.port || '-' }} · v{{ c.version || '-' }}</span>
-              <HealthStatusBadge :status="c.status" />
-            </li>
-          </ul>
-        </section>
-      </div>
-      <template #footer>
-        <template v-if="linksEditing">
-          <button type="button" class="btn-ghost" :disabled="linksSaving" @click="cancelEditLinks">{{ t('operation.common.cancel') }}</button>
-          <button type="button" class="btn-primary" :disabled="linksSaving || linksLoading" @click="saveLinks">
-            {{ linksSaving ? t('operation.common.saving') : t('operation.common.save') }}
-          </button>
-        </template>
-        <template v-else>
-          <button v-if="canEditLinks" type="button" class="btn-ghost" @click="startEditLinks">
-            <Link2 class="h-4 w-4" /> {{ t('operation.server.editLinks') }}
-          </button>
-          <button type="button" class="btn-ghost" @click="closeTopology">{{ t('operation.common.cancel') }}</button>
-        </template>
-      </template>
-    </AppModal>
+    <OperationServerRelationLinksModal
+      :open="linksModalOpen"
+      :server-id="linksServerId"
+      :server-name="linksServerName"
+      @close="linksModalOpen = false"
+      @saved="onLinksSaved"
+    />
 
     <RelationDrawer
       :open="relationOpen"

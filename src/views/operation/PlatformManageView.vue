@@ -5,6 +5,7 @@ import { addPlatformApi, deletePlatformApi, getPlatformApi, listPlatformApi, rev
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import RelationDrawer from '@/components/operation/RelationDrawer.vue'
 import SecretManageModal from '@/components/operation/SecretManageModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
@@ -32,6 +33,8 @@ const isEdit = computed(() => form.value.id != null && form.value.id !== '')
 const secretOpen = ref(false)
 const secretSaving = ref(false)
 const secretRow = ref<OperationPlatform | null>(null)
+const relationOpen = ref(false)
+const relationRow = ref<OperationPlatform | null>(null)
 
 const canManagePassword = computed(() => assertOperationSecretEdit(PERM.OP_PLATFORM_EDIT))
 
@@ -147,6 +150,12 @@ async function removeRow(row: OperationPlatform) {
   }
 }
 
+function openRelationDrawer(row: OperationPlatform) {
+  if (row.id == null) return
+  relationRow.value = row
+  relationOpen.value = true
+}
+
 function openPasswordManage(row: OperationPlatform) {
   if (!canManagePassword.value) return
   secretRow.value = row
@@ -221,7 +230,11 @@ onMounted(loadList)
             <tr v-if="loading"><td colspan="7" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
             <tr v-else-if="!list.length"><td colspan="7" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
             <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
-              <td class="px-4 py-3 font-medium">{{ row.platformName }}</td>
+              <td class="px-4 py-3 font-medium">
+                <button type="button" class="text-left font-medium text-brand-600 hover:underline dark:text-brand-400" @click="openRelationDrawer(row)">
+                  {{ row.platformName }}
+                </button>
+              </td>
               <td class="px-4 py-3"><a v-if="row.url" :href="row.url" target="_blank" class="text-brand-600 hover:underline">{{ row.url }}</a><span v-else>-</span></td>
               <td class="px-4 py-3">{{ row.account || '-' }}</td>
               <td class="px-4 py-3 text-center">
@@ -296,6 +309,16 @@ onMounted(loadList)
         <button type="button" class="btn-primary" :disabled="saving" @click="submitForm">{{ saving ? t('operation.common.saving') : t('operation.common.save') }}</button>
       </template>
     </AppModal>
+
+    <RelationDrawer
+      :open="relationOpen"
+      entity-type="platform"
+      :entity-id="relationRow?.id ?? null"
+      :entity-name="relationRow?.platformName"
+      :entity-environment="relationRow?.environment"
+      :show-edit-links="false"
+      @close="relationOpen = false"
+    />
 
     <SecretManageModal
       :open="secretOpen"

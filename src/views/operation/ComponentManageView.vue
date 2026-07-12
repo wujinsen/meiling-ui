@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { addComponentApi, checkComponentApi, deleteComponentApi, getComponentApi, getComponentLinksApi, listComponentApi, revealComponentSecretApi, saveComponentLinksApi, updateComponentApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
@@ -10,6 +11,7 @@ import OperationLinkedServersCell from '@/components/operation/OperationLinkedSe
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import OperationRelationChips from '@/components/operation/OperationRelationChips.vue'
+import OperationRelationFilterChips from '@/components/operation/OperationRelationFilterChips.vue'
 import OperationServerLinksModal from '@/components/operation/OperationServerLinksModal.vue'
 import RelationDrawer, { type RelationDrawerTab } from '@/components/operation/RelationDrawer.vue'
 import ServerDetailModal from '@/components/operation/ServerDetailModal.vue'
@@ -27,12 +29,15 @@ import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
+import { useOperationRelationListFilter } from '@/composables/useOperationRelationListFilter'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyComponent, type OperationComponent } from '@/types/operation'
 import { applyServerIdsToLinkedRow, entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { Pencil, Plus, RefreshCw, Search, Trash2, Activity, ClipboardList, KeyRound, Link2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -70,7 +75,12 @@ const {
 
 const canManagePassword = computed(() => assertOperationSecretEdit(PERM.OP_COMPONENT_EDIT))
 
-const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, componentName: '', serverIp: '', environment: '' as number | '' })
+const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, componentName: '', serverIp: '', environment: '' as number | '', serverId: '', projectId: '' })
+
+const { activeFilters, applyQueryFromRoute, clearFilter } = useOperationRelationListFilter('component', query, route, router, () => {
+  if (query.pageNum !== 1) query.pageNum = 1
+  else void loadList()
+})
 
 async function applyFormServerLinks(componentId: string | number, detail?: OperationComponent) {
   const linksRes = await getComponentLinksApi(componentId)
@@ -96,6 +106,8 @@ function resetQuery() {
   query.componentName = ''
   query.serverIp = ''
   query.environment = ''
+  query.serverId = ''
+  query.projectId = ''
   search()
 }
 
@@ -108,6 +120,8 @@ async function loadList() {
       componentName: query.componentName || undefined,
       serverIp: query.serverIp || undefined,
       environment: query.environment === '' ? undefined : (query.environment as 1 | 2 | 3 | 4),
+      serverId: query.serverId || undefined,
+      projectId: query.projectId || undefined,
     })
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.component.loadFailed'))
     const rows = result.data.list ?? []
@@ -341,7 +355,10 @@ async function savePassword(password: string) {
 }
 
 watch(() => [query.pageNum, query.pageSize], loadList)
-onMounted(loadList)
+onMounted(() => {
+  applyQueryFromRoute()
+  loadList()
+})
 </script>
 
 <template>
@@ -374,6 +391,7 @@ onMounted(loadList)
     </OperationPageHeader>
 
     <div class="card p-5">
+      <OperationRelationFilterChips :filters="activeFilters" @clear="clearFilter" />
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
         <table class="w-full min-w-[1200px] text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">

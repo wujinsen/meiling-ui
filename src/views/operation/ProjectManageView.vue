@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { addProjectApi, createDeployTaskApi, deleteProjectApi, getDeployStatusApi, getProjectApi, getProjectLinksApi, listProjectApi, saveProjectLinksApi, updateProjectApi } from '@/api/operation'
+import { useRoute, useRouter } from 'vue-router'
+import { addProjectApi, createDeployTaskApi, deleteProjectApi, getDeployStatusApi, getProjectApi, getProjectComponentLinksApi, getProjectLinksApi, listProjectApi, saveProjectComponentLinksApi, saveProjectLinksApi, updateProjectApi } from '@/api/operation'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
@@ -10,6 +11,8 @@ import OperationLinkedServersCell from '@/components/operation/OperationLinkedSe
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import OperationRelationChips from '@/components/operation/OperationRelationChips.vue'
+import OperationRelationFilterChips from '@/components/operation/OperationRelationFilterChips.vue'
+import OperationProjectComponentLinksModal from '@/components/operation/OperationProjectComponentLinksModal.vue'
 import OperationServerLinksModal from '@/components/operation/OperationServerLinksModal.vue'
 import RelationDrawer, { type RelationDrawerTab } from '@/components/operation/RelationDrawer.vue'
 import ServerDetailModal from '@/components/operation/ServerDetailModal.vue'
@@ -27,6 +30,7 @@ import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
+import { useOperationRelationListFilter } from '@/composables/useOperationRelationListFilter'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject } from '@/types/operation'
 import { applyServerIdsToLinkedRow, entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
@@ -34,6 +38,8 @@ import { resolveDeployServiceKey } from '@/utils/operationPort'
 import { ClipboardList, Link2, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Server, Square, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -76,6 +82,10 @@ const linksOpen = ref(false)
 const linksSaving = ref(false)
 const linksRow = ref<OperationProject | null>(null)
 const linksServerIds = ref<string[]>([])
+const componentLinksOpen = ref(false)
+const componentLinksSaving = ref(false)
+const componentLinksRow = ref<OperationProject | null>(null)
+const componentLinkIds = ref<string[]>([])
 const relationOpen = ref(false)
 const relationRow = ref<OperationProject | null>(null)
 const relationTab = ref<RelationDrawerTab>('servers')
@@ -83,7 +93,12 @@ const relationTab = ref<RelationDrawerTab>('servers')
 const canDeployExec = computed(() => assertAction(PERM.OP_DEPLOY_EXEC))
 const deployExecAvailable = computed(() => deployStatus.value?.available !== false)
 
-const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, projectName: '', serverIp: '', environment: '' as number | '' })
+const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, projectName: '', serverIp: '', environment: '' as number | '', serverId: '', componentId: '' })
+
+const { activeFilters, applyQueryFromRoute, clearFilter } = useOperationRelationListFilter('project', query, route, router, () => {
+  if (query.pageNum !== 1) query.pageNum = 1
+  else void loadList()
+})
 
 async function applyFormServerLinks(projectId: string | number, detail?: OperationProject) {
   const linksRes = await getProjectLinksApi(projectId)
@@ -109,6 +124,8 @@ function resetQuery() {
   query.projectName = ''
   query.serverIp = ''
   query.environment = ''
+  query.serverId = ''
+  query.componentId = ''
   search()
 }
 
@@ -121,6 +138,8 @@ async function loadList() {
       projectName: query.projectName || undefined,
       serverIp: query.serverIp || undefined,
       environment: query.environment === '' ? undefined : (query.environment as 1 | 2 | 3 | 4),
+      serverId: query.serverId || undefined,
+      componentId: query.componentId || undefined,
     })
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.project.loadFailed'))
     const rows = result.data.list ?? []
@@ -212,7 +231,49 @@ function openRelationDrawer(row: OperationProject, tab: RelationDrawerTab = 'ser
 
 async function onRelationEditLinks() {
   relationOpen.value = false
-  if (relationRow.value) await openProjectLinks(relationRow.value)
+  if (!relationRow.value) return
+  if (relationTab.value === 'components') await openProjectComponentLinks(relationRow.value)
+  else await openProjectLinks(relationRow.value)
+}
+
+async function openProjectComponentLinks(row: OperationProject) {
+  if (!guardAction(PERM.OP_PROJECT_EDIT) || row.id == null) return
+  componentLinksRow.value = row
+  try {
+    const result = await getProjectComponentLinksApi(row.id)
+    if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.project.componentLinksLoadFailed'))
+    componentLinkIds.value = (result.data?.componentIds ?? []).map(String)
+    componentLinksOpen.value = true
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.project.componentLinksLoadFailed'))
+    componentLinksRow.value = null
+  }
+}
+
+function closeProjectComponentLinks() {
+  componentLinksOpen.value = false
+  componentLinksRow.value = null
+  componentLinkIds.value = []
+}
+
+async function saveProjectComponentLinks(ids: string[]) {
+  if (!componentLinksRow.value?.id) return
+  componentLinksSaving.value = true
+  try {
+    const componentIds = ids.map((id) => (Number.isFinite(Number(id)) ? Number(id) : id))
+    const result = await saveProjectComponentLinksApi(componentLinksRow.value.id, {
+      projectId: componentLinksRow.value.id,
+      componentIds,
+    })
+    if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.project.componentLinksSaveFailed'))
+    showToast('success', t('operation.project.componentLinksSaveOk'))
+    closeProjectComponentLinks()
+    await loadList()
+  } catch (e) {
+    showToast('error', e instanceof Error ? e.message : t('operation.project.componentLinksSaveFailed'))
+  } finally {
+    componentLinksSaving.value = false
+  }
 }
 
 async function confirmProjectLinks(ids: string[]) {
@@ -422,7 +483,10 @@ function deployRunningClass(row: OperationProject) {
 }
 
 watch(() => [query.pageNum, query.pageSize], loadList)
-onMounted(loadList)
+onMounted(() => {
+  applyQueryFromRoute()
+  loadList()
+})
 </script>
 
 <template>
@@ -455,6 +519,7 @@ onMounted(loadList)
     </OperationPageHeader>
 
     <div class="card p-5">
+      <OperationRelationFilterChips :filters="activeFilters" @clear="clearFilter" />
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
         <table class="w-full min-w-[1180px] text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">
@@ -537,6 +602,9 @@ onMounted(loadList)
                   <button type="button" class="btn-action-edit" @click="openProjectLinks(row)">
                     <Link2 class="h-3.5 w-3.5" />{{ t('operation.project.linkServers') }}
                   </button>
+                  <button type="button" class="btn-action-edit" @click="openProjectComponentLinks(row)">
+                    <Link2 class="h-3.5 w-3.5" />{{ t('operation.project.linkComponents') }}
+                  </button>
                   <button type="button" class="btn-action-edit" @click="openEdit(row)"><Pencil class="h-3.5 w-3.5" />{{ t('operation.common.edit') }}</button>
                   <button type="button" class="btn-action-danger" @click="removeRow(row)"><Trash2 class="h-3.5 w-3.5" />{{ t('operation.common.delete') }}</button>
                 </div>
@@ -609,6 +677,15 @@ onMounted(loadList)
       :saving="linksSaving"
       @confirm="confirmProjectLinks"
       @close="closeProjectLinks"
+    />
+
+    <OperationProjectComponentLinksModal
+      :open="componentLinksOpen"
+      :model-value="componentLinkIds"
+      :entity-name="componentLinksRow?.projectName"
+      :saving="componentLinksSaving"
+      @confirm="saveProjectComponentLinks"
+      @close="closeProjectComponentLinks"
     />
 
     <AppModal :open="deployOpen" :title="t('operation.deploy.statusTitle', { name: deployTitle })" wide @close="closeDeployModal">

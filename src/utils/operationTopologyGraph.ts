@@ -177,3 +177,68 @@ export function topologyStats(graph: ReturnType<typeof filterTopologyGraph>) {
     downServers,
   }
 }
+
+export type TopologyEntitySearchHit = {
+  id: string
+  label: string
+  sublabel?: string
+  kind: 'server' | 'project' | 'component'
+}
+
+function matchesTopologyKeyword(keyword: string, ...fields: Array<string | undefined | null>) {
+  const q = keyword.trim().toLowerCase()
+  if (!q) return false
+  return fields.some((field) => field?.toLowerCase().includes(q))
+}
+
+export function buildTopologyEntitySearchHits(
+  graph: OperationTopologyGraph,
+  keyword: string,
+  limitPerKind = 8,
+): TopologyEntitySearchHit[] {
+  const q = keyword.trim()
+  if (!q) return []
+
+  const hits: TopologyEntitySearchHit[] = []
+  const servers = graph.servers ?? []
+  const projects = graph.projects ?? []
+  const components = graph.components ?? []
+
+  for (const srv of servers) {
+    if (!srv.id) continue
+    if (!matchesTopologyKeyword(q, srv.serverName, srv.ip, srv.innerIp, ...(srv.tags ?? []))) continue
+    hits.push({
+      id: `s-${srv.id}`,
+      kind: 'server',
+      label: srv.serverName || srv.ip || String(srv.id),
+      sublabel: srv.innerIp || srv.ip || undefined,
+    })
+    if (hits.filter((h) => h.kind === 'server').length >= limitPerKind) break
+  }
+
+  for (const project of projects) {
+    if (!project.id) continue
+    if (!matchesTopologyKeyword(q, project.projectName, project.port)) continue
+    hits.push({
+      id: `p-${project.id}`,
+      kind: 'project',
+      label: project.projectName || String(project.id),
+      sublabel: project.port || undefined,
+    })
+    if (hits.filter((h) => h.kind === 'project').length >= limitPerKind) break
+  }
+
+  for (const component of components) {
+    if (!component.id) continue
+    if (!matchesTopologyKeyword(q, component.componentName, component.port, component.version)) continue
+    hits.push({
+      id: `c-${component.id}`,
+      kind: 'component',
+      label: component.componentName || String(component.id),
+      sublabel: component.version || component.port || undefined,
+    })
+    if (hits.filter((h) => h.kind === 'component').length >= limitPerKind) break
+  }
+
+  return hits
+}

@@ -137,7 +137,7 @@ export type OperationTopologyGraph = {
   links?: OperationTopologyLink[]
 }
 
-export type OperationRelationEntityType = 'server' | 'project' | 'component'
+export type OperationRelationEntityType = 'server' | 'project' | 'component' | 'platform'
 
 export type OperationRelationEntity = {
   entityType?: OperationRelationEntityType
@@ -204,6 +204,11 @@ export type OperationServerLinks = {
 export type OperationProjectLinks = {
   projectId?: number | string
   serverIds?: (number | string)[]
+}
+
+export type OperationProjectComponentLinks = {
+  projectId?: number | string
+  componentIds?: (number | string)[]
 }
 
 export type OperationComponentLinks = {

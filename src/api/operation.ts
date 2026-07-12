@@ -13,6 +13,7 @@ import type {
   OperationRelationEntityType,
   OperationServerLinks,
   OperationProjectLinks,
+  OperationProjectComponentLinks,
   OperationComponentLinks,
   OperationPortAudit,
   OperationStats,
@@ -99,6 +100,11 @@ export const getProjectLinksApi = (id: number | string) =>
   request<OperationProjectLinks>(`/operation/project/${id}/links`, { method: 'GET' })
 export const saveProjectLinksApi = (id: number | string, body: OperationProjectLinks) =>
   request<boolean>(`/operation/project/${id}/links`, { method: 'PUT', body: JSON.stringify(body) })
+
+export const getProjectComponentLinksApi = (id: number | string) =>
+  request<OperationProjectComponentLinks>(`/operation/project/${id}/component-links`, { method: 'GET' })
+export const saveProjectComponentLinksApi = (id: number | string, body: OperationProjectComponentLinks) =>
+  request<boolean>(`/operation/project/${id}/component-links`, { method: 'PUT', body: JSON.stringify(body) })
 
 export const getComponentLinksApi = (id: number | string) =>
   request<OperationComponentLinks>(`/operation/component/${id}/links`, { method: 'GET' })

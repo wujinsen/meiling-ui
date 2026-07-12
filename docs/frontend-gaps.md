@@ -9,18 +9,18 @@
 
 | 状态 | 说明 |
 |------|------|
-| 🟡 **SVR-25 / SVR-28 进行中** | 拓扑/抽屉/三列表 chips 已落地；28e 部署/任务/端口审计已接；平台管理无关联实体 API |
+| 🟢 **SVR-25 / SVR-28 已完成** | 28d 去旧拓扑弹窗、25d 抽屉增强、平台同环境 tab 已接 |
 
 | 优先级 | 项 | 前端 | 后端 / 菜单 |
 |--------|-----|------|-------------|
 | **P1** | **SVR-25b** `TopologyGraphView` | ✅ `OperationTopologyGraphView`（ECharts + 筛选 + 详情） | `GET /operation/topology` ✅ |
 | **P1** | **SVR-25c** 拓扑菜单 | supplement 路由已注册 | 执行 `docs/sql/28_operation_topology_menu.sql` 后重新登录 |
-| **P1** | **SVR-28c** `RelationDrawer` | ✅ 组件 + 服务器/项目/组件列表 chips | `GET /operation/relations/{type}/{id}` ✅ |
-| P2 | **SVR-25d** 拓扑弹窗增强 | 并入 RelationDrawer（部署/端口/任务） | topology VO 补字段 |
-| P2 | **SVR-28d** 服务器拓扑按钮 | ✅ 改为打开 RelationDrawer | — |
-| P2 | **SVR-28e** 部署/任务/端口矩阵/平台 | ✅ 部署中心·任务历史·端口审计弹窗；平台管理无 server/project/component 实体 | — |
-| P2 | **SVR-28f** 拓扑页实体搜索下拉 | 关键字筛选已有；下拉 + `?focus=` 深链待 polish | — |
-| P2 | **SVR-26b** 项目组件依赖维护 | 待做 | `component-links` API ✅ |
+| **P1** | **SVR-28c** `RelationDrawer` | ✅ chips + URL 过滤 chip + 反向 list 参数 | `GET /operation/relations/{type}/{id}` ✅ |
+| P2 | **SVR-25d** 拓扑弹窗增强 | ✅ RelationDrawer：部署状态徽章、任务行→DeployTaskDrawer | topology VO 补字段 |
+| P2 | **SVR-28d** 服务器拓扑按钮 | ✅ RelationDrawer + `OperationServerRelationLinksModal` 编辑关联 | — |
+| P2 | **SVR-28e** 部署/任务/端口矩阵/平台 | ✅ 部署中心·任务历史·端口审计·平台同环境抽屉 | — |
+| P2 | **SVR-28f** 拓扑页实体搜索下拉 | ✅ 分组下拉 + `?focus=` 深链 | — |
+| P2 | **SVR-26b** 项目组件依赖维护 | ✅ `OperationProjectComponentLinksModal` | `component-links` API ✅ |
 
 | 类型 | 项 | 负责方 |
 |------|-----|--------|
@@ -74,9 +74,7 @@
 
 ## 5. 建议执行顺序（仅前端可推进）
 
-1. **SVR-28c 余量** — 三列表页解析 URL query 定位过滤
-2. **SVR-26b** — 项目依赖组件弹窗
-3. **Sync fail 点验**（P0 O4）
-4. **LLM 关闭态 / 平台 LLM DB Key** 点验（P1）
+1. **Sync fail 点验**（P0 O4）
+2. **LLM 关闭态 / 平台 LLM DB Key** 点验（P1）
 
 **运营模块**：SVR-25/28 首版已可联调；完整验收见设计文档 §验收用例。
