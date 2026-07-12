@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { Server } from 'lucide-vue-next'
 import type { LinkedServerRow, OperationServer } from '@/types/operation'
 import { linkedServerCount, resolvePrimaryServerLabel } from '@/utils/operationServerLinks'
 
@@ -17,6 +19,8 @@ const emit = defineEmits<{
   'view-more': []
 }>()
 
+const { t } = useI18n()
+
 const primaryLabel = computed(() => resolvePrimaryServerLabel(props.row, props.serverCache))
 const extraCount = computed(() => linkedServerCount(props.row))
 const showMore = computed(() => extraCount.value > 1)
@@ -27,17 +31,20 @@ const showMore = computed(() => extraCount.value > 1)
     <button
       v-if="clickable && primaryLabel"
       type="button"
-      class="text-left text-brand-600 hover:underline"
+      class="operation-linked-server-link"
+      :title="t('operation.relations.detail')"
       @click="emit('view-primary')"
     >
-      {{ primaryLabel }}
+      <Server class="operation-linked-server-link__icon" aria-hidden="true" />
+      <span class="truncate">{{ primaryLabel }}</span>
     </button>
     <span v-else-if="primaryLabel">{{ primaryLabel }}</span>
     <span v-else class="text-gray-400">-</span>
     <button
       v-if="clickable && showMore"
       type="button"
-      class="operation-alias-chip operation-alias-chip--compact cursor-pointer text-[10px] hover:ring-brand-300"
+      class="operation-alias-chip operation-alias-chip--compact operation-linked-server-more text-[10px]"
+      :title="t('operation.server.pickLinkedTitle')"
       @click.stop="emit('view-more')"
     >
       +{{ extraCount - 1 }}

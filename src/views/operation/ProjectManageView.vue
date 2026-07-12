@@ -638,6 +638,8 @@ onMounted(() => {
                 v-model:server-ip="form.serverIp"
                 v-model:inner-ip="form.innerIp"
                 @manage-links="openFormLinks"
+                @view-primary="openLinkedServerView(form, 'primary')"
+                @view-more="openLinkedServerView(form, 'all')"
               />
             </FormField>
           </div>

@@ -231,7 +231,7 @@ onMounted(loadList)
             <tr v-else-if="!list.length"><td colspan="7" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
             <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
               <td class="px-4 py-3 font-medium">
-                <button type="button" class="text-left font-medium text-brand-600 hover:underline dark:text-brand-400" @click="openRelationDrawer(row)">
+                <button type="button" class="operation-entity-link text-left" @click="openRelationDrawer(row)">
                   {{ row.platformName }}
                 </button>
               </td>

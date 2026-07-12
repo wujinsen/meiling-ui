@@ -17,16 +17,24 @@
 - `GET /operation/platform/{id}`：`operation:platform:list`；返回 VO
 - `GET /operation/platform/{id}/secret`：`operation:secret:view`；返回 `{ password }` 明文（记审计日志）
 
-### 服务器管理 `OperationServerController`（前缀 `/operation/server`，7个）
+### 服务器管理 `OperationServerController`（前缀 `/operation/server`，6个）
 
 - `GET /operation/server/list`：`operation:server:list`；返回 `OperationServerVo`（含 `status` / `lastCheckTime`）
 - `POST /operation/server`：`operation:server:add` + `list`
 - `PUT /operation/server`：`operation:server:edit` + `list`
 - `GET /operation/server/{id}`：`operation:server:list`
 - `DELETE /operation/server/{ids}`：`operation:server:remove` + `list`
-- `GET /operation/server/{id}/topology`：`operation:server:list`；返回 `OperationServerTopologyVo`（server + projects + components）
+- ~~`GET /operation/server/{id}/topology`~~：**已删除**（2026-07）→ 改用 `GET /operation/relations/server/{id}`
 - `POST /operation/server/{id}/check`：`operation:server:list`；TCP 探活（异步任务化时可能返回 `code=10107` + `data=taskId`）
 - `POST /operation/health/probe-all`：`operation:server:list`；**返回 `data=taskId`**，非同步 `{ serversProbed, ... }`
+
+### 关联导航 `OperationRelationsController`（前缀 `/operation/relations`）
+
+- `GET /operation/relations/{type}/{id}`：`operation:server:list`（或对应实体 list 权限）；`type` = `server` | `project` | `component`；返回 `OperationRelationsVo`（entity + servers/projects/components + recentTasks）
+
+### 全局拓扑图
+
+- `GET /operation/topology`：`operation:server:list`；返回 `OperationTopologyGraphVo`（ECharts 全图 nodes + links，**非**单机 relations）
 
 ### 项目管理 `OperationProjectController`（前缀 `/operation/project`，5个）
 

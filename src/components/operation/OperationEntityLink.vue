@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { ChevronRight } from 'lucide-vue-next'
+
 const props = defineProps<{
   label: string
   disabled?: boolean
   title?: string
+  showIcon?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +22,7 @@ const emit = defineEmits<{
     :title="props.title"
     @click.stop="emit('open')"
   >
-    {{ props.label }}
+    <span>{{ props.label }}</span>
+    <ChevronRight v-if="!props.disabled && props.showIcon !== false" class="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden="true" />
   </button>
 </template>

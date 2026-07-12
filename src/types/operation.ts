@@ -60,37 +60,6 @@ export type OperationServer = {
   componentCount?: number | null
 }
 
-export type OperationTopologyProject = {
-  id?: number | string
-  serverId?: number | string
-  serverIp?: string
-  innerIp?: string
-  url?: string
-  projectName?: string
-  deployPath?: string
-  port?: string
-  environment?: Environment
-  remark?: string
-}
-
-export type OperationTopologyComponent = {
-  id?: number | string
-  componentName?: string
-  serverIp?: string
-  port?: string
-  version?: string
-  deployPath?: string
-  environment?: Environment
-  status?: number | null
-  lastCheckTime?: string | number | null
-}
-
-export type OperationServerTopology = {
-  server?: OperationServer
-  projects?: OperationTopologyProject[]
-  components?: OperationTopologyComponent[]
-}
-
 export type OperationTopologyServerNode = {
   id: string
   serverId?: number

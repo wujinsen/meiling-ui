@@ -14,7 +14,8 @@
 |------|-------------|------------|------|
 | **S0** 凭据 | `PlatformManageView` · `ComponentManageView` · `SecretManageModal` | `revealPlatformSecretApi` · `revealComponentSecretApi` | ✅ |
 | **S1** 探测 | `ServerManageView` · `ComponentManageView` · `HealthStatusBadge` | `checkServerApi` · `checkComponentApi` · `operationHealth.ts` | ✅ |
-| **S2** 拓扑 | `ServerManageView` 拓扑弹窗 | `getServerTopologyApi` | ✅ |
+| **S2** 单机关联 | `RelationDrawer` · `ServerManageView` | `getServerRelationsApi` / `getRelationsApi` | ✅ |
+| **S2a** 全局拓扑图 | `OperationTopologyGraphView` | `getTopologyGraphApi` → `GET /operation/topology` | ✅ |
 | **S3** 端口 | `PortAuditModal` · `PortMatchBadge` | `getPortAuditApi` · `operationPort.ts` | ✅ |
 | **S4** 部署 | `ProjectManageView` 进程状态弹窗 | `getDeployStatusApi(serverId)` · `execDeployApi` · `resolveDeployServiceKey()` | ✅ |
 | **S5** 驾驶舱 | `CandlelightDragon/cockpit/index` · `useCockpit` | `getOperationStatsApi`（`cockpit.ts`） | ✅ |
@@ -267,28 +268,51 @@ POST /operation/component/{id}/check
 
 `OperationComponent` 同样含 `status`、`lastCheckTime`（另含 §3.3 端口字段）。
 
-### 5.3 服务器拓扑（S2）
+### 5.3 单机关联视图（S2）与全局拓扑图（S2a）
+
+> **勿混用**：单机「这台服务器上挂了什么」走 **relations**；ECharts 全图走 **`GET /operation/topology`**。  
+> 已删除 `GET /operation/server/{id}/topology`（原 SVR-5），由 relations 覆盖且字段更全。
+
+#### 5.3.1 单实体关联 — `GET /operation/relations/{type}/{id}`（SVR-28b）
 
 ```http
-GET /operation/server/{id}/topology
+GET /operation/relations/server/{id}
+GET /operation/relations/project/{id}
+GET /operation/relations/component/{id}
 ```
 
-**响应 `OperationServerTopology`**：
+**响应 `OperationRelations`**（相对旧 topology 增加 `recentTasks`、`deployRunning`、`portMatchStatus` 等）：
 
 ```typescript
-export type OperationServerTopology = {
-  server?: OperationServer
-  projects?: OperationTopologyProject[]
-  components?: OperationTopologyComponent[]
+export type OperationRelations = {
+  entityType?: 'server' | 'project' | 'component'
+  entity?: { id?: number; name?: string; environment?: Environment }
+  servers?: OperationRelationServerItem[]
+  projects?: OperationRelationProjectItem[]
+  components?: OperationRelationComponentItem[]
+  recentTasks?: OperationRelationTaskItem[]
 }
 ```
 
 | ID | UI |
 |----|-----|
-| **S2-1** | 服务器行操作「拓扑」→ 弹窗展示 `server` 摘要 + 关联 `projects` / `components` 列表 |
-| **S2-2** | 拓扑内组件行可带 `HealthStatusBadge`（与列表一致） |
+| **S2-1** | 服务器行「拓扑」/ 关联 chips → `RelationDrawer`（`getServerRelationsApi`） |
+| **S2-2** | 抽屉内项目行：部署状态 + `PortMatchBadge`；组件行：`HealthStatusBadge` + 端口；任务行 → `DeployTaskDrawer` |
 
-**种子数据 smoke**：`GET /operation/server/201/topology` 应含项目 401/406、组件 306/307/304（以库内 seed 为准）。
+**种子 smoke**：`GET /operation/relations/server/201` 应含关联项目/组件（以库内 seed 为准）。
+
+#### 5.3.2 全局拓扑图 — `GET /operation/topology`（SVR-25a）
+
+```http
+GET /operation/topology
+```
+
+**响应 `OperationTopologyGraph`**：`servers` / `projects` / `components` / `links`（ECharts 力导向/环形，与单机 relations **不是同一接口**）。
+
+| ID | UI |
+|----|-----|
+| **S2a-1** | `OperationTopologyGraphView` 加载全图；环境/角色/标签筛选 |
+| **S2a-2** | 实体搜索在**已加载全量图**内内存匹配；`?focus=s-{id}` 深链高亮 |
 
 ---
 
@@ -452,8 +476,8 @@ import type {
   OperationPlatform,
   OperationProject,
   OperationServer,
-  OperationServerTopology,
-  OperationPortAudit,
+  OperationRelations,
+  OperationTopologyGraph,
   OperationStats,
   OperationDeployStatus,
   OperationSecretReveal,
@@ -461,8 +485,11 @@ import type {
 
 // CRUD：/operation/project|server|platform|component — list|get|add|update|remove
 
-export const checkServerApi = (id: number | string) =>
-  request<OperationServer | number>(`/operation/server/${id}/check`, { method: 'POST' })
+export const getTopologyGraphApi = () =>
+  request<OperationTopologyGraph>('/operation/topology', { method: 'GET' })
+
+export const getServerRelationsApi = (id: number | string) =>
+  request<OperationRelations>(`/operation/relations/server/${id}`, { method: 'GET' })
 
 export const probeAllHealthApi = () =>
   request<number>('/operation/health/probe-all', { method: 'POST', timeoutMs: 15_000 })
@@ -491,7 +518,7 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | 3 | meiling-ui proxy `/operation` → `8888`；`VITE_USE_MOCK_AUTH=false`；登录角色含 `operation:*:list` |
 | 4 | 平台/组件：列表只见 mask；reveal 需 `operation:secret:view` |
 | 5 | 服务器/组件：探测后 `status` / `lastCheckTime` 更新 |
-| 6 | 服务器 id=201：拓扑含关联项目与组件 |
+| 6 | 服务器 id=201：`GET /operation/relations/server/201` 含关联项目与组件 |
 | 7 | 端口校验：`mismatched >= 1`（种子 moli-server 9080） |
 | 8 | 驾驶舱 ops：`/operation/stats` 计数与库内台账一致 |
 | 9 | 批量探活：返回 `taskId`，抽屉轮询至 `finished`，列表自动刷新 |
@@ -505,7 +532,8 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 |----|------|----------|
 | S0 | 密码 | 列表无明文；reveal 受权限控制；空密码更新保留原值 |
 | S1 | 探测 | 行内探测更新状态灯；失败 Toast |
-| S2 | 拓扑 | 弹窗展示 projects + components；空列表友好提示 |
+| S2 | 单机关联 | `RelationDrawer` 展示 projects/components/tasks；空列表友好提示 |
+| S2a | 全局拓扑图 | `OperationTopologyGraphView` 加载 `/operation/topology` 全图 |
 | S3 | 端口 | 弹窗汇总与明细正确；组件/项目列 badge 展示 `expectedPort`（后端矩阵） |
 | S4 | 部署 | `getDeployStatusApi` 带 `serverId`；无 serverId 禁用按钮 |
 | S5 | 驾驶舱 | ops KPI 使用真实 stats，非纯 Mock |

@@ -35,7 +35,7 @@
 | Controller | 前缀 | 能力 | 权限码 |
 |------------|------|------|--------|
 | `OperationPlatformController` | `/operation/platform` | list/insert/update/get/remove | `operation:platform:*` |
-| `OperationServerController` | `/operation/server` | 同上 + topology/check | `operation:server:*` |
+| `OperationServerController` | `/operation/server` | CRUD + check/links（无 topology） | `operation:server:*` |
 | `OperationComponentController` | `/operation/component` | 同上 + secret/check | `operation:component:*` |
 | `OperationProjectController` | `/operation/project` | 同上 | `operation:project:*` |
 
@@ -75,8 +75,8 @@
 | 任务 | 内容 | 状态 |
 |------|------|------|
 | **SVR-4** | TCP 探活 + `status` / `last_check_time` | ✅ 2026-07-09 |
-| **SVR-5** | `GET /operation/server/{id}/topology` | ✅ 2026-07-09 |
-| **SVR-6** | 前端状态灯 + 探测 + 拓扑弹窗 | ✅ 2026-07-09 · [operation-frontend.md](../api/operation-frontend.md) §5 |
+| **SVR-5** | ~~`GET /operation/server/{id}/topology`~~ → **`GET /operation/relations/server/{id}`** | ✅ 2026-07-12 迁移 |
+| **SVR-6** | 前端状态灯 + 探测 + `RelationDrawer`（原拓扑弹窗） | ✅ · [operation-frontend.md](../api/operation-frontend.md) §5.3 |
 
 ### P2 —— 联动
 

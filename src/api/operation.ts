@@ -7,7 +7,6 @@ import type {
   OperationProject,
   OperationServer,
   OperationServerSsh,
-  OperationServerTopology,
   OperationTopologyGraph,
   OperationRelations,
   OperationRelationEntityType,
@@ -83,12 +82,17 @@ export const getServerApi = server.get
 export const addServerApi = server.add
 export const updateServerApi = server.update
 export const deleteServerApi = server.remove
-export const getServerTopologyApi = (id: number | string) =>
-  request<OperationServerTopology>(`/operation/server/${id}/topology`, { method: 'GET' })
+
+/** SVR-25a · 全局拓扑图（ECharts）；与单机关联视图无关 */
 export const getTopologyGraphApi = () =>
   request<OperationTopologyGraph>('/operation/topology', { method: 'GET' })
+
+/** SVR-28b · 单实体关联视图（projects/components/recentTasks 等）；替代已删 `GET /server/{id}/topology` */
 export const getRelationsApi = (entityType: OperationRelationEntityType, id: number | string) =>
   request<OperationRelations>(`/operation/relations/${entityType}/${id}`, { method: 'GET' })
+
+export const getServerRelationsApi = (id: number | string) => getRelationsApi('server', id)
+
 export const checkServerApi = (id: number | string) =>
   request<OperationServer | number>(`/operation/server/${id}/check`, { method: 'POST' })
 export const getServerLinksApi = (id: number | string) =>

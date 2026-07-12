@@ -16,7 +16,11 @@ const props = withDefaults(
   { entityType: 'project', showInnerIp: false },
 )
 
-const emit = defineEmits<{ 'manage-links': [] }>()
+const emit = defineEmits<{
+  'manage-links': []
+  'view-primary': []
+  'view-more': []
+}>()
 
 const serverIp = defineModel<string>('serverIp', { default: '' })
 const innerIp = defineModel<string>('innerIp', { default: '' })
@@ -40,14 +44,20 @@ const hintKey = computed(() => {
 <template>
   <div class="operation-linked-servers-form">
     <div class="mb-2 flex flex-wrap items-center gap-2">
-      <button type="button" class="btn-ghost shrink-0 px-2 py-1 text-sm" @click="emit('manage-links')">
-        <Link2 class="h-3.5 w-3.5" />
+      <button type="button" class="operation-link-action shrink-0" @click="emit('manage-links')">
+        <Link2 class="h-3.5 w-3.5" aria-hidden="true" />
         {{ t('operation.common.linkServer') }}
       </button>
     </div>
 
     <template v-if="isLinked">
-      <OperationLinkedServersCell :row="row" :server-cache="serverCache" />
+      <OperationLinkedServersCell
+        :row="row"
+        :server-cache="serverCache"
+        clickable
+        @view-primary="emit('view-primary')"
+        @view-more="emit('view-more')"
+      />
       <p class="mt-1.5 text-xs text-gray-400">{{ t(hintKey) }}</p>
     </template>
     <template v-else>

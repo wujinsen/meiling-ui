@@ -495,6 +495,8 @@ onMounted(() => {
                 entity-type="component"
                 v-model:server-ip="form.serverIp"
                 @manage-links="openFormLinks"
+                @view-primary="openLinkedServerView(form, 'primary')"
+                @view-more="openLinkedServerView(form, 'all')"
               />
             </FormField>
           </div>
