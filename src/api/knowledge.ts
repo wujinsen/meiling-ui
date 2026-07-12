@@ -1213,7 +1213,36 @@ export async function getKbSyncLogsApi(params?: {
 }) {
   if (USE_MOCK) {
     await delay(180)
-    return ok<MoliPage<KbSyncLog>>({ records: [], total: 0, size: 10, current: 1 })
+    const mockLogs: KbSyncLog[] = [
+      {
+        id: 'mock-sync-ok',
+        batchNo: 'mock-batch-1',
+        action: 'upsert',
+        sourcePath: 'guides/getting-started.md',
+        status: 'success',
+        message: '',
+        createTime: '2026-07-12 10:00:00',
+      },
+      {
+        id: 'mock-sync-fail',
+        batchNo: 'mock-batch-1',
+        action: 'upsert',
+        sourcePath: 'missing/broken-page.md',
+        status: 'fail',
+        message: 'ENOENT: no such file or directory',
+        createTime: '2026-07-12 10:00:01',
+      },
+    ]
+    const pageNum = params?.pageNum ?? 1
+    const pageSize = params?.pageSize ?? 10
+    const start = (pageNum - 1) * pageSize
+    const slice = mockLogs.slice(start, start + pageSize)
+    return ok<MoliPage<KbSyncLog>>({
+      records: slice,
+      total: mockLogs.length,
+      size: pageSize,
+      current: pageNum,
+    })
   }
   return request<MoliPage<KbSyncLog>>(`${KB_BASE}/sync/logs${buildQuery(params as Record<string, string | number | undefined>)}`, {
     method: 'GET',

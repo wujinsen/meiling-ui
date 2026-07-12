@@ -27,7 +27,7 @@ import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyComponent, type OperationComponent } from '@/types/operation'
-import { entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
+import { applyServerIdsToLinkedRow, entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { Pencil, Plus, RefreshCw, Search, Trash2, Activity, ClipboardList, KeyRound, Link2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -148,9 +148,9 @@ async function openEdit(row: OperationComponent) {
 }
 
 function openFormLinks() {
-  if (!isEdit.value || form.value.id == null) return
-  if (!guardAction(PERM.OP_COMPONENT_EDIT)) return
-  linksRow.value = { ...form.value }
+  const perm = isEdit.value ? PERM.OP_COMPONENT_EDIT : PERM.OP_COMPONENT_ADD
+  if (!guardAction(perm)) return
+  linksRow.value = form.value.id != null ? { ...form.value } : null
   linksServerIds.value = resolveEntityServerIds(form.value.serverIds, form.value.serverId).map(String)
   linksOpen.value = true
 }
@@ -186,6 +186,22 @@ function closeComponentLinks() {
   linksOpen.value = false
   linksRow.value = null
   linksServerIds.value = []
+}
+
+async function confirmComponentLinks(ids: string[]) {
+  const serverIds = normalizeServerIds(ids) ?? []
+  if (linksRow.value?.id != null) {
+    await saveComponentLinks(ids)
+    return
+  }
+  linksSaving.value = true
+  try {
+    form.value = applyServerIdsToLinkedRow(form.value, serverIds, serverCache.value)
+    await hydrateRows([form.value])
+    closeComponentLinks()
+  } finally {
+    linksSaving.value = false
+  }
 }
 
 async function saveComponentLinks(ids: string[]) {
@@ -226,7 +242,7 @@ async function submitForm() {
       ...form.value,
       componentName: form.value.componentName.trim(),
       serverId: primaryServerId === '' || primaryServerId == null ? undefined : primaryServerId,
-      serverIds: isEdit.value ? serverIds : undefined,
+      serverIds,
       serverIp: form.value.serverIp?.trim() || undefined,
       account: form.value.account?.trim() || undefined,
       deployPath: form.value.deployPath?.trim() || undefined,
@@ -432,7 +448,6 @@ onMounted(loadList)
               <OperationLinkedServersFormSection
                 :row="form"
                 :server-cache="serverCache"
-                :is-edit="isEdit"
                 entity-type="component"
                 v-model:server-ip="form.serverIp"
                 @manage-links="openFormLinks"
@@ -491,10 +506,10 @@ onMounted(loadList)
     <OperationServerLinksModal
       :open="linksOpen"
       :model-value="linksServerIds"
-      :entity-name="linksRow?.componentName"
+      :entity-name="linksRow?.componentName ?? form.componentName"
       entity-type="component"
       :saving="linksSaving"
-      @confirm="saveComponentLinks"
+      @confirm="confirmComponentLinks"
       @close="closeComponentLinks"
     />
 

@@ -31,7 +31,7 @@
 ### 项目管理 `OperationProjectController`（前缀 `/operation/project`，5个）
 
 - `GET /operation/project/list`：`operation:project:list`
-- `POST /operation/project`：`operation:project:add` + `list`
+- `POST /operation/project`：`operation:project:add` + `list`；body 可含 `serverIds` + 主 `serverId`（create 同步 N:N）
 - `PUT /operation/project`：`operation:project:edit` + `list`
 - `GET /operation/project/{id}`：`operation:project:list`
 - `DELETE /operation/project/{ids}`：`operation:project:remove` + `list`
@@ -41,7 +41,7 @@
 ### 组件管理 `OperationComponentController`（前缀 `/operation/component`，9个）
 
 - `GET /operation/component/list`：`operation:component:list`；返回 `OperationComponentVo`（含 `status` / `lastCheckTime` / `portMatchStatus` / `expectedPort`）
-- `POST /operation/component`：`operation:component:add` + `list`
+- `POST /operation/component`：`operation:component:add` + `list`；body 可含 `serverIds` + 主 `serverId`
 - `PUT /operation/component`：`operation:component:edit` + `list`
 - `GET /operation/component/{id}`：`operation:component:list`；返回 VO
 - `GET /operation/component/{id}/secret`：`operation:secret:view`

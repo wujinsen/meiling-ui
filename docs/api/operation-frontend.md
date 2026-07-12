@@ -23,8 +23,8 @@
 | **S7** 批量探活 | `ServerManageView` · 驾驶舱 ops | `probeAllHealthApi` → `taskId` · `useProbeAllHealth` · `useOperationTaskPoll` | ✅ |
 | **S9** 动态 serviceKey | `DeployCenterView` | `getDeployPresetsApi().serviceKeys`（回退 `MOLI_DEPLOY_SERVICES`） | ✅ |
 | **S6-b** 多选服务器 | `ProjectManageView` · `ComponentManageView` · `OperationServerLinksModal` | 列表行「关联服务器」；分页搜索多选；`PUT .../links` | ✅ |
-| **S6-b+** 关联展示 | `OperationLinkedServersCell` · `useOperationServerLabelCache` · `ServerDetailModal` | 列表列「关联服务器」显示 `服务器名 · IP` + `+N`；点击主标签查看详情，`+N` 多选；行内按钮仍编辑关联 | ✅ |
-| **S10** serverId 表单 | `ProjectManageView` · `ComponentManageView` | 编辑弹窗仅 IP；关联在列表独立弹窗 | ✅ |
+| **S6-b+** 关联展示 | `OperationLinkedServersCell` · `OperationLinkedServersFormSection` · `useOperationServerLabelCache` | 列表 + **新增/编辑弹窗**统一「关联服务器」；`服务器名 · IP` + `+N`；新增可草稿选服后 `POST` 带 `serverIds` | ✅ |
+| **S10** 表单关联 | `OperationLinkedServersFormSection` | 新增/编辑同一套：按钮开 `OperationServerLinksModal`；已关联只读展示；未关联可手填 IP | ✅ |
 | **S11** orphan 标记 | `OperationOrphanBadge` · `operationOrphan.ts` · `operationServerLinks.ts` | 无关联服务器时徽章 + 行底色（含 `serverIds` 为空） | ✅ |
 | **S12** 端口矩阵 | `PortMatrixManageView` · `OperationPortMatrixAliasInput` | CRUD + 审计弹窗「管理端口矩阵」 · **SVR-21d** | ✅ |
 | **S13** 任务历史 | `TaskHistoryView` · `OperationTaskStatusBadge` | `listTaskApi` 分页 + 日志抽屉 + 部署中心入口 | ✅ |
@@ -512,7 +512,7 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | S6 | 部署中心 | 服务器分页选择；上传/命令/启停走任务抽屉 |
 | S7 | 批量探活 | 异步 taskId + 轮询；完成后刷新 |
 | S9 | serviceKeys | 部署中心服务列表来自 presets，非仅前端常量 |
-| S10 | 多选服务器 | `OperationServerLinksModal`；提交 `serverIds` + 主 `serverId`；列表主服务器 **名称 · IP** + `+N` |
+| S10 | 表单 + 多选服务器 | 新增/编辑 `OperationLinkedServersFormSection`；`OperationServerLinksModal`；`serverIds` + 主 `serverId`；列表 **名称 · IP** + `+N` |
 | S11 | orphan 标记 | 无 `serverIds` 且无 `serverId` 时琥珀色徽章 + 行底色；多关联 `+N` |
 | S12 | 端口矩阵管理 | `PortMatrixManageView` · CRUD `/operation/port-matrix/*`；审计弹窗跳转 |
 | S13 | 任务历史 | `TaskHistoryView` · `GET /operation/task/list`；筛选 + 日志抽屉 |
@@ -553,14 +553,26 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 
 | 项 | 说明 |
 |----|------|
-| 表单组件 | 列表行「关联服务器」→ `OperationServerLinksModal`；编辑弹窗内 `OperationLinkedServersFormSection`（已关联显示主标签 + 行内「关联服务器」；未关联可手填 IP） |
-| 提交字段 | `serverIds: string[]` + 主 `serverId`（`serverIds[0]`） |
-| 列表展示 | 主服务器 **`服务器名 · IP`**（`OperationLinkedServersCell`）+ `+N`；点击主标签 → `ServerDetailModal`；`+N` → `LinkedServersPickModal`；行内「关联服务器」编辑 N:N |
-| 数据补全 | `useOperationServerLabelCache.enrichRowsWithLinks`：列表每行补拉 `GET .../links`（含空数组 `[]`）；空关联时清空行内 `serverIds`/`serverId`；按 id 批量 `getServerApi` 解析名称 |
+| 列表行 | 「关联服务器」→ `OperationServerLinksModal`；列展示 `OperationLinkedServersCell` |
+| 新增/编辑弹窗 | `OperationLinkedServersFormSection`：**新增与编辑同一交互**（顶部「关联服务器」按钮 + 已选标签 / 未选手填 IP） |
+| 新增草稿 | 无 `id` 时弹窗确认仅更新表单 `serverIds`（`applyServerIdsToLinkedRow`）；保存时 `POST` body 带 `serverIds` + 主 `serverId` |
+| 编辑持久化 | 有 `id` 时弹窗确认走 `PUT .../links`；编辑弹窗内保存后同步刷新表单 |
+| 提交字段 | `serverIds: string[]` + 主 `serverId`（`serverIds[0]`）；create / update 均提交 |
+| 列表展示 | 主服务器 **`服务器名 · IP`** + `+N`；点击主标签 → `ServerDetailModal`；`+N` → `LinkedServersPickModal` |
+| 数据补全 | `enrichRowsWithLinks`：**每行** `GET .../links` 覆盖列表陈旧 `serverIds`；`hydrateRows` 批量 `getServerApi` |
 | 独立 links API | `GET/PUT /operation/project/{id}/links` · `GET/PUT /operation/component/{id}/links` |
-| 工具 | `src/utils/operationServerLinks.ts` · `formatOperationServerLabel` · `resolvePrimaryServerLabel` |
+| 工具 | `operationServerLinks.ts`：`formatOperationServerLabel` · `resolvePrimaryServerLabel` · `applyServerIdsToLinkedRow` |
 
-保存项目/组件时后端 `create`/`update` 会同步 N:N 关联表；前端在弹窗提交 `serverIds` 即可，无需单独调 links API。
+### 15.1 后端联调要点（关联保存后 UI 必对）
+
+| 检查项 | 要求 |
+|--------|------|
+| `GET .../links` | 返回有序 `serverIds`（首项=主）；无关联返回 `[]` |
+| `PUT .../links` | 写 N:N 表并同步 `serverId` / `serverIp` / `innerIp`（主服务器） |
+| `POST .../project` · `POST .../component` | 接受 body 内 `serverIds`，create 时同步关联（`add` API 当前仅返回 `boolean`，无 `id` 回传） |
+| `GET /operation/server/{id}` | 列表/弹窗解析 `serverName` · IP 用 |
+
+列表/弹窗改关联后若 UI 不变：优先查 `GET links` 顺序与 `PUT` 后主字段是否同步。
 
 ---
 

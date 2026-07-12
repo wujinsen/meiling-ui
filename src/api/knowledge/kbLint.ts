@@ -10,7 +10,10 @@ import type {
   KbLintScanStatus,
   MoliPage,
 } from '@/types/knowledge'
+import { getToken } from '@/utils/authSession'
 import { KB_BASE, USE_MOCK, buildQuery, delay, normalizeKbPageRecords, ok } from './core'
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
 const MOCK_ISSUES: KbLintIssue[] = [
   {
@@ -65,36 +68,43 @@ function filterMockIssues(params?: KbLintIssueQuery): KbLintIssue[] {
   return rows
 }
 
+function paginateLintIssuesClientSide(
+  rows: KbLintIssue[],
+  params?: KbLintIssueQuery,
+  totalHint?: number,
+): MoliPage<KbLintIssue> {
+  let filtered = rows
+  if (params?.unassignedOnly) filtered = filtered.filter((r) => r.assigneeId == null)
+  const pageNum = Math.max(1, params?.pageNum ?? 1)
+  const pageSize = Math.max(1, params?.pageSize ?? (filtered.length || 10))
+  const start = (pageNum - 1) * pageSize
+  return {
+    records: filtered.slice(start, start + pageSize),
+    total: totalHint ?? filtered.length,
+    current: pageNum,
+    size: pageSize,
+  }
+}
+
 function normalizeLintIssuesResponse(
   data: KbLintIssue[] | MoliPage<KbLintIssue> | Record<string, unknown> | null | undefined,
   params?: KbLintIssueQuery,
 ): MoliPage<KbLintIssue> {
   if (Array.isArray(data)) {
-    let rows = data as KbLintIssue[]
-    if (params?.unassignedOnly) rows = rows.filter((r) => r.assigneeId == null)
-    const pageNum = Math.max(1, params?.pageNum ?? 1)
-    const pageSize = Math.max(1, params?.pageSize ?? (rows.length || 10))
-    const start = (pageNum - 1) * pageSize
+    return paginateLintIssuesClientSide(data as KbLintIssue[], params)
+  }
+  const raw = (data ?? {}) as Record<string, unknown>
+  const page = normalizeKbPageRecords<KbLintIssue>(data as MoliPage<KbLintIssue>)
+  const serverPaginated = raw.current != null && raw.size != null
+  if (serverPaginated) {
     return {
-      records: rows.slice(start, start + pageSize),
-      total: rows.length,
-      current: pageNum,
-      size: pageSize,
+      records: page.records,
+      total: page.total,
+      current: Number(raw.current),
+      size: Number(raw.size),
     }
   }
-  const page = normalizeKbPageRecords<KbLintIssue>(data as MoliPage<KbLintIssue>)
-  let rows = page.records
-  if (params?.unassignedOnly) rows = rows.filter((r) => r.assigneeId == null)
-  const pageNum = Math.max(1, params?.pageNum ?? 1)
-  const pageSize = Math.max(1, params?.pageSize ?? 10)
-  const start = (pageNum - 1) * pageSize
-  const sliced = rows.slice(start, start + pageSize)
-  return {
-    records: sliced,
-    total: rows.length || page.total,
-    current: pageNum,
-    size: pageSize,
-  }
+  return paginateLintIssuesClientSide(page.records, params, page.total)
 }
 
 /** GET /kb/lint —— DB 快照体检 */
@@ -127,19 +137,30 @@ export async function getKbLintScanStatusApi(spaceId?: number | string) {
       openIssueCount: 2,
     })
   }
-  const res = await request<KbLintScanStatus>(`${KB_BASE}/lint/scan/status${buildQuery({ spaceId })}`, {
-    method: 'GET',
-  })
+  const path = `${KB_BASE}/lint/scan/status${buildQuery({ spaceId })}`
+  const headers: HeadersInit = {}
+  const token = getToken()
+  if (token) headers.Authorization = token
+  const httpRes = await fetch(`${API_BASE}${path}`, { method: 'GET', headers })
+  if (httpRes.status === 404) {
+    const issuesRes = await getKbLintIssuesApi({ spaceId, status: 0, pageNum: 1, pageSize: 1 })
+    const openCount =
+      issuesRes.code === API_SUCCESS_CODE ? Number(issuesRes.data?.total) || 0 : undefined
+    return ok<KbLintScanStatus>({
+      spaceId,
+      scheduleEnabled: false,
+      openIssueCount: openCount,
+    })
+  }
+  const text = await httpRes.text()
+  let res: MoliResult<KbLintScanStatus>
+  try {
+    res = JSON.parse(text) as MoliResult<KbLintScanStatus>
+  } catch {
+    return { code: httpRes.status, msg: 'Invalid response', data: undefined }
+  }
   if (res.code === API_SUCCESS_CODE && res.data) return res
-  // 旧版 knowledge-server 未部署 scan/status（8090 实测 404）→ 用待处理工单数降级
-  const issuesRes = await getKbLintIssuesApi({ spaceId, status: 0, pageNum: 1, pageSize: 1 })
-  const openCount =
-    issuesRes.code === API_SUCCESS_CODE ? Number(issuesRes.data?.total) || 0 : undefined
-  return ok<KbLintScanStatus>({
-    spaceId,
-    scheduleEnabled: false,
-    openIssueCount: openCount,
-  })
+  return res
 }
 
 /** GET /kb/lint/issues —— 工单列表（O5 筛选 + O8 分页） */

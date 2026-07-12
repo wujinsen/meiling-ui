@@ -146,13 +146,11 @@ GET /KnowledgeServer/kb/index/types?spaceId=900...
 
 ---
 
-## 7. 待后端确认
+## 7. 后端确认（2026-07 已落地）
 
-1. `DocumentSearchRequest` 增 `List<String> kbTypes`、`List<Long> categoryIds` 是否可行？重复查询参数绑定 List 是否满足现有网关/框架？
-2. `/kb/index`、`/kb/index/types` 增列表参数与 SQL `IN` 是否有性能顾虑（分类计数在大空间下）？
-3. `kbTypes` 中含非法体裁时：整体报错，还是忽略非法项？（前端建议：报错，与现单值一致。）
-4. `uncategorizedOnly` 与 `categoryIds` 组合语义是否按「`IN (...) OR IS NULL`」实现？
+1. `DocumentSearchRequest` 已增 `kbTypes` / `categoryIds`；重复查询参数绑定 List 可用。
+2. `/kb/index`、`/kb/index/types` 已支持列表参数与 SQL `IN`。
+3. 非法 `kbTypes`：整体报错（与单值一致）。
+4. `uncategorizedOnly` + `categoryIds`：`IN (...) OR IS NULL`。
 
----
-
-*本文档为需求与接口方案；**后端与前端已实现**（2026-07）。契约权威见 `moli-project-distribute/docs/api/KNOWLEDGE_API.md` §2.1.3 v3。*
+契约权威见 `moli-project-distribute/docs/api/KNOWLEDGE_API.md` §2.1.3 v3；前端探针 `npm run kb:prd` → `P0-browse-v3`。

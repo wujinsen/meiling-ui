@@ -20,6 +20,8 @@
 | Lint / Sync API | `src/api/knowledge/kbLint.ts` + `knowledge.ts`（Sync） | ✅ | 类型在 `src/types/knowledge.ts`；Sync 归一化 `src/utils/kbSyncStatus.ts` |
 | 空间解析 | `src/utils/kbSyncScope.ts` | ✅ | 已禁止静默默认 enterprise-kb |
 
+**本轮完成（2026-07-12 晚）**：O4 日志「仅显示失败」筛选 + Mock fail 样本；`kbLint` 服务端分页信任 + `scan/status` 仅 HTTP 404 降级；`GovernFixPanel` LLM 关闭时仅-AI 选中提示；`kb:prd` 增 `P2-O5-unassigned` · `P0-browse-v3` 探针（17 项 / 15 通过）。
+
 **本轮完成（2026-07-12）**：健康体检 **O9** 定时 scan 状态条（`KbLintScanStatusBar` + `GET /kb/lint/scan/status`）；Lint API 拆至 `src/api/knowledge/kbLint.ts`；`KnowledgeLintView` 质量 Tab 布局（工具栏 → O9 条 → 概览 → 工单表）。
 
 **上轮完成（2026-07-10）**：健康体检 Sync **O1–O4**（`KbSyncOpsPanel`）、Ingest Tab1/3 **表单排版**、治理页 **工作流旁路链接**（`KbGovernWorkflowLinks`）。
@@ -90,7 +92,7 @@ KnowledgeLintView.vue
 | **O1** | 当前 Sync 状态 | `GET /kb/sync/status?spaceId=` | 展示 `running` / `lastBatchNo` / `lastStatus` / `lastMessage` / `failCount` |
 | **O2** | 触发 Sync | `POST /kb/sync/trigger?spaceId=&spaceCode=` | 按钮；`running` 时 disabled；需 `kb:sync:trigger` |
 | **O3** | 最近日志 | `GET /kb/sync/logs?spaceId=&pageSize=10` | 表格：batchNo、**status**、createTime、message 摘要 |
-| **O4** | 失败态 | 同上 + trigger 响应 | `status=fail` 行 danger 色 + 展开 message；Toast「Sync 失败，请查看日志」 |
+| **O4** | 失败态 | 同上 + trigger 响应 | `status=fail` 行 danger 色 + 展开 message；日志表「仅显示失败」筛选；Mock 含 fail 样本；Toast「Sync 失败，请查看日志」 |
 
 **三空间快捷（可选）**：平台 admin 在 Sync Tab 顶栏展示 `enterprise-kb` / `moli-ops-manual` / `jp-fe-ap-exam` 快捷切换（复用 `KbSpaceSelector` 或 chip）。
 
@@ -98,7 +100,7 @@ KnowledgeLintView.vue
 
 - 已有：`getKbSyncStatusApi` / `getKbSyncLogsApi` / `triggerKbSyncApi`（`knowledge.ts`）  
 - 已有：`resolveKbSyncParams`（`kbSyncScope.ts`）、`deriveKbSyncBatchStatus` / `isKbSyncLogFailed`（`kbSyncStatus.ts`）  
-- 已实现：`running` 时 4s 轮询 status + 首页 logs；日志行按 `KbSyncLog.status` fail 着色 + 展开 message  
+- 已实现：`running` 时 4s 轮询 status + 首页 logs；日志行按 `KbSyncLog.status` fail 着色 + 展开 message；**「仅显示失败」**客户端筛选（当前页）
 
 ### 3.3 TypeScript
 
@@ -187,7 +189,7 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode?; async? }
 
 - [x] 选空间后加载 status + 最近 10 条 log  
 - [x] trigger 成功 → status 刷新、log 新增 success 行  
-- [x] trigger 失败（运维配合制造）→ fail 行可见、Toast  
+- [x] trigger 失败（运维配合制造）→ fail 行可见、Toast；可用「仅显示失败」筛选定位  
 - [x] `running` 时不能重复 trigger  
 - [x] 三空间切换后 status/logs 随 `spaceId` 刷新  
 
@@ -210,9 +212,9 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode?; async? }
 
 **后端对接（knowledge-server ≥ 2026-07-12）**：
 
-- `GET /kb/lint/scan/status` ✅；旧版未部署时 `getKbLintScanStatusApi` 降级（`scheduleEnabled=false` + 待处理工单数）。  
-- `GET /kb/lint/issues` 支持 `issueType`、`resolved=0`、`pageNum`/`pageSize`（分页版）；全量数组仍兼容客户端 slice。  
-- `unassignedOnly` 查询参数后端未实现 → 前端在 `normalizeLintIssuesResponse` 内过滤 `assigneeId == null`。  
+- `GET /kb/lint/scan/status` ✅（8090 已部署，`kb:prd` P0-O9）；**仅 HTTP 404** 时 `getKbLintScanStatusApi` 降级（`scheduleEnabled=false` + 待处理工单数）。  
+- `GET /kb/lint/issues` 支持 `issueType`、`resolved=0`、`unassignedOnly`、`pageNum`/`pageSize`（`current`+`size` 时前端信任服务端分页）；全量数组仍兼容客户端 slice。  
+- `unassignedOnly` 查询参数 ✅（`kb:prd` P2-O5-unassigned）；裸数组响应仍走 `normalizeLintIssuesResponse` 客户端过滤。  
 - `PUT /kb/lint/issue/{id}?status=&assigneeId=` ✅  
 - `PUT /kb/lint/issues/batch` ✅ · `batchUpdateKbLintIssuesApi` 直接调批量端点（响应 `data` 为更新条数 → 映射 `{ okCount, failCount }`）。
 
@@ -241,7 +243,7 @@ export type KbLintIssueQuery = {
   issueType?: string
   assigneeId?: number | string
   resolvedOnly?: boolean   // → query resolved=0
-  unassignedOnly?: boolean // 客户端过滤
+  unassignedOnly?: boolean // → query unassignedOnly=true；服务端分页时信任后端
   pageNum?: number
   pageSize?: number
 }
@@ -486,7 +488,7 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 | `src/components/knowledge/KbLintIssuesPanel.vue` | 工单表 O5–O8 |
 | `src/views/knowledge/KnowledgeLintView.vue` | 质量（O9 + O5–O8）+ Sync（O1–O4）双 Tab |
 | `src/views/knowledge/KnowledgeWikiGovernView.vue` | 治理主页面 |
-| `src/components/knowledge/govern/GovernFixPanel.vue` | W2/W4/W5 |
+| `src/components/knowledge/govern/GovernFixPanel.vue` | W2/W4/W5；LLM 关闭时 AI/一键禁用 + 仅-AI 选中提示 |
 | `src/components/knowledge/govern/GovernSyncPanel.vue` | 治理页 Sync（可复用 Ops 面板） |
 | `src/views/system/kb-llm/index.vue` | T19d |
 | `src/views/knowledge/KnowledgeOpsDashboardView.vue` | KBOPS-9 运维看板 D1–D4 |
@@ -495,6 +497,7 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 | `scripts/kb-e2e-walkthrough.mjs` | T19d + T16f + T20f 主链路 E2E（`npm run kb:e2e`） |
 | `scripts/kb-e2e-extended.mjs` | AI 写盘 / Tab3 冲突 / rawUpload 权限（`npm run kb:e2e:extended`） |
 | `scripts/kb-e2e-script-fix.mjs` | T16f `script-fix` metadata 写盘（`npm run kb:e2e:script-fix`） |
+| `scripts/kb-prd-acceptance.mjs` | PRD §8 探针（`npm run kb:prd`：O4/O9/browse-v3/O5–O8） |
 | `src/utils/kbSyncStatus.ts` | Sync 状态/日志归一化 |
 | `src/utils/kbImport.ts` | Raw/Wiki 导入校验与冲突判定 |
 | `src/utils/kbWorkflowRoutes.ts` | nextSteps 路由跳转 |
@@ -534,6 +537,7 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-12（晚） | O4 fail-only 筛选；`kbLint` 分页信任 + scan/status 404-only 降级；`GovernFixPanel` LLM-off 提示；`kb:prd` 探针扩展；浏览多选 facet 文档 §7 结案 |
 | 2026-07-12 | O7 改调 `PUT /kb/lint/issues/batch`（去掉并行 PUT 兜底）；§3.7.1/§10 对齐；与 distribute `TASKS.md` 同步 |
 | 2026-07-12 | **O9** `KbLintScanStatusBar` + §3.8；§0/§3.1/§9/§10/§11 对齐；Lint API 拆 `src/api/knowledge/kbLint.ts`；§3.7 O5–O8 验收勾选 |
 | 2026-07-11 | §1 排期表 O1–O4 / W2–W7 标 ✅；§3.6 / §10 验收勾选；E2E 复验 18/18（`KB_BASE=8090`） |

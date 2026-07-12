@@ -10,11 +10,10 @@ const props = withDefaults(
   defineProps<{
     row: LinkedServerRow
     serverCache?: ReadonlyMap<string, OperationServer>
-    isEdit?: boolean
     entityType?: 'project' | 'component'
     showInnerIp?: boolean
   }>(),
-  { isEdit: false, entityType: 'project', showInnerIp: false },
+  { entityType: 'project', showInnerIp: false },
 )
 
 const emit = defineEmits<{ 'manage-links': [] }>()
@@ -32,27 +31,23 @@ const hintKey = computed(() => {
       ? 'operation.component.linkedServersFormHint'
       : 'operation.project.linkedServersFormHint'
   }
-  return props.isEdit
-    ? (props.entityType === 'component' ? 'operation.component.linkServersEditHint' : 'operation.project.linkServersEditHint')
-    : (props.entityType === 'component' ? 'operation.component.linkServersCreateHint' : 'operation.project.linkServersCreateHint')
+  return props.entityType === 'component'
+    ? 'operation.component.linkServersUnlinkedHint'
+    : 'operation.project.linkServersUnlinkedHint'
 })
 </script>
 
 <template>
   <div class="operation-linked-servers-form">
+    <div class="mb-2 flex flex-wrap items-center gap-2">
+      <button type="button" class="btn-ghost shrink-0 px-2 py-1 text-sm" @click="emit('manage-links')">
+        <Link2 class="h-3.5 w-3.5" />
+        {{ t('operation.common.linkServer') }}
+      </button>
+    </div>
+
     <template v-if="isLinked">
-      <div class="flex flex-wrap items-center gap-3">
-        <OperationLinkedServersCell :row="row" :server-cache="serverCache" />
-        <button
-          v-if="isEdit"
-          type="button"
-          class="btn-ghost shrink-0 px-2 py-1 text-sm"
-          @click="emit('manage-links')"
-        >
-          <Link2 class="h-3.5 w-3.5" />
-          {{ t('operation.common.linkServer') }}
-        </button>
-      </div>
+      <OperationLinkedServersCell :row="row" :server-cache="serverCache" />
       <p class="mt-1.5 text-xs text-gray-400">{{ t(hintKey) }}</p>
     </template>
     <template v-else>

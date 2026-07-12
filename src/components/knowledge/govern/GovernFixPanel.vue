@@ -92,6 +92,18 @@ const canAuto = computed(() => {
   return hasScript || hasAi
 })
 
+const autoDisabledAiOnly = computed(
+  () =>
+    props.canEdit &&
+    !props.fixing &&
+    !props.optionsLoading &&
+    selectedIssues.value.length > 0 &&
+    !canAuto.value &&
+    !llmReady.value &&
+    aiIssues.value.length > 0 &&
+    scriptIssues.value.length === 0,
+)
+
 const relintSummary = computed(() => {
   const r = props.lastResult
   if (!r || r.issuesAfter == null) return null
@@ -242,6 +254,15 @@ onMounted(applyModelDefault)
             {{ fixing ? t('knowledge.wikiGovern.fixRunning') : t('knowledge.wikiGovern.fixAuto') }}
           </button>
         </div>
+        <p
+          v-if="autoDisabledAiOnly"
+          class="text-xs text-amber-700 dark:text-amber-300"
+        >
+          {{ t('knowledge.wikiGovern.fixAutoAiOnlyOff') }}
+          <button type="button" class="ml-1 text-brand-600 underline dark:text-brand-400" @click="openLlmSettings">
+            {{ t('knowledge.wikiGovern.openLlmSettings') }}
+          </button>
+        </p>
 
         <div
           v-if="lastResult"

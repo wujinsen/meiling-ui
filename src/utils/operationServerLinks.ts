@@ -19,6 +19,25 @@ export function resolvePrimaryServerLabel(row: LinkedServerRow, cache?: Readonly
   return null
 }
 
+export function applyServerIdsToLinkedRow<T extends LinkedServerRow>(
+  row: T,
+  serverIds: string[],
+  cache?: ReadonlyMap<string, OperationServer>,
+): T {
+  const ids = serverIds.map(String).filter(Boolean)
+  if (!ids.length) {
+    return { ...row, serverIds: undefined, serverId: '' }
+  }
+  const primary = cache?.get(ids[0])
+  return {
+    ...row,
+    serverIds: ids,
+    serverId: ids[0],
+    serverIp: primary ? (primary.ip || primary.innerIp || row.serverIp) : row.serverIp,
+    innerIp: primary?.innerIp ?? row.innerIp,
+  }
+}
+
 export function normalizeServerIds(ids?: (string | number)[]) {
   if (!ids?.length) return undefined
   const out = ids.map((id) => String(id).trim()).filter(Boolean)

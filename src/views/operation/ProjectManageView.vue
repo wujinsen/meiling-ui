@@ -27,7 +27,7 @@ import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject } from '@/types/operation'
-import { entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
+import { applyServerIdsToLinkedRow, entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { resolveDeployServiceKey } from '@/utils/operationPort'
 import { ClipboardList, Link2, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Server, Square, Trash2 } from 'lucide-vue-next'
 
@@ -159,9 +159,9 @@ async function openEdit(row: OperationProject) {
 }
 
 function openFormLinks() {
-  if (!isEdit.value || form.value.id == null) return
-  if (!guardAction(PERM.OP_PROJECT_EDIT)) return
-  linksRow.value = { ...form.value }
+  const perm = isEdit.value ? PERM.OP_PROJECT_EDIT : PERM.OP_PROJECT_ADD
+  if (!guardAction(perm)) return
+  linksRow.value = form.value.id != null ? { ...form.value } : null
   linksServerIds.value = resolveEntityServerIds(form.value.serverIds, form.value.serverId).map(String)
   linksOpen.value = true
 }
@@ -196,6 +196,22 @@ function closeProjectLinks() {
   linksOpen.value = false
   linksRow.value = null
   linksServerIds.value = []
+}
+
+async function confirmProjectLinks(ids: string[]) {
+  const serverIds = normalizeServerIds(ids) ?? []
+  if (linksRow.value?.id != null) {
+    await saveProjectLinks(ids)
+    return
+  }
+  linksSaving.value = true
+  try {
+    form.value = applyServerIdsToLinkedRow(form.value, serverIds, serverCache.value)
+    await hydrateRows([form.value])
+    closeProjectLinks()
+  } finally {
+    linksSaving.value = false
+  }
 }
 
 async function saveProjectLinks(ids: string[]) {
@@ -236,7 +252,7 @@ async function submitForm() {
       ...form.value,
       projectName: form.value.projectName.trim(),
       serverId: primaryServerId === '' || primaryServerId == null ? undefined : primaryServerId,
-      serverIds: isEdit.value ? serverIds : undefined,
+      serverIds,
       url: form.value.url?.trim() || undefined,
       serverIp: form.value.serverIp?.trim() || undefined,
       innerIp: form.value.innerIp?.trim() || undefined,
@@ -523,7 +539,6 @@ onMounted(loadList)
               <OperationLinkedServersFormSection
                 :row="form"
                 :server-cache="serverCache"
-                :is-edit="isEdit"
                 entity-type="project"
                 show-inner-ip
                 v-model:server-ip="form.serverIp"
@@ -563,10 +578,10 @@ onMounted(loadList)
     <OperationServerLinksModal
       :open="linksOpen"
       :model-value="linksServerIds"
-      :entity-name="linksRow?.projectName"
+      :entity-name="linksRow?.projectName ?? form.projectName"
       entity-type="project"
       :saving="linksSaving"
-      @confirm="saveProjectLinks"
+      @confirm="confirmProjectLinks"
       @close="closeProjectLinks"
     />
 

@@ -252,6 +252,24 @@ async function testO5O8LintIssues(token) {
     bad('P2-O5-filter', `issueType 筛选异常 code=${broken.code}`)
   }
 
+  const unassigned = await kb(
+    'GET',
+    `/lint/issues?spaceId=${sp.id}&unassignedOnly=true&pageNum=1&pageSize=5`,
+    null,
+    token,
+  )
+  if (unassigned.code === 200) {
+    const uaRows = pageRows(unassigned.data)
+    const allUnassigned = uaRows.every((r) => r.assigneeId == null || r.assigneeId === '')
+    if (!uaRows.length || allUnassigned) {
+      ok('P2-O5-unassigned', `unassignedOnly=${uaRows.length}`)
+    } else {
+      bad('P2-O5-unassigned', 'unassignedOnly 仍返回已指派工单')
+    }
+  } else {
+    skip('P2-O5-unassigned', `unassignedOnly code=${unassigned.code}`)
+  }
+
   if (Array.isArray(all.data) && all.data.length > 5) {
     ok('P2-O8', `服务端返回数组 len=${all.data.length}（前端 slice 分页）`)
   } else if (rows.length <= 5) {

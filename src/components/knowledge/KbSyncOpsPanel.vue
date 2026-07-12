@@ -40,6 +40,7 @@ const pageNum = ref(1)
 const pageSize = ref(DEFAULT_PAGE_SIZE)
 const showRawOutput = ref(false)
 const expandedLogIds = ref(new Set<string>())
+const failOnlyLogs = ref(false)
 const nextSteps = ref<KbWorkflowHintVo[]>([])
 
 type SyncResult = {
@@ -131,6 +132,14 @@ function statusLabel(row: KbSyncLog) {
   }
   return row.status
 }
+
+const displayLogs = computed(() =>
+  failOnlyLogs.value ? logs.value.filter((row) => isKbSyncLogFailed(row.status)) : logs.value,
+)
+
+const failOnlyEmpty = computed(
+  () => failOnlyLogs.value && logs.value.length > 0 && displayLogs.value.length === 0,
+)
 
 async function loadStatus() {
   statusLoading.value = true
@@ -423,6 +432,23 @@ defineExpose({
 
     <!-- O3/O4: 日志表 -->
     <div class="card overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 dark:border-white/5">
+        <p class="text-sm font-medium text-gray-700 dark:text-gray-200">{{ t('knowledge.sync.logsTitle') }}</p>
+        <label class="flex cursor-pointer items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+          <input
+            v-model="failOnlyLogs"
+            type="checkbox"
+            class="h-3.5 w-3.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 dark:border-white/20"
+          />
+          {{ t('knowledge.sync.failOnlyFilter') }}
+        </label>
+      </div>
+      <p
+        v-if="failOnlyEmpty"
+        class="border-b border-amber-100 bg-amber-50/80 px-4 py-2 text-xs text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200"
+      >
+        {{ t('knowledge.sync.failOnlyEmpty') }}
+      </p>
       <p v-if="logsLoading && !logs.length" class="p-8 text-center text-sm text-gray-400">{{ t('common.loading') }}</p>
       <div v-else class="overflow-x-auto">
         <table class="w-full min-w-[40rem] text-left text-sm">
@@ -437,10 +463,10 @@ defineExpose({
             </tr>
           </thead>
           <tbody>
-            <tr v-if="!logs.length">
+            <tr v-if="!displayLogs.length">
               <td colspan="6" class="px-3 py-8 text-center text-gray-400">{{ t('knowledge.sync.logsEmpty') }}</td>
             </tr>
-            <template v-for="row in logs" :key="row.id">
+            <template v-for="row in displayLogs" :key="row.id">
               <tr
                 class="border-b border-gray-50 dark:border-white/5"
                 :class="logRowClass(row)"
