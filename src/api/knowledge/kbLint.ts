@@ -190,31 +190,60 @@ export async function updateKbLintIssueApi(
   return request<boolean>(`${KB_BASE}/lint/issue/${id}${buildQuery(patchToQuery(patch))}`, { method: 'PUT' })
 }
 
-const BATCH_CONCURRENCY = 5
+function toBatchRequestBody(payload: KbLintIssueBatchUpdate): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    ids: payload.ids.map((id) => String(id)),
+  }
+  if (payload.status != null) body.status = payload.status
+  if (payload.assigneeId === null) {
+    body.clearAssignee = true
+  } else if (payload.assigneeId !== undefined && payload.assigneeId !== '') {
+    body.assigneeId = String(payload.assigneeId)
+  }
+  return body
+}
 
-/** O7：后端批量 API 未就绪时，并行单条 PUT */
+function batchResultFromCount(
+  ids: Array<number | string>,
+  updated: number,
+  code: number,
+  msg?: string,
+) {
+  const okCount = Math.max(0, updated)
+  const failCount = Math.max(0, ids.length - okCount)
+  return {
+    code: failCount ? 500 : code,
+    msg: failCount ? msg ?? `${failCount} failed` : msg ?? 'ok',
+    data: { okCount, failCount, results: [] as { id: number | string; ok: boolean; msg?: string }[] },
+  }
+}
+
+/** O7/O8：PUT /kb/lint/issues/batch —— 批量改状态 / 指派 */
 export async function batchUpdateKbLintIssuesApi(payload: KbLintIssueBatchUpdate) {
   const { ids, status, assigneeId } = payload
-  const patch: KbLintIssueUpdate = {}
-  if (status != null) patch.status = status
-  if (assigneeId !== undefined) patch.assigneeId = assigneeId
+  if (!ids.length) {
+    return batchResultFromCount(ids, 0, API_SUCCESS_CODE)
+  }
 
-  const results: { id: number | string; ok: boolean; msg?: string }[] = []
-  for (let i = 0; i < ids.length; i += BATCH_CONCURRENCY) {
-    const chunk = ids.slice(i, i + BATCH_CONCURRENCY)
-    const settled = await Promise.all(
-      chunk.map(async (id) => {
-        const res = await updateKbLintIssueApi(id, patch)
-        return { id, ok: res.code === API_SUCCESS_CODE, msg: res.msg }
-      }),
-    )
-    results.push(...settled)
+  if (USE_MOCK) {
+    await delay(180)
+    let updated = 0
+    for (const id of ids) {
+      const row = MOCK_ISSUES.find((r) => String(r.id) === String(id))
+      if (!row) continue
+      if (status != null) row.status = status
+      if (assigneeId !== undefined) row.assigneeId = assigneeId
+      updated++
+    }
+    return batchResultFromCount(ids, updated, API_SUCCESS_CODE)
   }
-  const okCount = results.filter((r) => r.ok).length
-  const failCount = results.length - okCount
-  return {
-    code: failCount ? 500 : API_SUCCESS_CODE,
-    msg: failCount ? `${failCount} failed` : 'ok',
-    data: { okCount, failCount, results },
+
+  const res = await request<number>(`${KB_BASE}/lint/issues/batch`, {
+    method: 'PUT',
+    body: JSON.stringify(toBatchRequestBody(payload)),
+  })
+  if (res.code !== API_SUCCESS_CODE) {
+    return batchResultFromCount(ids, 0, res.code, res.msg)
   }
+  return batchResultFromCount(ids, Number(res.data) || 0, API_SUCCESS_CODE, res.msg)
 }

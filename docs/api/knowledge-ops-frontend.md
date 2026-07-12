@@ -37,7 +37,7 @@
 | **P1** | Ingest 三 Tab | `knowledge/ingest/index` | [kb-import-entry-frontend.md](kb-import-entry-frontend.md) | ✅ T20a/b/e | ✅ **T20f** Tab1/3 UI + 直联 |
 | **P2** | 运维 Dashboard | `knowledge/ops/dashboard` | **本文 §8** | ✅ KBOPS-9 | ✅ 前端聚合 |
 
-**建议迭代顺序**：**O1–O4 + O9** ✅ → **O5–O8**（工单筛选/指派/批量）→ T16f 治理闭环核对 → T19d LLM → T20f Ingest → Dashboard。E2E 基线：`npm run kb:e2e` + `kb:e2e:extended`（`KB_BASE=8090`，2026-07-11 **18/18**）。
+**建议迭代顺序**：**O1–O4 + O9** ✅ → **O5–O8** ✅ → T16f ✅ → T19d ✅ → T20f ✅ → Dashboard ✅。E2E 基线：`npm run kb:e2e` + `kb:e2e:extended`（`KB_BASE=8090`，2026-07-11 **18/18**）。
 
 **网关前缀**：`{VITE_API_BASE_URL}/KnowledgeServer`（开发代理 `vite.config.ts` → `http://127.0.0.1:8888`）
 
@@ -205,16 +205,16 @@ export async function triggerKbSyncApi(params?: { spaceId?; spaceCode?; async? }
 |----|------|-----|-----|
 | **O5** | 筛选 | `GET /kb/lint/issues?spaceId=&status=&issueType=&resolved=0` | 类型下拉、状态下拉、「仅未指派」勾选 |
 | **O6** | 指派 | `PUT /kb/lint/issue/{id}?assigneeId=` | 指派人列下拉（`listUserApi`）+「指派给我」 |
-| **O7** | 批量 | 后端批量 API **404** → 前端 `batchUpdateKbLintIssuesApi` 并行单条 PUT（并发 5） | 多选 + 批量忽略 / 标记修复 / 批量指派 |
-| **O8** | 分页 | 传 `pageNum` / `pageSize`；后端当前仍返回全量数组 | `AppPagination`；`normalizeLintIssuesResponse` 客户端 slice |
+| **O7** | 批量 | `PUT /kb/lint/issues/batch`（`ids` + `status` / `assigneeId` / `clearAssignee`） | 多选 + 批量忽略 / 标记修复 / 批量指派 |
+| **O8** | 分页 | 传 `pageNum` / `pageSize`；后端分页或全量数组 | `AppPagination`；`normalizeLintIssuesResponse` 兼容 slice |
 
-**后端实测（8090，2026-07）**：
+**后端对接（knowledge-server ≥ 2026-07-12）**：
 
-- `GET /kb/lint/scan/status` **当前 404**（路线图已规划）→ `getKbLintScanStatusApi` 降级：`scheduleEnabled=false` + `openIssueCount` 来自 `GET /kb/lint/issues?status=0`。  
-- `GET /kb/lint/issues` 支持 `issueType`、`resolved=0`；**忽略 `pageNum/pageSize`**（仍返回全量，如 390 条）→ 前端兼容切片。  
+- `GET /kb/lint/scan/status` ✅；旧版未部署时 `getKbLintScanStatusApi` 降级（`scheduleEnabled=false` + 待处理工单数）。  
+- `GET /kb/lint/issues` 支持 `issueType`、`resolved=0`、`pageNum`/`pageSize`（分页版）；全量数组仍兼容客户端 slice。  
 - `unassignedOnly` 查询参数后端未实现 → 前端在 `normalizeLintIssuesResponse` 内过滤 `assigneeId == null`。  
 - `PUT /kb/lint/issue/{id}?status=&assigneeId=` ✅  
-- `PUT /kb/lint/issues/batch` **404** → O7 用并行 PUT 兜底；后端就绪后可改调批量端点。
+- `PUT /kb/lint/issues/batch` ✅ · `batchUpdateKbLintIssuesApi` 直接调批量端点（响应 `data` 为更新条数 → 映射 `{ okCount, failCount }`）。
 
 ### 3.7.2 TypeScript
 
@@ -253,6 +253,7 @@ export type KbLintIssueQuery = {
 getKbLintIssuesApi(params?)      // → MoliPage<KbLintIssue>
 updateKbLintIssueApi(id, patch)  // status 和/或 assigneeId
 batchUpdateKbLintIssuesApi({ ids, status?, assigneeId? })
+  // → PUT /kb/lint/issues/batch；assigneeId=null 时 body.clearAssignee=true
 ```
 
 `getKbLintIssuesApi` 统一返回 `{ records, total, current, size }`，无论后端给数组还是 `MoliPage`。
@@ -276,7 +277,7 @@ batchUpdateKbLintIssuesApi({ ids, status?, assigneeId? })
 - [x] 选空间后工单表加载；切换 `issueType` / `status` 刷新列表 — 2026-07-12 `kb:prd` P2-O5  
 - [x] 「仅未指派」勾选后列表仅显示 `assigneeId` 为空行 — 前端 `normalizeLintIssuesResponse` 过滤  
 - [x] 单条指派下拉 +「指派给我」→ PUT 成功、列表刷新 — 2026-07-12 `kb:prd` P2-O6  
-- [x] 多选 → 批量忽略 / 标记修复 / 批量指派（并行 PUT） — 2026-07-12 `kb:prd` P2-O7（batch 404 兜底）  
+- [x] 多选 → 批量忽略 / 标记修复 / 批量指派（`PUT /kb/lint/issues/batch`） — 2026-07-12 `kbLint.ts` 改调批量 API  
 - [x] 分页切换 `pageNum` / `pageSize`；全量响应时总数与切片正确 — 2026-07-12 `kb:prd` P2-O8  
 - [ ] 扫描并落库后工单表自动刷新 — UI 点验（`issuesPanelRef.loadIssues` 已接）
 
@@ -464,7 +465,7 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 | D1–D4 | Dashboard | §8 四区块 | P2 | ✅ |
 | O5 | Lint 工单 | issueType / status / 未指派筛选 | P2 | ✅ |
 | O6 | Lint 工单 | 指派人列 + PUT assigneeId | P2 | ✅ |
-| O7 | Lint 工单 | 多选批量（并行 PUT 兜底） | P2 | ✅ |
+| O7 | Lint 工单 | 多选批量（`PUT /kb/lint/issues/batch`） | P2 | ✅ |
 | O8 | Lint 工单 | AppPagination + 客户端 slice | P2 | ✅ |
 
 ---
@@ -533,7 +534,8 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-12 | **O9** `KbLintScanStatusBar` + §3.8；§0/§3.1/§9/§10/§11 对齐；Lint API 拆 `src/api/knowledge/kbLint.ts`；§3.7 O5–O8 工单增强（组件/API 已落地，验收待勾） |
+| 2026-07-12 | O7 改调 `PUT /kb/lint/issues/batch`（去掉并行 PUT 兜底）；§3.7.1/§10 对齐；与 distribute `TASKS.md` 同步 |
+| 2026-07-12 | **O9** `KbLintScanStatusBar` + §3.8；§0/§3.1/§9/§10/§11 对齐；Lint API 拆 `src/api/knowledge/kbLint.ts`；§3.7 O5–O8 验收勾选 |
 | 2026-07-11 | §1 排期表 O1–O4 / W2–W7 标 ✅；§3.6 / §10 验收勾选；E2E 复验 18/18（`KB_BASE=8090`） |
 | 2026-07-10 | **KBOPS-9** `KnowledgeOpsDashboardView` D1–D4；E2E 脚本 walkthrough + extended（12/12 + 7/7）；`13_kb_ops_dashboard_menu.sql` |
 | 2026-07-10 | O1–O4、`KbSyncOpsPanel`、T20f Tab1/3 UI 排版、治理工作流链接；验收表标 ✅ |

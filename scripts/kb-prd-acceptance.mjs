@@ -274,11 +274,34 @@ async function testO5O8LintIssues(token) {
     }
   }
 
-  const batch = await request(KB_BASE, 'PUT', '/kb/lint/issues/batch', { ids: [1], status: 1 }, token)
-  if (batch.status === 404) {
-    ok('P2-O7', 'batch API 404 — 前端并行 PUT 兜底')
+  const openForBatch = await kb('GET', `/lint/issues?spaceId=${sp.id}&status=0&pageNum=1&pageSize=3`, null, token)
+  const batchCandidates = pageRows(openForBatch.data).filter((r) => r?.id)
+  if (!batchCandidates.length) {
+    skip('P2-O7', '无待处理工单可测批量')
   } else {
-    skip('P2-O7', `batch HTTP ${batch.status} code=${batch.json?.code}`)
+    const ids = batchCandidates.slice(0, 2).map((r) => String(r.id))
+    const batch = await request(
+      KB_BASE,
+      'PUT',
+      '/kb/lint/issues/batch',
+      { ids, status: 1 },
+      token,
+    )
+    if (batch.status === 404) {
+      bad('P2-O7', 'batch API 404 — 需部署 knowledge-server ≥ PUT /kb/lint/issues/batch')
+    } else if (batch.json?.code === 200) {
+      const updated = Number(batch.json?.data ?? 0)
+      await request(
+        KB_BASE,
+        'PUT',
+        '/kb/lint/issues/batch',
+        { ids, status: 0 },
+        token,
+      )
+      ok('P2-O7', `batch status=1 updated=${updated}/${ids.length} · 已还原 status=0`)
+    } else {
+      bad('P2-O7', `batch HTTP ${batch.status} code=${batch.json?.code} ${batch.json?.msg ?? ''}`)
+    }
   }
 }
 
