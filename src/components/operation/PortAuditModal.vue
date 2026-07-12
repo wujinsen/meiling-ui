@@ -4,8 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { getPortAuditApi } from '@/api/operation'
 import AppModal from '@/components/ui/AppModal.vue'
+import OperationEntityLink from '@/components/operation/OperationEntityLink.vue'
+import OperationRelationDrawerHost from '@/components/operation/OperationRelationDrawerHost.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
+import { useOperationRelationDrawer } from '@/composables/useOperationRelationDrawer'
 import { assertAction, guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
 import { PERM } from '@/constants/permissions'
@@ -23,6 +26,15 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const router = useRouter()
+const {
+  relationOpen,
+  relationType,
+  relationId,
+  relationName,
+  relationTab,
+  openRelation,
+  closeRelation,
+} = useOperationRelationDrawer()
 const loading = ref(false)
 const audit = ref<OperationPortAudit | null>(null)
 const canManageMatrix = computed(() => assertAction(PERM.OP_PORT_MATRIX_LIST))
@@ -50,6 +62,14 @@ function goManageMatrix() {
   if (!guardAction(PERM.OP_PORT_MATRIX_LIST)) return
   emit('close')
   router.push('/operation/port-matrix')
+}
+
+function openAuditItemRelations(item: { id?: number | string; recordType?: 'project' | 'component'; name?: string }) {
+  if (item.id == null || !item.recordType) return
+  openRelation(item.recordType, item.id, {
+    name: item.name,
+    tab: item.recordType === 'project' ? 'servers' : 'servers',
+  })
 }
 </script>
 
@@ -117,7 +137,14 @@ function goManageMatrix() {
             <tbody>
               <tr v-for="item in audit.items" :key="`${item.recordType}-${item.id}`" class="border-t border-gray-50 dark:border-white/5">
                 <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ item.recordType === 'project' ? t('operation.project.title') : t('operation.component.title') }}</td>
-                <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{{ item.name }}</td>
+                <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
+                  <OperationEntityLink
+                    v-if="item.id && item.recordType"
+                    :label="item.name || '—'"
+                    @open="openAuditItemRelations(item)"
+                  />
+                  <span v-else>{{ item.name }}</span>
+                </td>
                 <td class="px-4 py-3 tabular-nums">{{ item.actualPort || '-' }}</td>
                 <td class="px-4 py-3 tabular-nums">{{ item.expectedPort || '-' }}</td>
                 <td class="px-4 py-3"><EnvironmentBadge :environment="item.environment" size="sm" /></td>
@@ -141,4 +168,13 @@ function goManageMatrix() {
       <button type="button" class="btn-ghost" @click="emit('close')">{{ t('operation.common.cancel') }}</button>
     </template>
   </AppModal>
+
+  <OperationRelationDrawerHost
+    :open="relationOpen"
+    :entity-type="relationType"
+    :entity-id="relationId"
+    :entity-name="relationName"
+    :initial-tab="relationTab"
+    @close="closeRelation"
+  />
 </template>

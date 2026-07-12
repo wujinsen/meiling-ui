@@ -22,6 +22,8 @@ const props = defineProps<{
   entityId: number | string | null
   initialTab?: RelationDrawerTab
   entityName?: string
+  /** 管理页可编辑关联；导航页（28e）传 false 隐藏编辑按钮 */
+  showEditLinks?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -226,7 +228,7 @@ watch(
     <template #footer>
       <button type="button" class="btn-ghost" @click="emit('close')">{{ t('operation.common.cancel') }}</button>
       <button type="button" class="btn-ghost" @click="openTopology">{{ t('operation.relations.openTopology') }}</button>
-      <button type="button" class="btn-primary" @click="emit('editLinks')">{{ t('operation.relations.editLinks') }}</button>
+      <button v-if="props.showEditLinks !== false" type="button" class="btn-primary" @click="emit('editLinks')">{{ t('operation.relations.editLinks') }}</button>
     </template>
   </AppModal>
 

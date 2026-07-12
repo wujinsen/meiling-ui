@@ -7,11 +7,15 @@ import {
   createDeployTaskApi,
   getDeployPresetsApi,
   getDeployStatusApi,
+  listProjectApi,
   uploadFileApi,
 } from '@/api/operation'
 import DeployServerPicker from '@/components/operation/DeployServerPicker.vue'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
+import OperationEntityLink from '@/components/operation/OperationEntityLink.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import OperationRelationDrawerHost from '@/components/operation/OperationRelationDrawerHost.vue'
+import { useOperationRelationDrawer } from '@/composables/useOperationRelationDrawer'
 import AppSelect from '@/components/ui/AppSelect.vue'
 import { useOperationTaskPoll } from '@/composables/useOperationTaskPoll'
 import { confirm } from '@/composables/useConfirm'
@@ -29,11 +33,23 @@ import {
   type UploadPostMode,
 } from '@/types/operation'
 import { normalizeDeployServiceKeys } from '@/utils/operationDeploy'
+import { resolveDeployServiceKey } from '@/utils/operationPort'
 import { Loader2, Play, RefreshCw, RotateCcw, Square, Terminal, Upload, List } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
 const { drawerOpen, task, logText, polling, openTask, closeDrawer } = useOperationTaskPoll()
+const {
+  relationOpen,
+  relationType,
+  relationId,
+  relationName,
+  relationTab,
+  openRelation,
+  closeRelation,
+} = useOperationRelationDrawer()
+
+const projectNameIndex = ref<Record<string, { id: string | number; name: string }>>({})
 
 const selectedServerId = ref<string>('')
 const selectedServer = ref<OperationServer | null>(null)
@@ -65,6 +81,36 @@ const canCommandExec = computed(() => assertAction(PERM.OP_COMMAND_EXEC))
 
 function onServerSelect(server: OperationServer) {
   selectedServer.value = server
+}
+
+function openServerRelations(server: OperationServer) {
+  openRelation('server', server.id, { name: server.serverName, tab: 'projects' })
+}
+
+async function loadProjectIndex() {
+  try {
+    const result = await listProjectApi({ pageNum: 1, pageSize: 500 })
+    if (result.code !== API_SUCCESS_CODE || !result.data?.list) return
+    const index: Record<string, { id: string | number; name: string }> = {}
+    for (const project of result.data.list) {
+      if (project.id == null || !project.projectName) continue
+      const key = resolveDeployServiceKey(project.projectName)
+      if (key && !index[key]) {
+        index[key] = { id: project.id, name: project.projectName }
+      }
+    }
+    projectNameIndex.value = index
+  } catch {
+    projectNameIndex.value = {}
+  }
+}
+
+function openServiceRelations(svc: OperationDeployServiceOption | string) {
+  const key = typeof svc === 'string' ? svc : svc.key
+  const matched = projectNameIndex.value[key]
+  if (matched) {
+    openRelation('project', matched.id, { name: matched.name, tab: 'servers' })
+  }
 }
 
 function openTaskHistory() {
@@ -141,6 +187,8 @@ watch(selectedServerId, () => {
     void loadPresets()
   }
 })
+
+void loadProjectIndex()
 
 watch(pathPresetPick, (p) => {
   if (p) uploadTarget.value = p
@@ -325,13 +373,19 @@ async function submitRemoteCommand() {
     </OperationPageHeader>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(17rem,280px)_1fr]">
-      <DeployServerPicker v-model="selectedServerId" @select="onServerSelect" />
+      <DeployServerPicker v-model="selectedServerId" @select="onServerSelect" @open-relations="openServerRelations" />
 
       <div class="space-y-6">
         <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-gray-900/40">
           <h2 class="mb-4 text-sm font-semibold">
             {{ t('operation.deployCenter.services') }}
-            <span v-if="selectedServer" class="font-normal text-gray-400">· {{ selectedServer.serverName }}</span>
+            <span v-if="selectedServer" class="font-normal text-gray-400">
+              ·
+              <OperationEntityLink
+                :label="selectedServer.serverName || String(selectedServer.id)"
+                @open="openServerRelations(selectedServer)"
+              />
+            </span>
           </h2>
           <div v-if="!selectedServerId" class="text-sm text-gray-400">{{ t('operation.deployCenter.selectServer') }}</div>
           <div v-else class="grid gap-4 md:grid-cols-3">
@@ -340,7 +394,14 @@ async function submitRemoteCommand() {
               :key="svc.key"
               class="rounded-lg border border-gray-100 p-4 dark:border-white/10"
             >
-              <div class="mb-2 font-medium">{{ serviceLabel(svc) }}</div>
+              <div class="mb-2 font-medium">
+                <OperationEntityLink
+                  v-if="projectNameIndex[svc.key]"
+                  :label="serviceLabel(svc)"
+                  @open="openServiceRelations(svc)"
+                />
+                <span v-else>{{ serviceLabel(svc) }}</span>
+              </div>
               <div class="mb-3 text-sm text-gray-500">{{ runningLabel(svc.key) }}</div>
               <div class="flex flex-wrap gap-2">
                 <button
@@ -487,6 +548,15 @@ async function submitRemoteCommand() {
       :log-text="logText"
       :polling="polling"
       @close="closeDrawer"
+    />
+
+    <OperationRelationDrawerHost
+      :open="relationOpen"
+      :entity-type="relationType"
+      :entity-id="relationId"
+      :entity-name="relationName"
+      :initial-tab="relationTab"
+      @close="closeRelation"
     />
   </div>
 </template>

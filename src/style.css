@@ -338,6 +338,14 @@
     @apply cursor-default border-transparent bg-transparent text-gray-400 hover:border-transparent hover:bg-transparent dark:text-gray-500;
   }
 
+  .operation-entity-link {
+    @apply inline font-medium text-brand-600 underline-offset-2 transition hover:text-brand-700 hover:underline dark:text-brand-400 dark:hover:text-brand-300;
+  }
+
+  .operation-entity-link--disabled {
+    @apply cursor-default text-gray-500 no-underline hover:text-gray-500 hover:no-underline dark:text-gray-400;
+  }
+
   .btn-tree-toggle {
     @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 transition;
     @apply hover:bg-white hover:text-gray-900 hover:shadow-sm;
@@ -1028,6 +1036,10 @@
 
   .deploy-server-picker__name {
     @apply min-w-0 truncate;
+  }
+
+  .deploy-server-picker__relation-btn {
+    @apply inline-flex shrink-0 items-center justify-center rounded p-0.5 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/15 dark:hover:text-brand-300;
   }
 
   .deploy-server-picker__env-badge {

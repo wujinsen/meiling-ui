@@ -4,11 +4,14 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { listTaskApi } from '@/api/operation'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
+import OperationEntityLink from '@/components/operation/OperationEntityLink.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import OperationRelationDrawerHost from '@/components/operation/OperationRelationDrawerHost.vue'
 import OperationServerSelect from '@/components/operation/OperationServerSelect.vue'
 import OperationTaskStatusBadge from '@/components/operation/OperationTaskStatusBadge.vue'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
+import { useOperationRelationDrawer } from '@/composables/useOperationRelationDrawer'
 import { useOperationTaskPoll } from '@/composables/useOperationTaskPoll'
 import { formatDateTime, showToast } from '@/composables/useToast'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
@@ -19,6 +22,15 @@ import { FileText, RefreshCw, Search } from 'lucide-vue-next'
 const { t } = useI18n()
 const route = useRoute()
 const { drawerOpen, task, logText, polling, openTask, closeDrawer } = useOperationTaskPoll()
+const {
+  relationOpen,
+  relationType,
+  relationId,
+  relationName,
+  relationTab,
+  openRelation,
+  closeRelation,
+} = useOperationRelationDrawer()
 
 const loading = ref(false)
 const list = ref<OperationTask[]>([])
@@ -58,6 +70,16 @@ function taskSummary(row: OperationTask) {
   if (row.action) parts.push(row.action)
   if (row.targetName) parts.push(row.targetName)
   return parts.length ? parts.join(' · ') : '-'
+}
+
+function openTaskServer(row: OperationTask) {
+  if (row.serverId == null || row.serverId === '') return
+  openRelation('server', row.serverId, { name: row.targetName ?? undefined, tab: 'tasks' })
+}
+
+function openTaskProject(row: OperationTask) {
+  if (row.projectId == null || row.projectId === '') return
+  openRelation('project', row.projectId, { name: row.targetName ?? undefined, tab: 'tasks' })
 }
 
 function search() {
@@ -219,9 +241,25 @@ onUnmounted(stopAutoRefresh)
                   <span class="text-xs text-gray-500">{{ row.progress ?? 0 }}%</span>
                 </div>
               </td>
-              <td class="max-w-[220px] truncate px-4 py-3" :title="taskSummary(row)">
-                <span v-if="row.serverId" class="text-xs text-gray-400">#{{ row.serverId }}</span>
-                {{ taskSummary(row) }}
+              <td class="max-w-[220px] px-4 py-3">
+                <div class="flex min-w-0 flex-col gap-0.5">
+                  <div v-if="row.serverId" class="truncate">
+                    <OperationEntityLink
+                      :label="row.targetName || t('operation.taskHistory.serverIdLabel', { id: row.serverId })"
+                      @open="openTaskServer(row)"
+                    />
+                  </div>
+                  <div v-else-if="row.projectId" class="truncate">
+                    <OperationEntityLink
+                      :label="row.targetName || t('operation.taskHistory.projectIdLabel', { id: row.projectId })"
+                      @open="openTaskProject(row)"
+                    />
+                  </div>
+                  <span v-else class="truncate text-gray-500" :title="taskSummary(row)">{{ taskSummary(row) }}</span>
+                  <span v-if="row.serverId && row.serviceKey" class="truncate text-xs text-gray-400" :title="taskSummary(row)">
+                    {{ row.serviceKey }}<template v-if="row.action"> · {{ row.action }}</template>
+                  </span>
+                </div>
               </td>
               <td class="max-w-[200px] truncate px-4 py-3 text-gray-500" :title="row.message || ''">{{ row.message || '-' }}</td>
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
@@ -246,6 +284,15 @@ onUnmounted(stopAutoRefresh)
       :log-text="logText"
       :polling="polling"
       @close="closeDrawer"
+    />
+
+    <OperationRelationDrawerHost
+      :open="relationOpen"
+      :entity-type="relationType"
+      :entity-id="relationId"
+      :entity-name="relationName"
+      :initial-tab="relationTab"
+      @close="closeRelation"
     />
   </div>
 </template>

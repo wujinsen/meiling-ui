@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Search } from 'lucide-vue-next'
+import { Search, GitBranch } from 'lucide-vue-next'
 import { listServerApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
@@ -14,6 +14,7 @@ const model = defineModel<string>({ default: '' })
 
 const emit = defineEmits<{
   select: [server: OperationServer]
+  openRelations: [server: OperationServer]
 }>()
 
 const { t } = useI18n()
@@ -165,7 +166,17 @@ onMounted(async () => {
       >
         <div class="deploy-server-picker__item-top">
           <span class="deploy-server-picker__name">{{ pinnedServer.serverName }}</span>
-          <EnvironmentBadge :environment="pinnedServer.environment" size="sm" />
+          <div class="flex items-center gap-1">
+            <button
+              type="button"
+              class="deploy-server-picker__relation-btn"
+              :title="t('operation.relations.drawerTitle')"
+              @click.stop="emit('openRelations', pinnedServer)"
+            >
+              <GitBranch class="h-3.5 w-3.5" />
+            </button>
+            <EnvironmentBadge :environment="pinnedServer.environment" size="sm" />
+          </div>
         </div>
         <div class="deploy-server-picker__sub">
           {{ pinnedServer.innerIp || pinnedServer.ip || '-' }}
@@ -185,7 +196,17 @@ onMounted(async () => {
         >
           <div class="deploy-server-picker__item-top">
             <span class="deploy-server-picker__name">{{ srv.serverName }}</span>
-            <EnvironmentBadge :environment="srv.environment" size="sm" />
+            <div class="flex items-center gap-1">
+              <button
+                type="button"
+                class="deploy-server-picker__relation-btn"
+                :title="t('operation.relations.drawerTitle')"
+                @click.stop="emit('openRelations', srv)"
+              >
+                <GitBranch class="h-3.5 w-3.5" />
+              </button>
+              <EnvironmentBadge :environment="srv.environment" size="sm" />
+            </div>
           </div>
           <div class="deploy-server-picker__sub">
             {{ srv.innerIp || srv.ip || '-' }}

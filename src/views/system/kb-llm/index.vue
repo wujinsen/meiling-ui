@@ -77,12 +77,11 @@ const llmStatus = computed((): { kind: LlmStatusKind; label: string } => {
   return { kind: 'ready', label: t('system.kbLlm.status.available') }
 })
 
-const isDirty = computed(() => {
+const isFormDirty = computed(() => {
   const loaded = configLoaded.value
   if (!loaded) return false
   return (
-    form.enabled !== coerceKbLlmEnabled(loaded.enabled)
-    || form.provider !== ((PROVIDER_OPTIONS.includes(loaded.provider as LlmProvider)
+    form.provider !== ((PROVIDER_OPTIONS.includes(loaded.provider as LlmProvider)
       ? loaded.provider
       : 'custom') as LlmProvider)
     || form.baseUrl !== (loaded.baseUrl ?? '')
@@ -271,65 +270,77 @@ async function runTest() {
   }
 }
 
-async function saveConfig() {
-  if (!guardAction(PERM.KB_PLATFORM_LLM)) return
+async function persistConfig(options?: {
+  clearApiKey?: boolean
+  successToast?: string
+  revertEnabledOnFail?: boolean
+  previousEnabled?: boolean
+}): Promise<boolean> {
+  if (!guardAction(PERM.KB_PLATFORM_LLM)) return false
   const error = validateForm()
   if (error) {
     showToast('error', error)
-    return
+    return false
   }
   saving.value = true
   pageAlert.value = ''
   try {
-    const res = await saveKbPlatformLlmConfigApi(buildSavePayload())
+    const res = await saveKbPlatformLlmConfigApi(buildSavePayload(options?.clearApiKey))
     if (res.code !== API_SUCCESS_CODE || !res.data) {
       const msg = resolvePageAlert(res.msg || t('system.kbLlm.saveFailed'))
       pageAlert.value = msg
       throw new Error(msg)
     }
     applyConfig(res.data)
-    showToast('success', t('system.kbLlm.saveOk'))
+    showToast('success', options?.successToast ?? t('system.kbLlm.saveOk'))
+    return true
   } catch (e) {
+    if (options?.revertEnabledOnFail && options.previousEnabled !== undefined) {
+      form.enabled = options.previousEnabled
+    }
     if (!pageAlert.value) {
       showToast('error', e instanceof Error ? e.message : t('system.kbLlm.saveFailed'))
     }
+    return false
   } finally {
     saving.value = false
   }
 }
 
+async function saveConfig() {
+  await persistConfig()
+}
+
 async function onEnabledChange(next: boolean) {
-  if (next === form.enabled) return
+  if (next === form.enabled || saving.value) return
+  const previousEnabled = form.enabled
   const ok = await confirm({
     title: t(next ? 'system.kbLlm.confirm.enableTitle' : 'system.kbLlm.confirm.disableTitle'),
     message: t(next ? 'system.kbLlm.confirm.enableMessage' : 'system.kbLlm.confirm.disableMessage'),
     confirmText: t(next ? 'system.kbLlm.confirm.enableConfirm' : 'system.kbLlm.confirm.disableConfirm'),
     danger: !next,
   })
-  if (ok) form.enabled = next
+  if (!ok) return
+
+  form.enabled = next
+  const validationError = validateForm()
+  if (validationError) {
+    form.enabled = previousEnabled
+    showToast('error', validationError)
+    return
+  }
+
+  await persistConfig({
+    successToast: t(next ? 'system.kbLlm.enabledSaveOk' : 'system.kbLlm.disabledSaveOk'),
+    revertEnabledOnFail: true,
+    previousEnabled,
+  })
 }
 
 async function clearDbKey() {
   if (!guardAction(PERM.KB_PLATFORM_LLM)) return
   if (!(await confirm({ message: t('system.kbLlm.action.clearKeyConfirm') }))) return
-  saving.value = true
-  pageAlert.value = ''
-  try {
-    const res = await saveKbPlatformLlmConfigApi(buildSavePayload(true))
-    if (res.code !== API_SUCCESS_CODE || !res.data) {
-      const msg = resolvePageAlert(res.msg || t('system.kbLlm.saveFailed'))
-      pageAlert.value = msg
-      throw new Error(msg)
-    }
-    applyConfig(res.data)
-    showToast('success', t('system.kbLlm.clearKeyOk'))
-  } catch (e) {
-    if (!pageAlert.value) {
-      showToast('error', e instanceof Error ? e.message : t('system.kbLlm.saveFailed'))
-    }
-  } finally {
-    saving.value = false
-  }
+  await persistConfig({ clearApiKey: true, successToast: t('system.kbLlm.clearKeyOk') })
 }
 
 function addExtraModel() {
@@ -392,11 +403,23 @@ onMounted(loadConfig)
 
       <template v-else-if="configLoaded">
         <div
-          v-if="isDirty"
-          class="mb-4 flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200"
+          v-if="isFormDirty"
+          class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200"
         >
-          <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{{ t('system.kbLlm.unsavedHint') }}</span>
+          <div class="flex min-w-0 items-start gap-2">
+            <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{{ t('system.kbLlm.unsavedHint') }}</span>
+          </div>
+          <button
+            type="button"
+            class="btn-primary shrink-0 text-xs"
+            :disabled="saving || testing"
+            @click="saveConfig"
+          >
+            <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />
+            <Save v-else class="h-4 w-4" />
+            {{ saving ? t('system.kbLlm.saving') : t('system.kbLlm.action.saveNow') }}
+          </button>
         </div>
 
         <div
@@ -428,15 +451,20 @@ onMounted(loadConfig)
         <form class="form-grid-pairs max-w-3xl" @submit.prevent="saveConfig">
           <div class="form-grid-row">
             <FormField :label="t('system.kbLlm.field.enabled')" horizontal class="form-field-span-2">
-              <div class="flex items-center gap-3">
+              <div class="flex flex-wrap items-center gap-3">
                 <AppSwitch
                   v-model="form.enabled"
                   :label="t('system.kbLlm.field.enabled')"
+                  :disabled="saving"
                   confirm-before-change
                   @change="onEnabledChange"
                 />
                 <span class="text-sm text-gray-500 dark:text-gray-400">
+                  <Loader2 v-if="saving" class="mr-1 inline h-3.5 w-3.5 animate-spin" />
                   {{ form.enabled ? t('system.kbLlm.enabledOn') : t('system.kbLlm.enabledOff') }}
+                </span>
+                <span class="text-xs text-gray-400 dark:text-gray-500">
+                  {{ t('system.kbLlm.toggleAutoSaveHint') }}
                 </span>
               </div>
             </FormField>
@@ -572,7 +600,7 @@ onMounted(loadConfig)
             <Loader2 v-else class="h-4 w-4 animate-spin" />
             {{ testing ? t('system.kbLlm.testing') : t('system.kbLlm.action.test') }}
           </button>
-          <button type="button" class="btn-primary" :disabled="saving || testing" @click="saveConfig">
+          <button type="button" class="btn-primary" :disabled="saving || testing || !isFormDirty" @click="saveConfig">
             <Save v-if="!saving" class="h-4 w-4" />
             <Loader2 v-else class="h-4 w-4 animate-spin" />
             {{ saving ? t('system.kbLlm.saving') : t('system.kbLlm.action.save') }}
