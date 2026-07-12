@@ -23,7 +23,7 @@
 | **S7** 批量探活 | `ServerManageView` · 驾驶舱 ops | `probeAllHealthApi` → `taskId` · `useProbeAllHealth` · `useOperationTaskPoll` | ✅ |
 | **S9** 动态 serviceKey | `DeployCenterView` | `getDeployPresetsApi().serviceKeys`（回退 `MOLI_DEPLOY_SERVICES`） | ✅ |
 | **S6-b** 多选服务器 | `ProjectManageView` · `ComponentManageView` · `OperationServerLinksModal` | 列表行「关联服务器」；分页搜索多选；`PUT .../links` | ✅ |
-| **S6-b+** 关联展示 | `OperationLinkedServersCell` · `useOperationServerLabelCache` | 列表列显示 `服务器名 · IP` + `+N`；点击打开关联弹窗 | ✅ |
+| **S6-b+** 关联展示 | `OperationLinkedServersCell` · `useOperationServerLabelCache` · `ServerDetailModal` | 列表列「关联服务器」显示 `服务器名 · IP` + `+N`；点击主标签查看详情，`+N` 多选；行内按钮仍编辑关联 | ✅ |
 | **S10** serverId 表单 | `ProjectManageView` · `ComponentManageView` | 编辑弹窗仅 IP；关联在列表独立弹窗 | ✅ |
 | **S11** orphan 标记 | `OperationOrphanBadge` · `operationOrphan.ts` · `operationServerLinks.ts` | 无关联服务器时徽章 + 行底色（含 `serverIds` 为空） | ✅ |
 | **S12** 端口矩阵 | `PortMatrixManageView` · `OperationPortMatrixAliasInput` | CRUD + 审计弹窗「管理端口矩阵」 · **SVR-21d** | ✅ |
@@ -100,7 +100,32 @@
 
 列表筛选：query 传 `environment`；空或不传表示全部。工具：`src/utils/operationEnv.ts`。
 
-### 3.2 健康状态 `status`（服务器 / 组件）
+### 3.2 服务器角色 `serverRole`（SVR-23）
+
+与 `environment` **正交**。工具：`src/utils/operationServerRole.ts` · 组件：`ServerRoleSelect` / `ServerRoleBadge`。
+
+| 值 | 含义 | i18n |
+|----|------|------|
+| `app` | 应用主机 | `operation.serverRole.app` |
+| `db` | 数据库 | `operation.serverRole.db` |
+| `cache` | 缓存 | `operation.serverRole.cache` |
+| `mq` | 消息队列 | `operation.serverRole.mq` |
+| `gateway` | 网关/LB | `operation.serverRole.gateway` |
+| `bastion` | 堡垒机 | `operation.serverRole.bastion` |
+| `middleware` | 中间件 | `operation.serverRole.middleware` |
+| `other` | 其它 | `operation.serverRole.other` |
+
+列表筛选：`serverRole` query；新建默认 `app`。
+
+### 3.3 服务器标签 `tags`（SVR-24）
+
+工具：`src/utils/operationServerTag.ts` · 组件：`ServerTagsInput` / `ServerTagsBadges`。
+
+- 请求/响应：`tags: string[]`（最多 20 项，小写 `a-z0-9:-_`）
+- 列表筛选：`?tag=pro` 精确匹配
+- 联想：`GET /operation/server/tag-options`
+
+### 3.4 健康状态 `status`（服务器 / 组件）
 
 | 值 | 含义 | UI 建议 |
 |----|------|---------|
@@ -111,7 +136,7 @@
 
 探测接口会**写库**并返回更新后的 VO：`POST /operation/server/{id}/check`、`POST /operation/component/{id}/check`。常量见 `src/utils/operationHealth.ts`。
 
-### 3.3 端口校验 `portMatchStatus`（组件列表 VO）
+### 3.5 端口校验 `portMatchStatus`（组件列表 VO）
 
 | 值 | 含义 | UI 建议 |
 |----|------|---------|
@@ -124,7 +149,7 @@
 
 **`expectedPort` 来源**：后端端口矩阵（如 `moli-server` → 期望 `8888`），**非前端写死**；前端仅展示接口返回的 `expectedPort`。
 
-### 3.4 运维错误码 `10101`–`10109`
+### 3.6 运维错误码 `10101`–`10109`
 
 | code | 常量 | 典型场景 | 前端 |
 |------|------|----------|------|
@@ -209,7 +234,8 @@ export type OperationSecretReveal = { password?: string }
 ### 5.1 服务器列表 + 探测（S1）
 
 ```http
-GET  /operation/server/list?pageNum=1&pageSize=10&serverName=&ip=&environment=
+GET  /operation/server/list?pageNum=1&pageSize=10&serverName=&ip=&environment=&serverRole=&tag=
+GET  /operation/server/tag-options
 POST /operation/server/{id}/check
 ```
 
@@ -217,7 +243,9 @@ POST /operation/server/{id}/check
 
 ```typescript
 export type OperationServer = {
-  // ...serverName, ip, innerIp, port, environment, remark
+  // ...serverName, ip, innerIp, port, environment, serverRole, tags, remark
+  serverRole?: 'app' | 'db' | 'cache' | 'mq' | 'gateway' | 'bastion' | 'middleware' | 'other' | null
+  tags?: string[]
   status?: 0 | 1 | 2 | 3 | null
   lastCheckTime?: string | number | null
 }
@@ -225,6 +253,8 @@ export type OperationServer = {
 
 | ID | UI |
 |----|-----|
+| **S1-0** | 列表/表单「角色」列与筛选（`ServerRoleBadge` / `ServerRoleSelect`） |
+| **S1-0b** | 列表/表单「标签」列与筛选（`ServerTagsInput` / `ServerTagsBadges`） |
 | **S1-1** | 列表增加「健康状态」列（`HealthStatusBadge` + 可选 `lastCheckTime`） |
 | **S1-2** | 行操作「探测」→ `checkServerApi`；成功后就地更新该行 `status` / `lastCheckTime` |
 
@@ -526,7 +556,7 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | 表单组件 | 列表行「关联服务器」→ `OperationServerLinksModal`（一级弹窗，分页搜索多选） |
 | 编辑弹窗 | 不含关联 UI；已关联时 IP 只读，提示去列表配置 |
 | 提交字段 | `serverIds: string[]` + 主 `serverId`（`serverIds[0]`） |
-| 列表展示 | 主服务器 **`服务器名 · IP`**（`OperationLinkedServersCell`）+ `+N` 徽章；点击列打开关联弹窗；无关联时 orphan 行样式 |
+| 列表展示 | 主服务器 **`服务器名 · IP`**（`OperationLinkedServersCell`）+ `+N`；点击主标签 → `ServerDetailModal`；`+N` → `LinkedServersPickModal`；行内「关联服务器」编辑 N:N |
 | 数据补全 | `useOperationServerLabelCache`：列表缺 `serverIds` 时补拉 `GET .../links`；按 id 批量 `getServerApi` 解析名称 |
 | 独立 links API | `GET/PUT /operation/project/{id}/links` · `GET/PUT /operation/component/{id}/links` |
 | 工具 | `src/utils/operationServerLinks.ts` · `formatOperationServerLabel` · `resolvePrimaryServerLabel` |

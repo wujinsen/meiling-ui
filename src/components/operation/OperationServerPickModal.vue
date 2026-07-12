@@ -4,12 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { Search } from 'lucide-vue-next'
 import { getServerApi, listServerApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { Environment, OperationServer } from '@/types/operation'
-import { environmentI18nKey } from '@/utils/operationEnv'
 import { resolveServerSearchParams } from '@/utils/operationServerSearch'
 
 const PAGE_SIZE = 20
@@ -49,10 +49,6 @@ const showPinned = computed(
 )
 
 const modalTitle = computed(() => props.title ?? t('operation.serverPick.title'))
-
-function envLabel(env?: number) {
-  return t(environmentI18nKey(env))
-}
 
 function pickServer(srv: OperationServer) {
   if (srv.id == null) return
@@ -185,7 +181,7 @@ watch(
         >
           <div class="operation-server-pick-modal__item-top">
             <span class="operation-server-pick-modal__name">{{ pinnedServer.serverName }}</span>
-            <span class="operation-server-pick-modal__env-badge">{{ envLabel(pinnedServer.environment) }}</span>
+            <EnvironmentBadge :environment="pinnedServer.environment" size="sm" />
           </div>
           <div class="operation-server-pick-modal__sub">{{ pinnedServer.innerIp || pinnedServer.ip || '-' }}</div>
           <span class="operation-server-pick-modal__pinned-tag">{{ t('operation.serverPick.current') }}</span>
@@ -202,7 +198,7 @@ watch(
           >
             <div class="operation-server-pick-modal__item-top">
               <span class="operation-server-pick-modal__name">{{ srv.serverName }}</span>
-              <span class="operation-server-pick-modal__env-badge">{{ envLabel(srv.environment) }}</span>
+              <EnvironmentBadge :environment="srv.environment" size="sm" />
             </div>
             <div class="operation-server-pick-modal__sub">{{ srv.innerIp || srv.ip || '-' }}</div>
           </button>

@@ -74,6 +74,7 @@ export const updateProjectApi = project.update
 export const deleteProjectApi = project.remove
 
 export const listServerApi = (params?: ServerQuery) => server.list(params as Record<string, string | number | undefined>)
+export const getServerTagOptionsApi = () => request<string[]>('/operation/server/tag-options', { method: 'GET' })
 export const getServerApi = server.get
 export const addServerApi = server.add
 export const updateServerApi = server.update

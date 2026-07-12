@@ -4,15 +4,19 @@ import { useI18n } from 'vue-i18n'
 import { addProjectApi, createDeployTaskApi, deleteProjectApi, getDeployStatusApi, getProjectApi, getProjectLinksApi, listProjectApi, saveProjectLinksApi, updateProjectApi } from '@/api/operation'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
 import OperationLinkedServersCell from '@/components/operation/OperationLinkedServersCell.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import OperationServerLinksModal from '@/components/operation/OperationServerLinksModal.vue'
+import ServerDetailModal from '@/components/operation/ServerDetailModal.vue'
+import LinkedServersPickModal from '@/components/operation/LinkedServersPickModal.vue'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { useOperationServerLabelCache } from '@/composables/useOperationServerLabelCache'
+import { useViewLinkedServer } from '@/composables/useViewLinkedServer'
 import { useOperationTaskPoll } from '@/composables/useOperationTaskPoll'
 import { confirm } from '@/composables/useConfirm'
 import { assertAction, guardAction, guardActionWithRefresh } from '@/composables/useActionPermissions'
@@ -22,7 +26,6 @@ import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject } from '@/types/operation'
-import { environmentI18nKey } from '@/utils/operationEnv'
 import { isOperationOrphan } from '@/utils/operationOrphan'
 import { entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { resolveDeployServiceKey } from '@/utils/operationPort'
@@ -49,6 +52,16 @@ const deployProjectId = ref<string | number | null>(null)
 const deployStatus = ref<OperationDeployStatus | null>(null)
 
 const { serverCache, enrichRowsWithLinks, hydrateRows } = useOperationServerLabelCache()
+const {
+  detailOpen: serverDetailOpen,
+  detailServerId,
+  pickOpen: serverPickOpen,
+  pickServerIds,
+  openFromRow: openLinkedServerView,
+  closeDetail: closeServerDetail,
+  closePick: closeServerPick,
+  onPickServer,
+} = useViewLinkedServer(serverCache)
 
 const { drawerOpen: taskDrawerOpen,
   task: taskDetail,
@@ -68,10 +81,6 @@ const deployExecAvailable = computed(() => deployStatus.value?.available !== fal
 const serverIpLocked = computed(() => !isOperationOrphan(form.value.serverId))
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, projectName: '', serverIp: '', environment: '' as number | '' })
-
-function envLabel(env?: number) {
-  return t(environmentI18nKey(env))
-}
 
 function search() {
   if (query.pageNum === 1) loadList()
@@ -391,12 +400,12 @@ onMounted(loadList)
             <tr>
               <th class="px-4 py-3">{{ t('operation.project.projectName') }}</th>
               <th class="px-4 py-3">URL</th>
-              <th class="px-4 py-3">{{ t('operation.project.serverIp') }}</th>
+              <th class="px-4 py-3">{{ t('operation.common.linkServer') }}</th>
               <th class="px-4 py-3">{{ t('operation.project.port') }}</th>
               <th class="px-4 py-3">{{ t('operation.port.status') }}</th>
               <th class="px-4 py-3">{{ t('operation.deploy.status') }}</th>
               <th class="px-4 py-3">{{ t('operation.project.deployPath') }}</th>
-              <th class="px-4 py-3">{{ t('operation.common.environment') }}</th>
+              <th class="px-4 py-3 text-center">{{ t('operation.common.environment') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.createTime') }}</th>
               <th class="px-4 py-3 text-right">{{ t('operation.common.actions') }}</th>
             </tr>
@@ -423,7 +432,8 @@ onMounted(loadList)
                   :row="row"
                   :server-cache="serverCache"
                   clickable
-                  @click="openProjectLinks(row)"
+                  @view-primary="openLinkedServerView(row, 'primary')"
+                  @view-more="openLinkedServerView(row, 'all')"
                 />
               </td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
@@ -438,7 +448,9 @@ onMounted(loadList)
                 </p>
               </td>
               <td class="max-w-[160px] truncate px-4 py-3">{{ row.deployPath || '-' }}</td>
-              <td class="px-4 py-3"><span class="badge bg-gray-100 dark:bg-white/10">{{ envLabel(row.environment) }}</span></td>
+              <td class="px-4 py-3 text-center">
+                <EnvironmentBadge :environment="row.environment" />
+              </td>
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
               <td class="px-4 py-3">
                 <div class="btn-action-group flex-wrap justify-end">
@@ -479,11 +491,13 @@ onMounted(loadList)
             </FormField>
           </div>
           <div class="form-grid-row">
-            <FormField :label="t('operation.project.serverIp')" horizontal>
+            <FormField :label="t('operation.project.serverIp')" horizontal class="form-field-span-2">
               <input v-model="form.serverIp" class="field-input" :readonly="serverIpLocked" />
               <p class="mt-1 text-xs text-gray-400">{{ t('operation.project.linkServersEditHint') }}</p>
             </FormField>
-            <FormField :label="t('operation.project.innerIp')" horizontal>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('operation.project.innerIp')" horizontal class="form-field-span-2">
               <input v-model="form.innerIp" class="field-input" :readonly="serverIpLocked" />
             </FormField>
           </div>
@@ -519,7 +533,7 @@ onMounted(loadList)
       :open="linksOpen"
       :model-value="linksServerIds"
       :entity-name="linksRow?.projectName"
-      :default-environment="linksRow?.environment"
+      entity-type="project"
       :saving="linksSaving"
       @confirm="saveProjectLinks"
       @close="closeProjectLinks"
@@ -607,6 +621,15 @@ onMounted(loadList)
       :log-text="taskLogText"
       :polling="taskPolling"
       @close="closeTaskDrawer"
+    />
+
+    <ServerDetailModal :open="serverDetailOpen" :server-id="detailServerId" @close="closeServerDetail" />
+    <LinkedServersPickModal
+      :open="serverPickOpen"
+      :server-ids="pickServerIds"
+      :server-cache="serverCache"
+      @select="onPickServer"
+      @close="closeServerPick"
     />
   </div>
 </template>

@@ -4,12 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { Search } from 'lucide-vue-next'
 import { getServerApi, listServerApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { Environment, OperationServer } from '@/types/operation'
-import { environmentI18nKey } from '@/utils/operationEnv'
 import { resolveServerSearchParams } from '@/utils/operationServerSearch'
 
 const PAGE_SIZE = 20
@@ -20,11 +20,12 @@ const props = withDefaults(
     open: boolean
     modelValue: string[]
     entityName?: string
-    defaultEnvironment?: Environment | number | ''
+    /** 项目 / 组件，用于底部说明文案 */
+    entityType?: 'project' | 'component'
     disabled?: boolean
     saving?: boolean
   }>(),
-  { defaultEnvironment: '', disabled: false, saving: false },
+  { entityType: 'project', disabled: false, saving: false },
 )
 
 const emit = defineEmits<{
@@ -50,9 +51,11 @@ const offPageSelected = computed(() =>
   draftIds.value.filter((id) => !list.value.some((srv) => String(srv.id) === id)),
 )
 
-function envLabel(env?: number) {
-  return t(environmentI18nKey(env))
-}
+const multiServerHintKey = computed(() =>
+  props.entityType === 'component'
+    ? 'operation.serverMulti.hintComponent'
+    : 'operation.serverMulti.hintProject',
+)
 
 function formatServerLabel(srv: OperationServer) {
   const ip = srv.innerIp || srv.ip || '-'
@@ -170,9 +173,7 @@ watch(
     if (!open) return
     draftIds.value = props.modelValue.map(String)
     keyword.value = ''
-    environment.value = props.defaultEnvironment === '' || props.defaultEnvironment == null
-      ? ''
-      : Number(props.defaultEnvironment)
+    environment.value = ''
     pageNum.value = 1
     void ensureCache(draftIds.value)
     void loadList()
@@ -202,10 +203,16 @@ watch(
             class="operation-alias-chip operation-alias-chip--compact"
             :class="index === 0 && 'operation-server-multi-primary'"
           >
-            <span class="max-w-[220px] truncate">
+            <span class="max-w-[200px] truncate">
               {{ serverCache.get(id) ? formatServerLabel(serverCache.get(id)!) : id }}
             </span>
-            <span v-if="index === 0" class="ml-1 text-[10px] opacity-80">{{ t('operation.project.primaryServer') }}</span>
+            <EnvironmentBadge
+              v-if="serverCache.get(id)"
+              :environment="serverCache.get(id)!.environment"
+              size="sm"
+              class="ml-1 shrink-0"
+            />
+            <span v-if="index === 0" class="ml-1 text-[10px] opacity-80">{{ t('operation.serverMulti.primaryServer') }}</span>
             <button
               v-else-if="!disabled"
               type="button"
@@ -226,7 +233,7 @@ watch(
           </div>
         </div>
         <p v-else class="text-sm text-gray-400">{{ t('operation.serverMulti.empty') }}</p>
-        <p class="mt-2 text-xs text-gray-400">{{ t('operation.project.multiServerHint') }}</p>
+        <p class="mt-2 text-xs text-gray-400">{{ t(multiServerHintKey) }}</p>
       </section>
 
       <section class="operation-server-links-modal__browse">
@@ -269,7 +276,7 @@ watch(
               <tbody>
                 <tr v-if="!list.length">
                   <td colspan="4" class="px-3 py-8 text-center text-gray-400">
-                    {{ keyword ? t('operation.serverMulti.searchEmpty') : t('operation.common.empty') }}
+                    {{ keyword || environment !== '' ? t('operation.serverMulti.searchEmpty') : t('operation.common.empty') }}
                   </td>
                 </tr>
                 <tr
@@ -291,7 +298,7 @@ watch(
                   <td class="px-3 py-2.5 font-medium">{{ srv.serverName || '-' }}</td>
                   <td class="px-3 py-2.5">{{ srv.innerIp || srv.ip || '-' }}</td>
                   <td class="px-3 py-2.5">
-                    <span class="badge bg-gray-100 text-xs dark:bg-white/10">{{ envLabel(srv.environment) }}</span>
+                    <EnvironmentBadge :environment="srv.environment" size="sm" />
                   </td>
                 </tr>
               </tbody>

@@ -8,7 +8,6 @@ const model = defineModel<number | '' | undefined>({ default: '' })
 
 const props = defineProps<{
   includeAll?: boolean
-  /** 传给 AppSelect：false 时宽度随内容 */
   block?: boolean
 }>()
 

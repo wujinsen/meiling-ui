@@ -4,11 +4,11 @@ import { useI18n } from 'vue-i18n'
 import { Search } from 'lucide-vue-next'
 import { listServerApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { showToast } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { OperationServer } from '@/types/operation'
-import { environmentI18nKey } from '@/utils/operationEnv'
 
 const model = defineModel<string>({ default: '' })
 
@@ -36,10 +36,6 @@ const showPinned = computed(
     Boolean(pinnedServer.value) &&
     !list.value.some((srv) => String(srv.id) === model.value),
 )
-
-function envLabel(env?: number) {
-  return t(environmentI18nKey(env))
-}
 
 function resolveSearchParams() {
   const q = keyword.value.trim()
@@ -169,7 +165,7 @@ onMounted(async () => {
       >
         <div class="deploy-server-picker__item-top">
           <span class="deploy-server-picker__name">{{ pinnedServer.serverName }}</span>
-          <span class="deploy-server-picker__env-badge">{{ envLabel(pinnedServer.environment) }}</span>
+          <EnvironmentBadge :environment="pinnedServer.environment" size="sm" />
         </div>
         <div class="deploy-server-picker__sub">
           {{ pinnedServer.innerIp || pinnedServer.ip || '-' }}
@@ -189,7 +185,7 @@ onMounted(async () => {
         >
           <div class="deploy-server-picker__item-top">
             <span class="deploy-server-picker__name">{{ srv.serverName }}</span>
-            <span class="deploy-server-picker__env-badge">{{ envLabel(srv.environment) }}</span>
+            <EnvironmentBadge :environment="srv.environment" size="sm" />
           </div>
           <div class="deploy-server-picker__sub">
             {{ srv.innerIp || srv.ip || '-' }}

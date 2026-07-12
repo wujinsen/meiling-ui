@@ -3,17 +3,21 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { addComponentApi, checkComponentApi, deleteComponentApi, getComponentApi, getComponentLinksApi, listComponentApi, revealComponentSecretApi, saveComponentLinksApi, updateComponentApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
 import OperationLinkedServersCell from '@/components/operation/OperationLinkedServersCell.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import OperationServerLinksModal from '@/components/operation/OperationServerLinksModal.vue'
+import ServerDetailModal from '@/components/operation/ServerDetailModal.vue'
+import LinkedServersPickModal from '@/components/operation/LinkedServersPickModal.vue'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
 import SecretManageModal from '@/components/operation/SecretManageModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
 import { useOperationServerLabelCache } from '@/composables/useOperationServerLabelCache'
+import { useViewLinkedServer } from '@/composables/useViewLinkedServer'
 import { confirm } from '@/composables/useConfirm'
 import { assertOperationSecretEdit, guardAction, guardOperationSecretEdit } from '@/composables/useActionPermissions'
 import { PERM } from '@/constants/permissions'
@@ -22,7 +26,6 @@ import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyComponent, type OperationComponent } from '@/types/operation'
-import { environmentI18nKey } from '@/utils/operationEnv'
 import { entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
 import { isOperationOrphan } from '@/utils/operationOrphan'
 import { Pencil, Plus, RefreshCw, Search, Trash2, Activity, ClipboardList, KeyRound, Link2 } from 'lucide-vue-next'
@@ -49,16 +52,22 @@ const linksRow = ref<OperationComponent | null>(null)
 const linksServerIds = ref<string[]>([])
 
 const { serverCache, enrichRowsWithLinks, hydrateRows } = useOperationServerLabelCache()
+const {
+  detailOpen: serverDetailOpen,
+  detailServerId,
+  pickOpen: serverPickOpen,
+  pickServerIds,
+  openFromRow: openLinkedServerView,
+  closeDetail: closeServerDetail,
+  closePick: closeServerPick,
+  onPickServer,
+} = useViewLinkedServer(serverCache)
 
 const canManagePassword = computed(() => assertOperationSecretEdit(PERM.OP_COMPONENT_EDIT))
 
 const serverIpLocked = computed(() => !isOperationOrphan(form.value.serverId))
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, componentName: '', serverIp: '', environment: '' as number | '' })
-
-function envLabel(env?: number) {
-  return t(environmentI18nKey(env))
-}
 
 function search() {
   if (query.pageNum === 1) loadList()
@@ -309,13 +318,13 @@ onMounted(loadList)
           <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">
             <tr>
               <th class="px-4 py-3">{{ t('operation.component.componentName') }}</th>
-              <th class="px-4 py-3">{{ t('operation.component.serverIp') }}</th>
+              <th class="px-4 py-3">{{ t('operation.common.linkServer') }}</th>
               <th class="px-4 py-3">{{ t('operation.component.port') }}</th>
               <th class="px-4 py-3">{{ t('operation.port.status') }}</th>
               <th class="px-4 py-3">{{ t('operation.component.version') }}</th>
               <th class="px-4 py-3">{{ t('operation.component.deployPath') }}</th>
               <th class="px-4 py-3">{{ t('operation.health.status') }}</th>
-              <th class="px-4 py-3">{{ t('operation.common.environment') }}</th>
+              <th class="px-4 py-3 text-center">{{ t('operation.common.environment') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.createTime') }}</th>
               <th class="px-4 py-3 text-right">{{ t('operation.common.actions') }}</th>
             </tr>
@@ -341,7 +350,8 @@ onMounted(loadList)
                   :row="row"
                   :server-cache="serverCache"
                   clickable
-                  @click="openComponentLinks(row)"
+                  @view-primary="openLinkedServerView(row, 'primary')"
+                  @view-more="openLinkedServerView(row, 'all')"
                 />
               </td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
@@ -351,7 +361,9 @@ onMounted(loadList)
               <td class="px-4 py-3">
                 <HealthStatusBadge :status="row.status" :last-check-time="formatDateTime(row.lastCheckTime ?? undefined)" show-time />
               </td>
-              <td class="px-4 py-3"><span class="badge bg-gray-100 dark:bg-white/10">{{ envLabel(row.environment) }}</span></td>
+              <td class="px-4 py-3 text-center">
+                <EnvironmentBadge :environment="row.environment" />
+              </td>
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
               <td class="px-4 py-3">
                 <div class="btn-action-group flex-wrap justify-end">
@@ -446,7 +458,7 @@ onMounted(loadList)
       :open="linksOpen"
       :model-value="linksServerIds"
       :entity-name="linksRow?.componentName"
-      :default-environment="linksRow?.environment"
+      entity-type="component"
       :saving="linksSaving"
       @confirm="saveComponentLinks"
       @close="closeComponentLinks"
@@ -462,6 +474,15 @@ onMounted(loadList)
       :reveal-api="revealComponentSecretApi"
       @save="savePassword"
       @close="closePasswordManage"
+    />
+
+    <ServerDetailModal :open="serverDetailOpen" :server-id="detailServerId" @close="closeServerDetail" />
+    <LinkedServersPickModal
+      :open="serverPickOpen"
+      :server-ids="pickServerIds"
+      :server-cache="serverCache"
+      @select="onPickServer"
+      @close="closeServerPick"
     />
   </div>
 </template>

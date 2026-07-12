@@ -16,6 +16,8 @@ const props = withDefaults(
     placeholder?: string
     /** 占满父级宽度（表单默认）；false 时保持内容宽度 */
     block?: boolean
+    /** 下拉面板最小宽度（px），默认按最长选项估算 */
+    panelMinWidth?: number
   }>(),
   { disabled: false, block: true },
 )
@@ -53,16 +55,23 @@ function closePanel() {
   open.value = false
 }
 
+function estimatePanelWidth(triggerWidth: number) {
+  if (props.panelMinWidth) return Math.max(triggerWidth, props.panelMinWidth)
+  const longestLabel = props.options.reduce((max, opt) => Math.max(max, opt.label.length), 0)
+  const contentWidth = longestLabel * 15 + 48
+  return Math.max(triggerWidth, contentWidth, 168)
+}
+
 function updatePanelPosition() {
   const trigger = rootRef.value?.querySelector('.kb-space-dropdown-trigger') as HTMLElement | null
   if (!trigger) return
   const rect = trigger.getBoundingClientRect()
+  const panelWidth = estimatePanelWidth(rect.width)
   panelStyle.value = {
     top: `${rect.bottom + 6}px`,
     left: `${rect.left}px`,
-    width: `${rect.width}px`,
-    minWidth: `${rect.width}px`,
-    maxWidth: `${rect.width}px`,
+    width: `${panelWidth}px`,
+    minWidth: `${panelWidth}px`,
   }
 }
 

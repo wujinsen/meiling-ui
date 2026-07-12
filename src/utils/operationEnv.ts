@@ -33,3 +33,19 @@ export function environmentI18nKey(env?: number) {
   if (env === 4) return 'operation.env.pro'
   return 'operation.env.unknown'
 }
+
+/** 列表环境标签（对齐 operation-task-status 扁平样式） */
+export function environmentBadgeClass(env?: number): string {
+  switch (env) {
+    case 1:
+      return 'operation-env-badge--dev'
+    case 2:
+      return 'operation-env-badge--test'
+    case 3:
+      return 'operation-env-badge--pre'
+    case 4:
+      return 'operation-env-badge--pro'
+    default:
+      return 'operation-env-badge--unknown'
+  }
+}

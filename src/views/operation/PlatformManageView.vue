@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { addPlatformApi, deletePlatformApi, getPlatformApi, listPlatformApi, revealPlatformSecretApi, updatePlatformApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import SecretManageModal from '@/components/operation/SecretManageModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
@@ -15,7 +16,6 @@ import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyPlatform, type OperationPlatform } from '@/types/operation'
-import { environmentI18nKey } from '@/utils/operationEnv'
 import { Pencil, Plus, RefreshCw, Search, Trash2, KeyRound } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -36,10 +36,6 @@ const secretRow = ref<OperationPlatform | null>(null)
 const canManagePassword = computed(() => assertOperationSecretEdit(PERM.OP_PLATFORM_EDIT))
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, platformName: '', environment: '' as number | '' })
-
-function envLabel(env?: number) {
-  return t(environmentI18nKey(env))
-}
 
 function search() {
   if (query.pageNum === 1) loadList()
@@ -215,7 +211,7 @@ onMounted(loadList)
               <th class="px-4 py-3">{{ t('operation.platform.platformName') }}</th>
               <th class="px-4 py-3">URL</th>
               <th class="px-4 py-3">{{ t('operation.platform.account') }}</th>
-              <th class="px-4 py-3">{{ t('operation.common.environment') }}</th>
+              <th class="px-4 py-3 text-center">{{ t('operation.common.environment') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.remark') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.createTime') }}</th>
               <th class="px-4 py-3 text-right">{{ t('operation.common.actions') }}</th>
@@ -228,7 +224,9 @@ onMounted(loadList)
               <td class="px-4 py-3 font-medium">{{ row.platformName }}</td>
               <td class="px-4 py-3"><a v-if="row.url" :href="row.url" target="_blank" class="text-brand-600 hover:underline">{{ row.url }}</a><span v-else>-</span></td>
               <td class="px-4 py-3">{{ row.account || '-' }}</td>
-              <td class="px-4 py-3"><span class="badge bg-gray-100 dark:bg-white/10">{{ envLabel(row.environment) }}</span></td>
+              <td class="px-4 py-3 text-center">
+                <EnvironmentBadge :environment="row.environment" />
+              </td>
               <td class="max-w-[160px] truncate px-4 py-3">{{ row.remark || '-' }}</td>
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
               <td class="px-4 py-3">

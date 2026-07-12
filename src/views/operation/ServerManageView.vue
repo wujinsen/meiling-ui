@@ -2,9 +2,15 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerLinksApi, getServerTopologyApi, listComponentApi, listProjectApi, listServerApi, saveServerLinksApi, updateServerApi } from '@/api/operation'
+import { addServerApi, checkServerApi, deleteServerApi, getServerApi, getServerLinksApi, getServerTagOptionsApi, getServerTopologyApi, listComponentApi, listProjectApi, listServerApi, saveServerLinksApi, updateServerApi } from '@/api/operation'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
+import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
+import ServerRoleSelect from '@/components/operation/ServerRoleSelect.vue'
+import ServerRoleBadge from '@/components/operation/ServerRoleBadge.vue'
+import ServerTagsInput from '@/components/operation/ServerTagsInput.vue'
+import ServerTagsBadges from '@/components/operation/ServerTagsBadges.vue'
+import AppSelect from '@/components/ui/AppSelect.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
 import ServerSshModal from '@/components/operation/ServerSshModal.vue'
@@ -20,7 +26,6 @@ import { showToast, formatDateTime } from '@/composables/useToast'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { OPERATION_ERR_SERVER_TASK_RUNNING } from '@/constants/operationErrors'
 import { createEmptyServer, type OperationComponent, type OperationProject, type OperationServer, type OperationServerTopology } from '@/types/operation'
-import { environmentI18nKey } from '@/utils/operationEnv'
 import { Activity, GitBranch, KeyRound, Link2, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -52,6 +57,7 @@ const linkComponentSearch = ref('')
 const sshModalOpen = ref(false)
 const sshServerId = ref<string | number | null>(null)
 const sshServerName = ref('')
+const tagOptions = ref<string[]>([])
 
 const canEditLinks = computed(() => assertAction(PERM.OP_SERVER_EDIT))
 const canSshManage = computed(() => assertAction(PERM.OP_SSH_MANAGE))
@@ -80,11 +86,12 @@ const filteredLinkComponents = computed(() => {
   })
 })
 
-const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, serverName: '', ip: '', environment: '' as number | '' })
+const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, serverName: '', ip: '', environment: '' as number | '', serverRole: '' as string, tag: '' as string })
 
-function envLabel(env?: number) {
-  return t(environmentI18nKey(env))
-}
+const tagFilterOptions = computed(() => [
+  { value: '', label: t('operation.serverTags.all') },
+  ...tagOptions.value.map((tag) => ({ value: tag, label: tag })),
+])
 
 function openSsh(row: OperationServer) {
   if (!guardAction(PERM.OP_SSH_MANAGE)) return
@@ -112,6 +119,8 @@ function resetQuery() {
   query.serverName = ''
   query.ip = ''
   query.environment = ''
+  query.serverRole = ''
+  query.tag = ''
   search()
 }
 
@@ -124,6 +133,8 @@ async function loadList() {
       serverName: query.serverName || undefined,
       ip: query.ip || undefined,
       environment: query.environment === '' ? undefined : (query.environment as 1 | 2 | 3 | 4),
+      serverRole: query.serverRole || undefined,
+      tag: query.tag || undefined,
     })
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.loadFailed'))
     list.value = result.data.list ?? []
@@ -159,7 +170,7 @@ async function openEdit(row: OperationServer) {
   try {
     const result = await getServerApi(row.id!)
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.loadFailed'))
-    form.value = { ...result.data }
+    form.value = { ...result.data, tags: result.data.tags ?? [] }
     modalTitle.value = t('operation.common.edit')
     modalOpen.value = true
   } catch (e) {
@@ -187,13 +198,15 @@ async function submitForm() {
       innerIp: form.value.innerIp?.trim() || undefined,
       port: form.value.port?.trim() || undefined,
       environment: Number(form.value.environment ?? 1) as 1 | 2 | 3 | 4,
+      serverRole: form.value.serverRole || 'app',
+      tags: form.value.tags ?? [],
       remark: form.value.remark?.trim() || undefined,
     }
     const result = isEdit.value ? await updateServerApi(payload) : await addServerApi(payload)
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.saveFailed'))
     showToast('success', isEdit.value ? t('operation.common.updateOk') : t('operation.common.createOk'))
     closeModal()
-    await loadList()
+    await Promise.all([loadList(), loadTagOptions()])
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.common.saveFailed'))
   } finally {
@@ -364,8 +377,22 @@ function closeTopology() {
   linkComponentSearch.value = ''
 }
 
+async function loadTagOptions() {
+  try {
+    const result = await getServerTagOptionsApi()
+    if (result.code === API_SUCCESS_CODE && Array.isArray(result.data)) {
+      tagOptions.value = result.data
+    }
+  } catch {
+    tagOptions.value = []
+  }
+}
+
 watch(() => [query.pageNum, query.pageSize], loadList)
-onMounted(loadList)
+onMounted(() => {
+  loadTagOptions()
+  loadList()
+})
 </script>
 
 <template>
@@ -385,6 +412,14 @@ onMounted(loadList)
             <span>{{ t('operation.common.environment') }}</span>
             <EnvironmentSelect v-model="query.environment" include-all />
           </div>
+          <div class="operation-filter-field">
+            <span>{{ t('operation.serverRole.label') }}</span>
+            <ServerRoleSelect v-model="query.serverRole" include-all />
+          </div>
+          <div class="operation-filter-field">
+            <span>{{ t('operation.serverTags.label') }}</span>
+            <AppSelect v-model="query.tag" :options="tagFilterOptions" />
+          </div>
           <div class="operation-form-actions">
             <button type="submit" class="btn-primary shrink-0"><Search class="h-4 w-4" /> {{ t('operation.common.search') }}</button>
             <button type="button" class="btn-ghost shrink-0" @click="resetQuery"><RefreshCw class="h-4 w-4" /> {{ t('operation.common.reset') }}</button>
@@ -402,7 +437,7 @@ onMounted(loadList)
 
     <div class="card p-5">
       <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
-        <table class="w-full min-w-[1040px] text-left text-sm">
+        <table class="w-full min-w-[1180px] text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">
             <tr>
               <th class="px-4 py-3">{{ t('operation.server.serverName') }}</th>
@@ -410,15 +445,17 @@ onMounted(loadList)
               <th class="px-4 py-3">{{ t('operation.server.innerIp') }}</th>
               <th class="px-4 py-3">{{ t('operation.server.port') }}</th>
               <th class="px-4 py-3">{{ t('operation.health.status') }}</th>
-              <th class="px-4 py-3">{{ t('operation.common.environment') }}</th>
+              <th class="px-4 py-3">{{ t('operation.serverRole.label') }}</th>
+              <th class="px-4 py-3">{{ t('operation.serverTags.label') }}</th>
+              <th class="px-4 py-3 text-center">{{ t('operation.common.environment') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.remark') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.createTime') }}</th>
               <th class="px-4 py-3 text-right">{{ t('operation.common.actions') }}</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
-            <tr v-else-if="!list.length"><td colspan="9" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
+            <tr v-if="loading"><td colspan="11" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
+            <tr v-else-if="!list.length"><td colspan="11" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
             <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
               <td class="px-4 py-3 font-medium">{{ row.serverName }}</td>
               <td class="px-4 py-3">{{ row.ip || '-' }}</td>
@@ -427,7 +464,11 @@ onMounted(loadList)
               <td class="px-4 py-3">
                 <HealthStatusBadge :status="row.status" :last-check-time="formatDateTime(row.lastCheckTime ?? undefined)" show-time />
               </td>
-              <td class="px-4 py-3"><span class="badge bg-gray-100 dark:bg-white/10">{{ envLabel(row.environment) }}</span></td>
+              <td class="px-4 py-3"><ServerRoleBadge :server-role="row.serverRole" /></td>
+              <td class="px-4 py-3"><ServerTagsBadges :tags="row.tags" size="sm" /></td>
+              <td class="px-4 py-3 text-center">
+                <EnvironmentBadge :environment="row.environment" />
+              </td>
               <td class="max-w-[160px] truncate px-4 py-3">{{ row.remark || '-' }}</td>
               <td class="px-4 py-3">{{ formatDateTime(row.createTime) }}</td>
               <td class="px-4 py-3">
@@ -471,6 +512,21 @@ onMounted(loadList)
             </FormField>
             <FormField :label="t('operation.common.environment')" horizontal>
               <EnvironmentSelect v-model="form.environment" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField :label="t('operation.serverRole.label')" horizontal class="form-field-span-2">
+              <ServerRoleSelect v-model="form.serverRole" />
+            </FormField>
+          </div>
+          <div class="form-grid-row">
+            <FormField
+              :label="t('operation.serverTags.label')"
+              horizontal
+              class="form-field-span-2"
+              :hint="t('operation.serverTags.hint')"
+            >
+              <ServerTagsInput v-model="form.tags" :suggestions="tagOptions" :show-hint="false" :show-suggestions="false" />
             </FormField>
           </div>
           <div class="form-grid-row">

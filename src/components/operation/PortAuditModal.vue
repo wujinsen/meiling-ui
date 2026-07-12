@@ -5,12 +5,12 @@ import { useRouter } from 'vue-router'
 import { getPortAuditApi } from '@/api/operation'
 import AppModal from '@/components/ui/AppModal.vue'
 import PortMatchBadge from '@/components/operation/PortMatchBadge.vue'
+import EnvironmentBadge from '@/components/operation/EnvironmentBadge.vue'
 import { assertAction, guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
 import { PERM } from '@/constants/permissions'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { OperationPortAudit } from '@/types/operation'
-import { environmentI18nKey } from '@/utils/operationEnv'
 import { Settings2 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -120,7 +120,7 @@ function goManageMatrix() {
                 <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{{ item.name }}</td>
                 <td class="px-4 py-3 tabular-nums">{{ item.actualPort || '-' }}</td>
                 <td class="px-4 py-3 tabular-nums">{{ item.expectedPort || '-' }}</td>
-                <td class="px-4 py-3">{{ t(environmentI18nKey(item.environment)) }}</td>
+                <td class="px-4 py-3"><EnvironmentBadge :environment="item.environment" size="sm" /></td>
                 <td class="px-4 py-3"><PortMatchBadge :status="item.portMatchStatus" :expected-port="item.expectedPort" /></td>
               </tr>
             </tbody>

@@ -1026,8 +1026,36 @@
     @apply dark:bg-white/10 dark:text-gray-400;
   }
 
-  .deploy-server-picker__item--active .deploy-server-picker__env-badge {
-    @apply bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-300;
+  .deploy-server-picker__item--active .operation-env-badge {
+    @apply bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300;
+  }
+
+  .operation-env-badge {
+    @apply inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-xs font-medium;
+  }
+
+  .operation-env-badge--sm {
+    @apply px-1.5 py-0.5 text-[10px];
+  }
+
+  .operation-env-badge--dev {
+    @apply bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300;
+  }
+
+  .operation-env-badge--test {
+    @apply bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300;
+  }
+
+  .operation-env-badge--pre {
+    @apply bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300;
+  }
+
+  .operation-env-badge--pro {
+    @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300;
+  }
+
+  .operation-env-badge--unknown {
+    @apply bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400;
   }
 
   .deploy-server-picker__sub {

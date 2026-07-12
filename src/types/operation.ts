@@ -33,6 +33,8 @@ export type OperationProject = {
   lastDeployCheckTime?: string | number | null
 }
 
+export type ServerRole = 'app' | 'db' | 'cache' | 'mq' | 'gateway' | 'bastion' | 'middleware' | 'other'
+
 export type OperationServer = {
   id?: number | string
   serverName?: string
@@ -40,6 +42,8 @@ export type OperationServer = {
   innerIp?: string
   port?: string
   environment?: Environment
+  serverRole?: ServerRole | string | null
+  tags?: string[]
   remark?: string
   status?: number | null
   lastCheckTime?: string | number | null
@@ -153,6 +157,8 @@ export type ServerQuery = PageQuery & {
   serverName?: string
   ip?: string
   environment?: Environment
+  serverRole?: ServerRole | string
+  tag?: string
 }
 
 export type PlatformQuery = PageQuery & {
@@ -169,7 +175,7 @@ export function createEmptyProject(): OperationProject {
 }
 
 export function createEmptyServer(): OperationServer {
-  return { serverName: '', ip: '', innerIp: '', port: '', environment: 1, remark: '' }
+  return { serverName: '', ip: '', innerIp: '', port: '', environment: 1, serverRole: 'app', tags: [], remark: '' }
 }
 
 export function createEmptyPlatform(): OperationPlatform {
