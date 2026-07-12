@@ -447,6 +447,7 @@ export default {
       saveAsTemplateOk: 'Saved as batch template',
       resumeGenerate: 'Resume generate',
       generateProgress: 'Generated {generated}, skipped {skipped} of {total}',
+      generateLive: 'Generating: {slug}',
       generateFailed: '{failed} page(s) failed; click "Resume generate" to retry',
       patchTab: 'Patch section',
       patchEditHint: 'Edit enrich patch only; merged preview updates on save',

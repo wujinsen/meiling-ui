@@ -25,6 +25,8 @@ import {
   expressStartKbIngestApi,
   prepareKbIngestApi,
   generateKbIngestDraftsApi,
+  startKbIngestGenerateApi,
+  subscribeKbIngestGenerateStream,
   generateKbIngestPlanApi,
   getKbCategoryTreeApi,
   getKbIngestJobApi,
@@ -789,6 +791,7 @@ const categoryOptions = computed(() => {
 
 const drafts = ref<KbIngestDraft[]>([])
 const draftsGenerating = ref(false)
+const generateLiveSlug = ref('')
 const activeSlug = ref('')
 const draftTab = ref<'diff' | 'edit' | 'patch'>('diff')
 const draftEditContent = ref('')
@@ -837,6 +840,91 @@ function applyGenerateResultMeta(result?: Pick<KbIngestGenerateResult, 'template
 }
 
 const lastGenerateStats = ref<{ generated: number; skipped: number; failed: number; total: number } | null>(null)
+
+async function finishGenerateFromResult(data: KbIngestGenerateResult) {
+  applyGenerateResultMeta(data)
+  drafts.value = data.drafts ?? []
+  lastGenerateStats.value = {
+    generated: data.generated ?? 0,
+    skipped: data.skipped ?? 0,
+    failed: data.failed ?? 0,
+    total: data.total ?? drafts.value.length,
+  }
+  lint.value = null
+  if (drafts.value.length) selectDraft(drafts.value[0])
+  await loadJob()
+  showToast(
+    lastGenerateStats.value.failed > 0 ? 'error' : 'success',
+    t('knowledge.ingest.generateProgress', {
+      generated: lastGenerateStats.value.generated,
+      skipped: lastGenerateStats.value.skipped,
+      total: lastGenerateStats.value.total,
+    }) +
+      (lastGenerateStats.value.failed > 0
+        ? ' ' + t('knowledge.ingest.generateFailed', { failed: lastGenerateStats.value.failed })
+        : ''),
+  )
+}
+
+async function runGenerateDraftsSync(resume: boolean) {
+  const res = await generateKbIngestDraftsApi(jobId.value!, { resume, useLlmGenerate: !templateMode.value })
+  if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
+  await finishGenerateFromResult(res.data)
+}
+
+async function runGenerateDraftsAsync(resume: boolean) {
+  const start = await startKbIngestGenerateApi(jobId.value!, { resume, useLlmGenerate: !templateMode.value })
+  if (start.code !== API_SUCCESS_CODE || !start.data?.taskId) {
+    throw new Error(start.msg || t('knowledge.ingest.opFailed'))
+  }
+  const taskId = start.data.taskId
+  lastGenerateStats.value = {
+    generated: 0,
+    skipped: 0,
+    failed: 0,
+    total: start.data.total ?? 0,
+  }
+
+  await subscribeKbIngestGenerateStream(jobId.value!, taskId, {
+    onPageStart: (d) => {
+      generateLiveSlug.value = d.slug ?? ''
+    },
+    onProgress: (p) => {
+      lastGenerateStats.value = {
+        generated: p.generated,
+        skipped: p.skipped,
+        failed: p.failed,
+        total: p.total,
+      }
+    },
+    onComplete: async (data) => {
+      applyGenerateResultMeta(data)
+      lastGenerateStats.value = {
+        generated: data.generated ?? 0,
+        skipped: data.skipped ?? 0,
+        failed: data.failed ?? 0,
+        total: data.total ?? 0,
+      }
+    },
+    onError: (msg) => {
+      throw new Error(msg)
+    },
+  })
+
+  generateLiveSlug.value = ''
+  await loadDrafts()
+  const failed = lastGenerateStats.value?.failed ?? 0
+  lint.value = null
+  await loadJob()
+  showToast(
+    failed > 0 ? 'error' : 'success',
+    t('knowledge.ingest.generateProgress', {
+      generated: lastGenerateStats.value?.generated ?? 0,
+      skipped: lastGenerateStats.value?.skipped ?? 0,
+      total: lastGenerateStats.value?.total ?? 0,
+    }) + (failed > 0 ? ' ' + t('knowledge.ingest.generateFailed', { failed }) : ''),
+  )
+}
 
 const jobCanEdit = computed(() => {
   if (fullPermission.value) return true
@@ -1174,34 +1262,27 @@ async function generateDrafts(resume = false) {
     if (!ok) return
   }
   draftsGenerating.value = true
+  generateLiveSlug.value = ''
   try {
-    const res = await generateKbIngestDraftsApi(jobId.value, { resume, useLlmGenerate: !templateMode.value })
-    if (res.code !== API_SUCCESS_CODE || !res.data) throw new Error(res.msg || t('knowledge.ingest.opFailed'))
-    applyGenerateResultMeta(res.data)
-    drafts.value = res.data.drafts ?? []
-    lastGenerateStats.value = {
-      generated: res.data.generated ?? 0,
-      skipped: res.data.skipped ?? 0,
-      failed: res.data.failed ?? 0,
-      total: res.data.total ?? drafts.value.length,
+    try {
+      await runGenerateDraftsAsync(resume)
+    } catch (sseErr) {
+      const msg = sseErr instanceof Error ? sseErr.message : ''
+      const fallback =
+        msg.includes('404') ||
+        msg.includes('405') ||
+        msg.includes('异步 generate 未启用') ||
+        msg.includes('SSE')
+      if (fallback) {
+        await runGenerateDraftsSync(resume)
+      } else {
+        throw sseErr
+      }
     }
-    lint.value = null
-    if (drafts.value.length) selectDraft(drafts.value[0])
-    await loadJob()
-    showToast(
-      lastGenerateStats.value.failed > 0 ? 'error' : 'success',
-      t('knowledge.ingest.generateProgress', {
-        generated: lastGenerateStats.value.generated,
-        skipped: lastGenerateStats.value.skipped,
-        total: lastGenerateStats.value.total,
-      }) +
-        (lastGenerateStats.value.failed > 0
-          ? ' ' + t('knowledge.ingest.generateFailed', { failed: lastGenerateStats.value.failed })
-          : ''),
-    )
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.ingest.opFailed'))
   } finally {
+    generateLiveSlug.value = ''
     draftsGenerating.value = false
   }
 }
@@ -2043,6 +2124,9 @@ onUnmounted(() => {
 
         <p v-if="lastGenerateStats" class="mt-2 text-xs text-gray-400">
           {{ t('knowledge.ingest.generateProgress', lastGenerateStats) }}
+          <span v-if="generateLiveSlug" class="ml-1 text-brand-600 dark:text-brand-300">
+            {{ t('knowledge.ingest.generateLive', { slug: generateLiveSlug }) }}
+          </span>
         </p>
 
         <div

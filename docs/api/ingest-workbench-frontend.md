@@ -110,6 +110,30 @@ POST /kb/ingest/jobs/{id}/generate?resume=false&useLlmGenerate=false
 POST /kb/ingest/jobs/{id}/draft/regenerate?slug=guides/foo&useLlmGenerate=false
 ```
 
+### 4.5 Expert 异步生成 + SSE 进度（T15f） ✅
+
+> **背景**：多页 `generate` 同步 HTTP 易超时；后端提供 `generate/start` + `generate/stream`（SSE）。前端**优先走异步**，失败时**自动回退**同步 `POST .../generate`。
+
+**流程**：
+
+```text
+POST /kb/ingest/jobs/{id}/generate/start?resume=&useLlmGenerate=
+  → { taskId, total, status }
+GET  /kb/ingest/jobs/{id}/generate/stream?taskId=
+  → SSE: started | page_start | page_done | progress | complete | error
+```
+
+| SSE event | 前端处理 |
+|-----------|----------|
+| `page_start` | 展示 `knowledge.ingest.generateLive`（当前 slug） |
+| `progress` | 更新 `generated/skipped/failed/done/total` 统计条 |
+| `complete` | 写入 `templateMode` 等元数据；`loadDrafts()` + `loadJob()` |
+| `error` | Toast；若 404/405/SSE 不可用 → 回退同步 `generate` |
+
+**回退条件**（`KnowledgeIngestWorkbenchView.generateDrafts`）：`404` / `405` / 消息含「异步 generate 未启用」/「SSE」。
+
+**鉴权**：`subscribeKbIngestGenerateStream` 使用 `fetch` + `Authorization`（与 `EventSource` 不同，可带 token）。
+
 ---
 
 ## 5. nextSteps（T19 · 前端增量）
@@ -274,6 +298,10 @@ export function generateDraftsApi(
   )
 }
 
+/** T15f · 异步启动 + SSE（优先）；见 §4.5 */
+export function startKbIngestGenerateApi(jobId, opts?)
+export function subscribeKbIngestGenerateStream(jobId, taskId, handlers, signal?)
+
 export function publishIngestJobApi(
   jobId: number,
   opts?: { sync?: boolean; approveAll?: boolean }
@@ -297,6 +325,7 @@ export function publishIngestJobApi(
 | `ingest.express.skeletonPlan` | Express Plan（快速 skeleton） |
 | `ingest.nextSteps.title` | 入库完成，建议下一步 |
 | `ingest.rawCoverage.blocked` | 该 raw 已被其它 wiki 页引用，请 enrich 或换源 |
+| `ingest.generateLive` | 正在生成：{slug} |
 
 ---
 
@@ -310,6 +339,7 @@ export function publishIngestJobApi(
 | publish/commit 后展示 `nextSteps` | ✅ | `KbWorkflowNextSteps` 已接入 commit / publish 成功路径 |
 | 重复 ingest 已 covered raw → commit 报错可读 | ✅ | `code=10012` + `conflicts[]` 表格 + `rawCoverageBlocked` 引导 |
 | Expert：`generate?resume=true` 断点续跑 | ✅ | 已实现 |
+| Expert：异步 generate + SSE 进度（T15f） | ✅ | `start` + `stream`；404/SSE 失败回退同步 generate |
 | enrich 草稿 diff：`baseline` + `patch` | ✅ | diff / patch 标签页已有 |
 
 ---
@@ -319,7 +349,7 @@ export function publishIngestJobApi(
 | 项 | 实际路径 / 行为 |
 |----|-----------------|
 | 页面组件 | `src/views/knowledge/KnowledgeIngestWorkbenchView.vue` |
-| API | `src/api/knowledge.ts`（`expressStartKbIngestApi` / `publishKbIngestApi` / `generateKbIngestDraftsApi` 等） |
+| API | `src/api/knowledge/kbIngest.ts`（`generateKbIngestDraftsApi` / **`startKbIngestGenerateApi`** / **`subscribeKbIngestGenerateStream`** 等；`knowledge.ts` re-export） |
 | Express 选项 | 列表页：`expressSkeletonPlan` → `useLlmPlan`；`templateMode` → `useLlmGenerate` |
 | Express 进度 | `src/components/knowledge/IngestExpressProgressPanel.vue`（6 步，仅请求进行中展示） |
 | nextSteps 组件 | `src/components/knowledge/KbWorkflowNextSteps.vue`（commit / publish 成功路径已接入） |
@@ -329,6 +359,7 @@ export function publishIngestJobApi(
 
 1. **Express 两阶段**：列表「一键预览」仅 `expressStartKbIngestApi`，成功后导航 `?id=&express=1`；详情页 `publishKbIngestApi` 确认入库（**总览 §8.1**）。
 2. **Expert 模板模式**：详情页 `generateDrafts` / `regenerateDraft` 传 `{ useLlmGenerate: !templateMode }`；勾选「模板模式」独立于 Express Plan checkbox。
+3. **Expert 异步 generate（T15f）**：`generateDrafts()` 先 `startKbIngestGenerateApi` + SSE；不可用时回退 `generateKbIngestDraftsApi`（同步）。
 
 ---
 
@@ -348,6 +379,7 @@ export function publishIngestJobApi(
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-12 | **T15f** §4.5 异步 generate + SSE；`kbIngest.ts` `start`/`stream`；Expert 生成进度 `generateLive` i18n |
 | 2026-06-26 | §6 对齐 `code=10012` + `IngestRawConflictVo`；§11 I1/I3 验收更新 |
 | 2026-06-28 | §6 对齐 KNOWLEDGE_API commit 门禁 + ops §2.6；I3/B4 已结论 |
 | 2026-06-28 | 代码审计：§11 验收改状态表；新增 §12 落点、§13 后端确认 |

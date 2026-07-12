@@ -1042,6 +1042,16 @@ export type KbIngestGenerateResult = {
   drafts: KbIngestDraft[]
 }
 
+/** T15f · POST /kb/ingest/jobs/{id}/generate/start */
+export type KbIngestGenerateStartResult = {
+  taskId: string
+  jobId: number | string
+  total: number
+  resume: boolean
+  templateMode?: boolean
+  status: string
+}
+
 /** Ingest 批次模板（T15e） */
 export type KbIngestTemplate = {
   id: number | string

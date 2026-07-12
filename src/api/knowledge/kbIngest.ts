@@ -5,6 +5,7 @@ import type {
   KbIngestDraft,
   KbIngestExpressStartResult,
   KbIngestGenerateResult,
+  KbIngestGenerateStartResult,
   KbIngestJob,
   KbIngestJobCreateRequest,
   KbIngestJobFromTemplateRequest,
@@ -181,7 +182,7 @@ export async function exportKbIngestAgentPromptApi(id: number | string) {
 
 /* ---- T15b 生成 / 审阅 ---- */
 
-/** POST /kb/ingest/jobs/{id}/generate —— 按 plan 生成多页草稿；resume 断点续跑 */
+/** POST /kb/ingest/jobs/{id}/generate —— 按 plan 生成多页草稿（同步）；resume 断点续跑 */
 export async function generateKbIngestDraftsApi(
   id: number | string,
   opts?: { resume?: boolean; useLlmGenerate?: boolean },
@@ -194,6 +195,126 @@ export async function generateKbIngestDraftsApi(
     })}`,
     { method: 'POST', timeoutMs: 300_000 },
   )
+}
+
+/** T15f · POST /kb/ingest/jobs/{id}/generate/start —— 异步启动多页生成 */
+export async function startKbIngestGenerateApi(
+  id: number | string,
+  opts?: { resume?: boolean; useLlmGenerate?: boolean },
+) {
+  const { resume = false, useLlmGenerate = true } = opts ?? {}
+  return request<KbIngestGenerateStartResult>(
+    `${KB_BASE}/ingest/jobs/${toEntityId(id)}/generate/start${buildQuery({
+      resume: String(resume),
+      useLlmGenerate: String(useLlmGenerate),
+    })}`,
+    { method: 'POST' },
+  )
+}
+
+export type KbIngestGenerateSseHandlers = {
+  onStarted?: (data: Record<string, unknown>) => void
+  onPageStart?: (data: { index?: number; slug?: string; action?: string }) => void
+  onPageDone?: (data: { slug?: string; outcome?: string; message?: string }) => void
+  onProgress?: (data: {
+    generated: number
+    skipped: number
+    failed: number
+    done: number
+    total: number
+  }) => void
+  onComplete?: (data: Partial<KbIngestGenerateResult>) => void
+  onError?: (message: string) => void
+}
+
+function parseSseBlocks(buffer: string, onBlock: (event: string, data: string) => void): string {
+  const parts = buffer.split('\n\n')
+  const remainder = parts.pop() ?? ''
+  for (const block of parts) {
+    if (!block.trim()) continue
+    let event = 'message'
+    const dataLines: string[] = []
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim()
+      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim())
+    }
+    if (dataLines.length) onBlock(event, dataLines.join('\n'))
+  }
+  return remainder
+}
+
+/** T15f · GET /kb/ingest/jobs/{id}/generate/stream —— fetch + SSE 解析（带 Authorization） */
+export async function subscribeKbIngestGenerateStream(
+  id: number | string,
+  taskId: string,
+  handlers: KbIngestGenerateSseHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  const { getToken } = await import('@/utils/authSession')
+  const base = import.meta.env.VITE_API_BASE_URL ?? ''
+  const url = `${base}${KB_BASE}/ingest/jobs/${toEntityId(id)}/generate/stream${buildQuery({ taskId })}`
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers.Authorization = token
+
+  const res = await fetch(url, { headers, signal })
+  if (!res.ok) {
+    throw new Error(`SSE 连接失败 (HTTP ${res.status})`)
+  }
+  if (!res.body) {
+    throw new Error('SSE 响应无 body')
+  }
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  const dispatch = (event: string, data: string) => {
+    let parsed: Record<string, unknown> = {}
+    try {
+      parsed = JSON.parse(data) as Record<string, unknown>
+    } catch {
+      parsed = { message: data }
+    }
+    switch (event) {
+      case 'started':
+        handlers.onStarted?.(parsed)
+        break
+      case 'page_start':
+        handlers.onPageStart?.(parsed as { index?: number; slug?: string; action?: string })
+        break
+      case 'page_done':
+        handlers.onPageDone?.(parsed as { slug?: string; outcome?: string; message?: string })
+        break
+      case 'progress':
+        handlers.onProgress?.(parsed as {
+          generated: number
+          skipped: number
+          failed: number
+          done: number
+          total: number
+        })
+        break
+      case 'complete':
+        handlers.onComplete?.(parsed as Partial<KbIngestGenerateResult>)
+        break
+      case 'error': {
+        const msg = typeof parsed.message === 'string' ? parsed.message : 'generate failed'
+        handlers.onError?.(msg)
+        throw new Error(msg)
+      }
+      default:
+        break
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    buffer = parseSseBlocks(buffer, dispatch)
+  }
+  buffer = parseSseBlocks(buffer + '\n\n', dispatch)
 }
 
 /** GET /kb/ingest/jobs/{id}/drafts —— 草稿列表 */

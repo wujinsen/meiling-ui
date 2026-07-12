@@ -466,6 +466,7 @@ export default {
       saveAsTemplateOk: '已保存为批次模板',
       resumeGenerate: '续跑生成',
       generateProgress: '本次生成 {generated} 页，跳过 {skipped} 页（共 {total} 页）',
+      generateLive: '正在生成：{slug}',
       generateFailed: '{failed} 页生成失败，可点「续跑生成」重试',
       patchTab: 'Patch 段落',
       patchEditHint: '仅编辑 enrich 追加段落；保存后自动合并到预览',

@@ -447,6 +447,7 @@ export default {
       saveAsTemplateOk: 'バッチテンプレートに保存しました',
       resumeGenerate: '続きから生成',
       generateProgress: '生成 {generated} / スキップ {skipped}（全 {total} ページ）',
+      generateLive: '生成中：{slug}',
       generateFailed: '{failed} ページ生成失敗。「続き生成」で再試行できます',
       patchTab: 'Patch 段落',
       patchEditHint: 'enrich 追加分のみ編集；保存でプレビューにマージ',
