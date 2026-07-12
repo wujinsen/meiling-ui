@@ -9,7 +9,9 @@ import OperationLinkedServersFormSection from '@/components/operation/OperationL
 import OperationLinkedServersCell from '@/components/operation/OperationLinkedServersCell.vue'
 import OperationOrphanBadge from '@/components/operation/OperationOrphanBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import OperationRelationChips from '@/components/operation/OperationRelationChips.vue'
 import OperationServerLinksModal from '@/components/operation/OperationServerLinksModal.vue'
+import RelationDrawer, { type RelationDrawerTab } from '@/components/operation/RelationDrawer.vue'
 import ServerDetailModal from '@/components/operation/ServerDetailModal.vue'
 import LinkedServersPickModal from '@/components/operation/LinkedServersPickModal.vue'
 import PortAuditModal from '@/components/operation/PortAuditModal.vue'
@@ -50,6 +52,9 @@ const linksOpen = ref(false)
 const linksSaving = ref(false)
 const linksRow = ref<OperationComponent | null>(null)
 const linksServerIds = ref<string[]>([])
+const relationOpen = ref(false)
+const relationRow = ref<OperationComponent | null>(null)
+const relationTab = ref<RelationDrawerTab>('servers')
 
 const { serverCache, enrichRowsWithLinks, hydrateRows } = useOperationServerLabelCache()
 const {
@@ -186,6 +191,18 @@ function closeComponentLinks() {
   linksOpen.value = false
   linksRow.value = null
   linksServerIds.value = []
+}
+
+function openRelationDrawer(row: OperationComponent, tab: RelationDrawerTab = 'servers') {
+  if (row.id == null) return
+  relationRow.value = row
+  relationTab.value = tab
+  relationOpen.value = true
+}
+
+async function onRelationEditLinks() {
+  relationOpen.value = false
+  if (relationRow.value) await openComponentLinks(relationRow.value)
 }
 
 async function confirmComponentLinks(ids: string[]) {
@@ -363,6 +380,7 @@ onMounted(loadList)
             <tr>
               <th class="px-4 py-3">{{ t('operation.component.componentName') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.linkServer') }}</th>
+              <th class="px-4 py-3">{{ t('operation.relations.column') }}</th>
               <th class="px-4 py-3">{{ t('operation.component.port') }}</th>
               <th class="px-4 py-3">{{ t('operation.port.status') }}</th>
               <th class="px-4 py-3">{{ t('operation.component.version') }}</th>
@@ -374,8 +392,8 @@ onMounted(loadList)
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
-            <tr v-else-if="!list.length"><td colspan="10" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
+            <tr v-if="loading"><td colspan="11" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
+            <tr v-else-if="!list.length"><td colspan="11" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
             <tr
               v-for="row in list"
               v-else
@@ -396,6 +414,14 @@ onMounted(loadList)
                   clickable
                   @view-primary="openLinkedServerView(row, 'primary')"
                   @view-more="openLinkedServerView(row, 'all')"
+                />
+              </td>
+              <td class="px-4 py-3">
+                <OperationRelationChips
+                  :server-count="row.serverCount"
+                  :project-count="row.projectCount"
+                  @open-servers="openRelationDrawer(row, 'servers')"
+                  @open-projects="openRelationDrawer(row, 'projects')"
                 />
               </td>
               <td class="px-4 py-3">{{ row.port || '-' }}</td>
@@ -532,6 +558,16 @@ onMounted(loadList)
       :server-cache="serverCache"
       @select="onPickServer"
       @close="closeServerPick"
+    />
+
+    <RelationDrawer
+      :open="relationOpen"
+      entity-type="component"
+      :entity-id="relationRow?.id ?? null"
+      :entity-name="relationRow?.componentName"
+      :initial-tab="relationTab"
+      @close="relationOpen = false"
+      @edit-links="onRelationEditLinks"
     />
   </div>
 </template>

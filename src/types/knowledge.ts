@@ -167,6 +167,8 @@ export type KbPlatformLlmConfig = {
   /** database | yaml_fallback */
   source: string
   persistedInDatabase?: boolean
+  /** 是否已配置 KB_LLM_CONFIG_SECRET，可加密入库 api-key */
+  encryptionReady?: boolean
   updateTime?: string
 }
 

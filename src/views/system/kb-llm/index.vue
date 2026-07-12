@@ -19,6 +19,10 @@ import type {
   KbPlatformLlmConfigSaveRequest,
   KbPlatformLlmConfigTestResult,
 } from '@/types/knowledge'
+import {
+  coerceKbLlmEnabled,
+  resolveKbLlmRuntimeAvailable,
+} from '@/utils/kbPlatformLlm'
 import { AlertTriangle, Cpu, KeyRound, Loader2, PlugZap, RefreshCw, Save, Trash2, X } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -51,6 +55,8 @@ const extraModelDraft = ref('')
 const testResult = ref<KbPlatformLlmConfigTestResult | null>(null)
 const skipProviderPreset = ref(true)
 
+type LlmStatusKind = 'disabled' | 'ready' | 'needsKey'
+
 const form = reactive({
   enabled: false,
   provider: 'glm' as LlmProvider,
@@ -59,6 +65,33 @@ const form = reactive({
   temperature: 0.3,
   timeoutSeconds: 90,
   extraModels: [] as string[],
+})
+
+const llmStatus = computed((): { kind: LlmStatusKind; label: string } => {
+  if (!form.enabled) {
+    return { kind: 'disabled', label: t('system.kbLlm.status.disabled') }
+  }
+  if (!configLoaded.value?.apiKeyConfigured) {
+    return { kind: 'needsKey', label: t('system.kbLlm.status.unavailable') }
+  }
+  return { kind: 'ready', label: t('system.kbLlm.status.available') }
+})
+
+const isDirty = computed(() => {
+  const loaded = configLoaded.value
+  if (!loaded) return false
+  return (
+    form.enabled !== coerceKbLlmEnabled(loaded.enabled)
+    || form.provider !== ((PROVIDER_OPTIONS.includes(loaded.provider as LlmProvider)
+      ? loaded.provider
+      : 'custom') as LlmProvider)
+    || form.baseUrl !== (loaded.baseUrl ?? '')
+    || form.model !== (loaded.model ?? '')
+    || form.temperature !== (loaded.temperature ?? 0.3)
+    || form.timeoutSeconds !== (loaded.timeoutSeconds ?? 90)
+    || JSON.stringify(form.extraModels) !== JSON.stringify(loaded.extraModels ?? [])
+    || Boolean(apiKeyInput.value.trim())
+  )
 })
 
 const apiKeyPlaceholder = computed(() => {
@@ -93,9 +126,13 @@ const modelOptions = computed(() => {
 })
 
 function applyConfig(data: KbPlatformLlmConfig) {
-  configLoaded.value = data
+  configLoaded.value = {
+    ...data,
+    enabled: coerceKbLlmEnabled(data.enabled),
+    available: resolveKbLlmRuntimeAvailable(data.enabled, data.apiKeyConfigured, data.available),
+  }
   skipProviderPreset.value = true
-  form.enabled = data.enabled
+  form.enabled = coerceKbLlmEnabled(data.enabled)
   form.provider = (PROVIDER_OPTIONS.includes(data.provider as LlmProvider)
     ? data.provider
     : 'custom') as LlmProvider
@@ -113,7 +150,7 @@ function applyConfig(data: KbPlatformLlmConfig) {
 
 function buildSavePayload(clearApiKey = false): KbPlatformLlmConfigSaveRequest {
   const payload: KbPlatformLlmConfigSaveRequest = {
-    enabled: form.enabled,
+    enabled: coerceKbLlmEnabled(form.enabled),
     provider: form.provider,
     baseUrl: form.baseUrl.trim(),
     model: form.model.trim(),
@@ -261,6 +298,17 @@ async function saveConfig() {
   }
 }
 
+async function onEnabledChange(next: boolean) {
+  if (next === form.enabled) return
+  const ok = await confirm({
+    title: t(next ? 'system.kbLlm.confirm.enableTitle' : 'system.kbLlm.confirm.disableTitle'),
+    message: t(next ? 'system.kbLlm.confirm.enableMessage' : 'system.kbLlm.confirm.disableMessage'),
+    confirmText: t(next ? 'system.kbLlm.confirm.enableConfirm' : 'system.kbLlm.confirm.disableConfirm'),
+    danger: !next,
+  })
+  if (ok) form.enabled = next
+}
+
 async function clearDbKey() {
   if (!guardAction(PERM.KB_PLATFORM_LLM)) return
   if (!(await confirm({ message: t('system.kbLlm.action.clearKeyConfirm') }))) return
@@ -344,18 +392,30 @@ onMounted(loadConfig)
 
       <template v-else-if="configLoaded">
         <div
+          v-if="isDirty"
+          class="mb-4 flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-200"
+        >
+          <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{{ t('system.kbLlm.unsavedHint') }}</span>
+        </div>
+
+        <div
           class="mb-5 flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 dark:border-white/10"
-          :class="configLoaded.available
-            ? 'border-emerald-200 bg-emerald-50/80 dark:bg-emerald-500/10'
-            : 'border-gray-200 bg-gray-50/80 dark:bg-white/5'"
+          :class="{
+            'border-gray-200 bg-gray-50/80 dark:bg-white/5': llmStatus.kind === 'disabled',
+            'border-emerald-200 bg-emerald-50/80 dark:bg-emerald-500/10': llmStatus.kind === 'ready',
+            'border-amber-200 bg-amber-50/80 dark:bg-amber-500/10': llmStatus.kind === 'needsKey',
+          }"
         >
           <span
             class="badge"
-            :class="configLoaded.available
-              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-              : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300'"
+            :class="{
+              'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300': llmStatus.kind === 'disabled',
+              'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300': llmStatus.kind === 'ready',
+              'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300': llmStatus.kind === 'needsKey',
+            }"
           >
-            {{ configLoaded.available ? t('system.kbLlm.status.available') : t('system.kbLlm.status.unavailable') }}
+            {{ llmStatus.label }}
           </span>
           <span class="badge bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300">
             {{ sourceLabel }}
@@ -369,7 +429,12 @@ onMounted(loadConfig)
           <div class="form-grid-row">
             <FormField :label="t('system.kbLlm.field.enabled')" horizontal class="form-field-span-2">
               <div class="flex items-center gap-3">
-                <AppSwitch v-model="form.enabled" :label="t('system.kbLlm.field.enabled')" />
+                <AppSwitch
+                  v-model="form.enabled"
+                  :label="t('system.kbLlm.field.enabled')"
+                  confirm-before-change
+                  @change="onEnabledChange"
+                />
                 <span class="text-sm text-gray-500 dark:text-gray-400">
                   {{ form.enabled ? t('system.kbLlm.enabledOn') : t('system.kbLlm.enabledOff') }}
                 </span>

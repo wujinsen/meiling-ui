@@ -8,6 +8,9 @@ import type {
   OperationServer,
   OperationServerSsh,
   OperationServerTopology,
+  OperationTopologyGraph,
+  OperationRelations,
+  OperationRelationEntityType,
   OperationServerLinks,
   OperationProjectLinks,
   OperationComponentLinks,
@@ -81,6 +84,10 @@ export const updateServerApi = server.update
 export const deleteServerApi = server.remove
 export const getServerTopologyApi = (id: number | string) =>
   request<OperationServerTopology>(`/operation/server/${id}/topology`, { method: 'GET' })
+export const getTopologyGraphApi = () =>
+  request<OperationTopologyGraph>('/operation/topology', { method: 'GET' })
+export const getRelationsApi = (entityType: OperationRelationEntityType, id: number | string) =>
+  request<OperationRelations>(`/operation/relations/${entityType}/${id}`, { method: 'GET' })
 export const checkServerApi = (id: number | string) =>
   request<OperationServer | number>(`/operation/server/${id}/check`, { method: 'POST' })
 export const getServerLinksApi = (id: number | string) =>

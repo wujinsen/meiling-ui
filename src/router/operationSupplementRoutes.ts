@@ -12,6 +12,17 @@ export const OPERATION_PORT_MATRIX_ROUTE: RouteRecordRaw = {
   },
 }
 
+/** SVR-25b：运维拓扑图（菜单 407 或 supplement） */
+export const OPERATION_TOPOLOGY_ROUTE: RouteRecordRaw = {
+  path: 'topology',
+  name: 'OperationTopology',
+  component: () => import('@/views/operation/OperationTopologyGraphView.vue'),
+  meta: {
+    titleKey: 'operation.topology.title',
+    perms: 'operation:server:list',
+  },
+}
+
 /** 任务历史（无独立菜单种子时，可由部署中心跳转） */
 export const OPERATION_TASK_HISTORY_ROUTE: RouteRecordRaw = {
   path: 'task',
@@ -25,6 +36,7 @@ export const OPERATION_TASK_HISTORY_ROUTE: RouteRecordRaw = {
 
 const SUPPLEMENT_ROUTES: RouteRecordRaw[] = [
   OPERATION_PORT_MATRIX_ROUTE,
+  OPERATION_TOPOLOGY_ROUTE,
   OPERATION_TASK_HISTORY_ROUTE,
 ]
 
@@ -41,6 +53,21 @@ const OPERATION_PORT_MATRIX_MENU: MenuVo = {
   perms: 'operation:port-matrix:list',
   orderNum: 6,
   meta: { titleKey: 'operation.portMatrix.title', icon: 'table' },
+}
+
+const OPERATION_TOPOLOGY_MENU: MenuVo = {
+  id: 'op-supplement-topology',
+  menuName: '拓扑图',
+  menuNameEn: 'Topology',
+  menuNameJa: 'トポロジ図',
+  name: 'OperationTopology',
+  path: 'topology',
+  component: 'operation/topology/index',
+  menuType: 'C',
+  icon: 'git-branch',
+  perms: 'operation:server:list',
+  orderNum: 7,
+  meta: { titleKey: 'operation.topology.title', icon: 'git-branch' },
 }
 
 const OPERATION_TASK_HISTORY_MENU: MenuVo = {
@@ -80,6 +107,19 @@ function hasPortMatrixMenu(children: MenuVo[]) {
   })
 }
 
+function hasTopologyMenu(children: MenuVo[]) {
+  return children.some((child) => {
+    const path = normalizeMenuPath(child.path)
+    const component = (child.component || '').replace(/\/index$/i, '')
+    return (
+      path === 'topology'
+      || component === 'operation/topology'
+      || child.name === 'OperationTopology'
+      || child.routeName === 'OperationTopology'
+    )
+  })
+}
+
 function hasTaskHistoryMenu(children: MenuVo[]) {
   return children.some((child) => {
     const path = normalizeMenuPath(child.path)
@@ -104,6 +144,7 @@ export function mergeOperationSupplementMenus(menus: MenuVo[]): MenuVo[] {
     if (menu.menuType === 'M' && children?.length && isOperationParentMenu(menu)) {
       const extras: MenuVo[] = []
       if (!hasPortMatrixMenu(children)) extras.push(OPERATION_PORT_MATRIX_MENU)
+      if (!hasTopologyMenu(children)) extras.push(OPERATION_TOPOLOGY_MENU)
       if (!hasTaskHistoryMenu(children)) extras.push(OPERATION_TASK_HISTORY_MENU)
       if (extras.length) {
         return {

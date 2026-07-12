@@ -13,6 +13,8 @@ import ServerTagsBadges from '@/components/operation/ServerTagsBadges.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
 import HealthStatusBadge from '@/components/operation/HealthStatusBadge.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
+import OperationRelationChips from '@/components/operation/OperationRelationChips.vue'
+import RelationDrawer, { type RelationDrawerTab } from '@/components/operation/RelationDrawer.vue'
 import ServerSshModal from '@/components/operation/ServerSshModal.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormField from '@/components/ui/FormField.vue'
@@ -45,6 +47,9 @@ const topologyLoading = ref(false)
 const topologyTitle = ref('')
 const topology = ref<OperationServerTopology | null>(null)
 const topologyServerId = ref<string | number | null>(null)
+const relationOpen = ref(false)
+const relationRow = ref<OperationServer | null>(null)
+const relationTab = ref<RelationDrawerTab>('projects')
 const linksEditing = ref(false)
 const linksLoading = ref(false)
 const linksSaving = ref(false)
@@ -261,25 +266,25 @@ async function checkRow(row: OperationServer) {
   }
 }
 
-async function openTopology(row: OperationServer) {
+async function openRelationDrawer(row: OperationServer, tab: RelationDrawerTab = 'projects') {
   if (row.id == null) return
+  relationRow.value = row
+  relationTab.value = tab
+  relationOpen.value = true
+}
+
+async function onRelationEditLinks() {
+  relationOpen.value = false
+  if (relationRow.value?.id == null) return
+  topologyServerId.value = relationRow.value.id
+  topologyTitle.value = relationRow.value.serverName || String(relationRow.value.id)
   topologyOpen.value = true
-  topologyLoading.value = true
-  topologyTitle.value = row.serverName || String(row.id)
-  topologyServerId.value = row.id
-  linksEditing.value = false
   topology.value = null
-  try {
-    const result = await getServerTopologyApi(row.id)
-    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.server.topologyFailed'))
-    topology.value = result.data
-  } catch (e) {
-    showToast('error', e instanceof Error ? e.message : t('operation.server.topologyFailed'))
-    topologyOpen.value = false
-    topologyServerId.value = null
-  } finally {
-    topologyLoading.value = false
-  }
+  await startEditLinks()
+}
+
+async function openTopology(row: OperationServer) {
+  await openRelationDrawer(row, 'projects')
 }
 
 async function reloadTopology() {
@@ -447,6 +452,7 @@ onMounted(() => {
               <th class="px-4 py-3">{{ t('operation.health.status') }}</th>
               <th class="px-4 py-3">{{ t('operation.serverRole.label') }}</th>
               <th class="px-4 py-3">{{ t('operation.serverTags.label') }}</th>
+              <th class="px-4 py-3">{{ t('operation.relations.column') }}</th>
               <th class="px-4 py-3 text-center">{{ t('operation.common.environment') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.remark') }}</th>
               <th class="px-4 py-3">{{ t('operation.common.createTime') }}</th>
@@ -454,8 +460,8 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-if="loading"><td colspan="11" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
-            <tr v-else-if="!list.length"><td colspan="11" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
+            <tr v-if="loading"><td colspan="12" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.loading') }}</td></tr>
+            <tr v-else-if="!list.length"><td colspan="12" class="px-4 py-10 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
             <tr v-for="row in list" v-else :key="String(row.id)" class="border-t border-gray-50 dark:border-white/5 hover:bg-gray-50/80 dark:hover:bg-white/5">
               <td class="px-4 py-3 font-medium">{{ row.serverName }}</td>
               <td class="px-4 py-3">{{ row.ip || '-' }}</td>
@@ -466,6 +472,14 @@ onMounted(() => {
               </td>
               <td class="px-4 py-3"><ServerRoleBadge :server-role="row.serverRole" /></td>
               <td class="px-4 py-3"><ServerTagsBadges :tags="row.tags" size="sm" /></td>
+              <td class="px-4 py-3">
+                <OperationRelationChips
+                  :project-count="row.projectCount"
+                  :component-count="row.componentCount"
+                  @open-projects="openRelationDrawer(row, 'projects')"
+                  @open-components="openRelationDrawer(row, 'components')"
+                />
+              </td>
               <td class="px-4 py-3 text-center">
                 <EnvironmentBadge :environment="row.environment" />
               </td>
@@ -645,6 +659,16 @@ onMounted(() => {
         </template>
       </template>
     </AppModal>
+
+    <RelationDrawer
+      :open="relationOpen"
+      entity-type="server"
+      :entity-id="relationRow?.id ?? null"
+      :entity-name="relationRow?.serverName"
+      :initial-tab="relationTab"
+      @close="relationOpen = false"
+      @edit-links="onRelationEditLinks"
+    />
 
     <ServerSshModal
       :open="sshModalOpen"

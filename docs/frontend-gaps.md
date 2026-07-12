@@ -9,13 +9,26 @@
 
 | 状态 | 说明 |
 |------|------|
-| ✅ **无待开发项** | S0–S13、SVR-21d、S6-b 多选关联、S6-b+ 列表/表单展示均已落地 |
+| 🟡 **SVR-25 / SVR-28 首版已落地** | 拓扑图页、RelationDrawer、三列表 chips 已接；部署/任务/端口矩阵/平台页待接（28e） |
+
+| 优先级 | 项 | 前端 | 后端 / 菜单 |
+|--------|-----|------|-------------|
+| **P1** | **SVR-25b** `TopologyGraphView` | ✅ `OperationTopologyGraphView`（ECharts + 筛选 + 详情） | `GET /operation/topology` ✅ |
+| **P1** | **SVR-25c** 拓扑菜单 | supplement 路由已注册 | 执行 `docs/sql/28_operation_topology_menu.sql` 后重新登录 |
+| **P1** | **SVR-28c** `RelationDrawer` | ✅ 组件 + 服务器/项目/组件列表 chips | `GET /operation/relations/{type}/{id}` ✅ |
+| P2 | **SVR-25d** 拓扑弹窗增强 | 并入 RelationDrawer（部署/端口/任务） | topology VO 补字段 |
+| P2 | **SVR-28d** 服务器拓扑按钮 | ✅ 改为打开 RelationDrawer | — |
+| P2 | **SVR-28e** 部署/任务/端口矩阵/平台 | 实体名可点 → RelationDrawer | — |
+| P2 | **SVR-28f** 拓扑页实体搜索下拉 | 关键字筛选已有；下拉 + `?focus=` 深链待 polish | — |
+| P2 | **SVR-26b** 项目组件依赖维护 | 待做 | `component-links` API ✅ |
 
 | 类型 | 项 | 负责方 |
 |------|-----|--------|
 | 联调 | `POST` create 接受 `serverIds` 并写 N:N | **后端** |
 | 联调 | `PUT/GET .../links` 顺序与主 `serverId`/`serverIp` 同步 | **后端** |
 | 可选 | `POST` 返回新建 `id`，便于失败时补调 `PUT links` | 后端增强 |
+
+设计文档：[`design/server-topology-visualization.md`](design/server-topology-visualization.md) · [`design/operation-relations-navigation.md`](design/operation-relations-navigation.md)（镜像自 distribute）
 
 详见 [api/operation-frontend.md](api/operation-frontend.md) §0 · §15 · §15.1。
 
@@ -61,9 +74,9 @@
 
 ## 5. 建议执行顺序（仅前端可推进）
 
-1. **Sync fail 点验**：测试空间故意制造 fail，用「仅显示失败」验收 O4（P0）
-2. **LLM 关闭态点验**：关 `kb.llm.enabled` 看治理页 AI / 一键禁用（P1）
-3. **平台 LLM DB Key**：配置 `KB_LLM_CONFIG_SECRET` 后补测 T19d 入库 / 清除 UI（P1）
-4. **Lint 去兜底**：后端全量返回 `current`/`size` 后去掉裸数组客户端 slice（P2）
+1. **执行拓扑菜单 SQL** → 重新登录 → 验收拓扑图页（SVR-25c）
+2. **部署/任务/端口矩阵/平台** 实体名 → RelationDrawer（SVR-28e）
+3. **Sync fail 点验**（P0 O4）
+4. **LLM 关闭态 / 平台 LLM DB Key** 点验（P1）
 
-**运营模块**：前端无需再排期；联调按 [operation-frontend.md §15.1](api/operation-frontend.md#151-后端联调要点关联保存后-ui-必对) 与后端对齐即可。
+**运营模块**：SVR-25/28 首版已可联调；完整验收见设计文档 §验收用例。

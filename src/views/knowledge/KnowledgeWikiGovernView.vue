@@ -12,6 +12,7 @@ import GovernSyncPanel from '@/components/knowledge/govern/GovernSyncPanel.vue'
 import KbGovernWorkflowLinks from '@/components/knowledge/govern/KbGovernWorkflowLinks.vue'
 import {
   getKbWikiGovernOptionsApi,
+  getKbPlatformLlmConfigApi,
   lintWikiSpaceApi,
   wikiGovernAiBatchFixApi,
   wikiGovernAutoFixApi,
@@ -41,6 +42,8 @@ import {
   resolveManualKinds,
   resolveScriptKinds,
 } from '@/utils/kbWikiGovern'
+import { kbLlmSettingsRoute } from '@/utils/kbWorkflowRoutes'
+import { coerceKbLlmEnabled, mergeGovernLlmAvailable } from '@/utils/kbPlatformLlm'
 
 type GovernPhase = 'idle' | 'linted' | 'fixing' | 'relinted' | 'synced'
 
@@ -93,9 +96,18 @@ function selectedIssues(): KbWikiLintIssue[] {
 async function loadGovernOptions() {
   optionsLoading.value = true
   try {
-    const res = await getKbWikiGovernOptionsApi()
-    if (res.code === API_SUCCESS_CODE && res.data) {
-      llmOptions.value = res.data
+    const [optRes, cfgRes] = await Promise.all([
+      getKbWikiGovernOptionsApi(),
+      getKbPlatformLlmConfigApi(),
+    ])
+    const platformEnabled = cfgRes.code === API_SUCCESS_CODE && cfgRes.data
+      ? coerceKbLlmEnabled(cfgRes.data.enabled)
+      : true
+    if (optRes.code === API_SUCCESS_CODE && optRes.data) {
+      llmOptions.value = {
+        ...optRes.data,
+        llmAvailable: mergeGovernLlmAvailable(optRes.data.llmAvailable, platformEnabled),
+      }
     }
   } catch {
     llmOptions.value = null
@@ -321,6 +333,19 @@ function openWikiEdit(issue: KbWikiLintIssue) {
   )
 }
 
+function openLlmSettings() {
+  void router.push(kbLlmSettingsRoute())
+}
+
+const llmStatusLabel = computed(() => {
+  const o = llmOptions.value
+  if (!o?.llmAvailable) return t('knowledge.wikiGovern.llmUnavailable')
+  const provider = o.provider?.trim()
+  return provider
+    ? t('knowledge.wikiGovern.llmProviderKb', { provider })
+    : t('knowledge.wikiGovern.llmProviderKbDefault')
+})
+
 function applyRouteQuery() {
   const qSpace = route.query.spaceId
   if (typeof qSpace === 'string' && qSpace.trim()) {
@@ -374,6 +399,24 @@ onMounted(async () => {
         </button>
       </div>
     </header>
+
+    <div
+      v-if="!optionsLoading && canEdit && !spaceRequired"
+      class="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
+      :class="llmReady
+        ? 'border border-emerald-200 bg-emerald-50/90 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200'
+        : 'border border-amber-200 bg-amber-50/90 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'"
+    >
+      <span class="font-medium">{{ llmStatusLabel }}</span>
+      <button
+        v-if="!llmReady"
+        type="button"
+        class="text-brand-600 underline dark:text-brand-400"
+        @click="openLlmSettings"
+      >
+        {{ t('knowledge.wikiGovern.openLlmSettings') }}
+      </button>
+    </div>
 
     <p v-if="spaceRequired" class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
       {{ t('knowledge.wikiGovern.pickSpace') }}

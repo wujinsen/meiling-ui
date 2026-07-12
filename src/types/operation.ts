@@ -31,6 +31,8 @@ export type OperationProject = {
   portMatchStatus?: number | null
   deployRunning?: boolean | null
   lastDeployCheckTime?: string | number | null
+  serverCount?: number | null
+  componentCount?: number | null
 }
 
 export type ServerRole = 'app' | 'db' | 'cache' | 'mq' | 'gateway' | 'bastion' | 'middleware' | 'other'
@@ -54,6 +56,8 @@ export type OperationServer = {
   connPref?: string | null
   sshConfigured?: boolean | null
   uploadAllowedRoots?: string | null
+  projectCount?: number | null
+  componentCount?: number | null
 }
 
 export type OperationTopologyProject = {
@@ -85,6 +89,110 @@ export type OperationServerTopology = {
   server?: OperationServer
   projects?: OperationTopologyProject[]
   components?: OperationTopologyComponent[]
+}
+
+export type OperationTopologyServerNode = {
+  id: string
+  serverId?: number
+  serverName?: string
+  ip?: string
+  innerIp?: string
+  environment?: Environment
+  serverRole?: string | null
+  tags?: string[]
+  status?: number | null
+}
+
+export type OperationTopologyProjectNode = {
+  id: string
+  projectId?: number
+  projectName?: string
+  port?: string
+  environment?: Environment
+  deployRunning?: boolean | null
+  portMatchStatus?: number | null
+}
+
+export type OperationTopologyComponentNode = {
+  id: string
+  componentId?: number
+  componentName?: string
+  port?: string
+  version?: string
+  environment?: Environment
+  status?: number | null
+  portMatchStatus?: number | null
+}
+
+export type OperationTopologyLink = {
+  source: string
+  target: string
+  type?: 'deploys' | 'depends_on' | string
+}
+
+export type OperationTopologyGraph = {
+  servers?: OperationTopologyServerNode[]
+  projects?: OperationTopologyProjectNode[]
+  components?: OperationTopologyComponentNode[]
+  links?: OperationTopologyLink[]
+}
+
+export type OperationRelationEntityType = 'server' | 'project' | 'component'
+
+export type OperationRelationEntity = {
+  entityType?: OperationRelationEntityType
+  id?: number
+  name?: string
+  environment?: Environment
+}
+
+export type OperationRelationServerItem = {
+  id?: number
+  serverName?: string
+  ip?: string
+  innerIp?: string
+  environment?: Environment
+  serverRole?: string | null
+  tags?: string[]
+  status?: number | null
+  primary?: boolean
+}
+
+export type OperationRelationProjectItem = {
+  id?: number
+  projectName?: string
+  port?: string
+  environment?: Environment
+  deployRunning?: boolean | null
+  portMatchStatus?: number | null
+}
+
+export type OperationRelationComponentItem = {
+  id?: number
+  componentName?: string
+  port?: string
+  version?: string
+  environment?: Environment
+  status?: number | null
+  portMatchStatus?: number | null
+}
+
+export type OperationRelationTaskItem = {
+  id?: number | string
+  taskType?: string
+  action?: string
+  status?: string
+  createTime?: string | number
+  targetName?: string
+}
+
+export type OperationRelations = {
+  entityType?: OperationRelationEntityType
+  entity?: OperationRelationEntity
+  servers?: OperationRelationServerItem[]
+  projects?: OperationRelationProjectItem[]
+  components?: OperationRelationComponentItem[]
+  recentTasks?: OperationRelationTaskItem[]
 }
 
 export type OperationServerLinks = {
@@ -146,11 +254,15 @@ export type OperationComponent = {
   createTime?: string | number
   expectedPort?: string | null
   portMatchStatus?: number | null
+  serverCount?: number | null
+  projectCount?: number | null
 }
 
 export type ProjectQuery = PageQuery & {
   projectName?: string
   serverIp?: string
+  serverId?: number | string
+  componentId?: number | string
 }
 
 export type ServerQuery = PageQuery & {
@@ -159,6 +271,8 @@ export type ServerQuery = PageQuery & {
   environment?: Environment
   serverRole?: ServerRole | string
   tag?: string
+  projectId?: number | string
+  componentId?: number | string
 }
 
 export type PlatformQuery = PageQuery & {
@@ -168,6 +282,8 @@ export type PlatformQuery = PageQuery & {
 export type ComponentQuery = PageQuery & {
   componentName?: string
   serverIp?: string
+  serverId?: number | string
+  projectId?: number | string
 }
 
 export function createEmptyProject(): OperationProject {
