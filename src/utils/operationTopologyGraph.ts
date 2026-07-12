@@ -3,7 +3,17 @@ import type {
   OperationTopologyLink,
   OperationTopologyServerNode,
 } from '@/types/operation'
+import { TOPOLOGY_DASHED_LINKS, topologyLinkColor } from '@/utils/operationTopologyTheme'
 import { HEALTH_DOWN, HEALTH_SKIPPED, HEALTH_UP } from '@/utils/operationHealth'
+
+export type TopologyChartBuildOptions = {
+  dark?: boolean
+  focusId?: string
+  matchedIds?: Set<string> | null
+  labelLimit?: number
+  mutedKinds?: Set<'server' | 'project' | 'component'>
+  mutedLinkTypes?: Set<string>
+}
 
 export type TopologyGraphFilters = {
   environment?: number | ''
@@ -90,70 +100,124 @@ export function filterTopologyGraph(graph: OperationTopologyGraph, filters: Topo
   return { servers, projects, components, links }
 }
 
+export function computeTopologyDegrees(links: OperationTopologyLink[]) {
+  const deg = new Map<string, number>()
+  for (const link of links) {
+    deg.set(link.source, (deg.get(link.source) ?? 0) + 1)
+    deg.set(link.target, (deg.get(link.target) ?? 0) + 1)
+  }
+  return deg
+}
+
+function labelDegThreshold(degrees: Map<string, number>, nodeIds: string[], labelLimit: number) {
+  const degs = nodeIds.map((id) => degrees.get(id) ?? 0).sort((a, b) => b - a)
+  if (degs.length <= labelLimit) return -Infinity
+  return degs[labelLimit - 1]
+}
+
+export function topologyLinkTypes(links: OperationTopologyLink[]) {
+  return [...new Set(links.map((l) => l.type ?? 'deploys'))]
+}
+
 export function buildTopologyEchartsData(
   graph: ReturnType<typeof filterTopologyGraph>,
-  focusId?: string,
+  options: TopologyChartBuildOptions = {},
 ) {
+  const dark = options.dark ?? false
+  const focusId = options.focusId
+  const matched = options.matchedIds
+  const labelLimit = options.labelLimit ?? 24
+  const mutedKinds = options.mutedKinds ?? new Set()
+  const mutedLinkTypes = options.mutedLinkTypes ?? new Set()
+
+  const degrees = computeTopologyDegrees(graph.links)
+  const nodeIds = [
+    ...graph.servers.map((s) => s.id),
+    ...graph.projects.map((p) => p.id),
+    ...graph.components.map((c) => c.id),
+  ]
+  const degThreshold = labelDegThreshold(degrees, nodeIds, labelLimit)
+
   type NodeRow = {
     id: string
     name: string
     kind: 'server' | 'project' | 'component'
+    topoLabel: string
     symbolSize: number
-    itemStyle: { color: string; borderColor?: string; borderWidth?: number }
+    itemStyle: { color: string; opacity: number; borderColor: string; borderWidth: number }
     symbol: string
-    label: { show: boolean }
+    label: { show: boolean; position: string; color: string; fontSize: number }
   }
 
-  const nodes: NodeRow[] = [
-    ...graph.servers.map((s) => ({
-      id: s.id,
-      name: s.serverName || s.ip || s.id,
-      kind: 'server' as const,
-      symbolSize: topologyNodeSize('server'),
+  function buildNode(
+    id: string,
+    name: string,
+    kind: 'server' | 'project' | 'component',
+    statusNode: { status?: number | null; deployRunning?: boolean | null },
+    sublabel?: string,
+  ): NodeRow | null {
+    if (mutedKinds.has(kind)) return null
+    const deg = degrees.get(id) ?? 0
+    const dimmed = matched ? !matched.has(id) : false
+    const focused = focusId === id
+    const showLabel = matched ? matched.has(id) : focused || deg >= degThreshold
+    const baseSize = topologyNodeSize(kind)
+    return {
+      id,
+      name,
+      kind,
+      topoLabel: sublabel ? `${name}（${sublabel} · ${deg}）` : `${name}（${deg}）`,
+      symbolSize: Math.min(baseSize + 12, baseSize + deg * 3),
       itemStyle: {
-        color: topologyNodeColor('server', s),
-        borderColor: focusId === s.id ? '#7c3aed' : undefined,
-        borderWidth: focusId === s.id ? 3 : undefined,
+        color: topologyNodeColor(kind, statusNode),
+        opacity: dimmed ? 0.12 : 1,
+        borderColor: focused ? (dark ? '#e5e7eb' : '#111827') : dark ? '#0f1117' : '#fff',
+        borderWidth: focused ? 2 : 1,
       },
-      symbol: topologyNodeSymbol('server'),
-      label: { show: true },
-    })),
-    ...graph.projects.map((p) => ({
-      id: p.id,
-      name: p.projectName || p.id,
-      kind: 'project' as const,
-      symbolSize: topologyNodeSize('project'),
-      itemStyle: {
-        color: topologyNodeColor('project', p),
-        borderColor: focusId === p.id ? '#7c3aed' : undefined,
-        borderWidth: focusId === p.id ? 3 : undefined,
+      symbol: topologyNodeSymbol(kind),
+      label: {
+        show: showLabel && !dimmed,
+        position: 'right',
+        color: dark ? '#d1d5db' : '#374151',
+        fontSize: 11,
       },
-      symbol: topologyNodeSymbol('project'),
-      label: { show: true },
-    })),
-    ...graph.components.map((c) => ({
-      id: c.id,
-      name: c.componentName || c.id,
-      kind: 'component' as const,
-      symbolSize: topologyNodeSize('component'),
-      itemStyle: {
-        color: topologyNodeColor('component', c),
-        borderColor: focusId === c.id ? '#7c3aed' : undefined,
-        borderWidth: focusId === c.id ? 3 : undefined,
-      },
-      symbol: topologyNodeSymbol('component'),
-      label: { show: true },
-    })),
-  ]
+    }
+  }
 
-  const links = graph.links.map((l: OperationTopologyLink) => ({
-    source: l.source,
-    target: l.target,
-    lineStyle: {
-      type: l.type === 'depends_on' ? 'dashed' : 'solid',
-      color: '#94a3b8',
-    },
-  }))
+  const nodes: NodeRow[] = []
+  for (const s of graph.servers) {
+    const row = buildNode(s.id, s.serverName || s.ip || s.id, 'server', s, 'server')
+    if (row) nodes.push(row)
+  }
+  for (const p of graph.projects) {
+    const row = buildNode(p.id, p.projectName || p.id, 'project', p, 'project')
+    if (row) nodes.push(row)
+  }
+  for (const c of graph.components) {
+    const row = buildNode(c.id, c.componentName || c.id, 'component', c, 'component')
+    if (row) nodes.push(row)
+  }
+
+  const visibleIds = new Set(nodes.map((n) => n.id))
+  const links = graph.links
+    .filter((l) => visibleIds.has(l.source) && visibleIds.has(l.target))
+    .filter((l) => !mutedLinkTypes.has(l.type ?? 'deploys'))
+    .map((l: OperationTopologyLink) => {
+      const type = l.type ?? 'deploys'
+      const related = matched ? matched.has(l.source) || matched.has(l.target) : true
+      return {
+        source: l.source,
+        target: l.target,
+        name: type,
+        lineStyle: {
+          type: TOPOLOGY_DASHED_LINKS.has(type) ? 'dashed' : 'solid',
+          color: topologyLinkColor(type, dark),
+          width: type === 'depends_on' ? 1.3 : 1.8,
+          opacity: matched ? (related ? 0.75 : 0.05) : 0.55,
+          curveness: 0.12,
+        },
+      }
+    })
 
   return { nodes, links }
 }

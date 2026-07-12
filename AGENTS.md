@@ -6,6 +6,17 @@
 
 - [docs/sso-frontend-dev-guide.md](docs/sso-frontend-dev-guide.md)（中文完整说明）
 - [docs/sso-frontend-dev-guide.en.md](docs/sso-frontend-dev-guide.en.md)（英文摘要）
+- Agent Skill：`.cursor/skills/meiling-sso-system-page/SKILL.md`
+
+做 **运营管理 `operation_*`**（服务器/项目/组件/部署/拓扑/关联）相关需求时，**必须先阅读**：
+
+- [docs/api/operation-frontend.md](docs/api/operation-frontend.md) §0（代码落点）
+- Agent Skill：`.cursor/skills/meiling-operation-feature/SKILL.md`
+
+做 **知识库 Ingest 三 Tab / 导入入口** 相关需求时，**必须先阅读**：
+
+- [docs/api/kb-import-entry-frontend.md](docs/api/kb-import-entry-frontend.md)
+- Agent Skill：`.cursor/skills/meiling-kb-ingest-tab/SKILL.md`
 
 后端仓库：`../moli-project-single`（moli-admin，模块名 `moli-server`）。
 
@@ -69,9 +80,22 @@ npm run kb:e2e:script-fix # T16f script-fix metadata（PUT 植入 → 写盘 →
 
 ## 迭代清单
 
-任务结束前：
+任务结束前执行 Skill：`.cursor/skills/meiling-task-closeout/SKILL.md`，或手动核对：
 
 - [ ] `npm run build` 通过
 - [ ] i18n zh / en / ja 同步（若改了文案）
 - [ ] 不破坏登录 → 选系统 → 进入 → 切换 流程
 - [ ] 前端缺口见 [docs/frontend-gaps.md](docs/frontend-gaps.md)
+
+## Agent Skills（项目级）
+
+| Skill | 用途 |
+|-------|------|
+| `meiling-add-menu-page` | 新菜单：SQL + viewRegistry + 视图 + i18n + 权限 |
+| `meiling-operation-feature` | 运营管理模块开发与 SVR-* |
+| `meiling-i18n-sync` | zh / en / ja 文案同步 |
+| `meiling-task-closeout` | 构建、冒烟、缺口文档收尾 |
+| `meiling-kb-e2e-run` | KB E2E 脚本与 Ingest 联调 |
+| `meiling-kb-ingest-tab` | Ingest 工作台 Tab1/2/3 开发与权限 |
+| `meiling-sso-system-page` | SSO 门户、系统注册、用户分配 |
+| `meiling-api-layer` | `request()` / CRUD / KB 超时与 ID |

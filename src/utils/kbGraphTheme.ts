@@ -2,6 +2,7 @@
 
 export const KB_RELATION_COLORS: Record<string, string> = {
   links_to: '#60a5fa',
+  deploys: '#60a5fa',
   relates_to: '#34d399',
   related: '#34d399',
   same_tag: '#fbbf24',

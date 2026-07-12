@@ -7,7 +7,7 @@ import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { GraphChart } from 'echarts/charts'
-import { GraphicComponent, ToolboxComponent, TooltipComponent } from 'echarts/components'
+import { TooltipComponent } from 'echarts/components'
 import { getServerTagOptionsApi, getTopologyGraphApi } from '@/api/operation'
 import EnvironmentSelect from '@/components/operation/EnvironmentSelect.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
@@ -25,18 +25,21 @@ import {
   buildTopologyEntitySearchHits,
   filterTopologyGraph,
   parseTopologyFocus,
+  topologyLinkTypes,
   topologyStats,
   type TopologyEntitySearchHit,
   type TopologyGraphFilters,
 } from '@/utils/operationTopologyGraph'
+import { topologyLinkColor } from '@/utils/operationTopologyTheme'
 
-use([CanvasRenderer, GraphChart, TooltipComponent, ToolboxComponent, GraphicComponent])
+use([CanvasRenderer, GraphChart, TooltipComponent])
 
 const { t } = useI18n()
 const { isDark } = useTheme()
 const route = useRoute()
 
 const loading = ref(false)
+const lastRefreshedAt = ref('')
 const rawGraph = ref<OperationTopologyGraph>({ servers: [], projects: [], components: [], links: [] })
 const entitySearch = ref('')
 const environment = ref<number | ''>('')
@@ -46,6 +49,19 @@ const layout = ref<'force' | 'circular'>('force')
 const tagOptions = ref<string[]>([])
 const focusId = ref('')
 const entitySearchOpen = ref(false)
+const mutedKinds = ref<Array<'server' | 'project' | 'component'>>([])
+const mutedLinkTypes = ref<string[]>([])
+
+const BIG_GRAPH = 80
+const LABEL_LIMIT = 24
+
+const NODE_KIND_COLORS: Record<'server' | 'project' | 'component', string> = {
+  server: '#3b82f6',
+  project: '#6366f1',
+  component: '#8b5cf6',
+}
+
+const nodeKinds = ['server', 'project', 'component'] as const
 
 const entitySearchHits = computed(() => buildTopologyEntitySearchHits(rawGraph.value, entitySearch.value))
 
@@ -77,6 +93,35 @@ const filters = computed<TopologyGraphFilters>(() => ({
 const filtered = computed(() => filterTopologyGraph(rawGraph.value, filters.value))
 const stats = computed(() => topologyStats(filtered.value))
 
+const allLinkTypes = computed(() => topologyLinkTypes(filtered.value.links))
+
+const activeKinds = computed(() => nodeKinds.filter((k) => !mutedKinds.value.includes(k)))
+
+const activeLinkTypes = computed(() => allLinkTypes.value.filter((t) => !mutedLinkTypes.value.includes(t)))
+
+const matchedIds = computed(() => {
+  const q = entitySearch.value.trim().toLowerCase()
+  if (!q) return null
+  const ids = new Set<string>()
+  for (const s of filtered.value.servers) {
+    if ([s.serverName, s.ip, s.innerIp, ...(s.tags ?? [])].some((f) => f?.toLowerCase().includes(q))) ids.add(s.id)
+  }
+  for (const p of filtered.value.projects) {
+    if ([p.projectName, p.port].some((f) => f?.toLowerCase().includes(q))) ids.add(p.id)
+  }
+  for (const c of filtered.value.components) {
+    if ([c.componentName, c.port, c.version].some((f) => f?.toLowerCase().includes(q))) ids.add(c.id)
+  }
+  return ids
+})
+
+const isBig = computed(() => {
+  const g = filtered.value
+  return g.servers.length + g.projects.length + g.components.length > BIG_GRAPH
+})
+
+const effectiveLayout = computed(() => (isBig.value ? 'circular' : layout.value))
+
 const layoutOptions = computed(() => [
   { value: 'force', label: t('operation.topology.layoutForce') },
   { value: 'circular', label: t('operation.topology.layoutCircular') },
@@ -88,32 +133,49 @@ const tagFilterOptions = computed(() => [
 ])
 
 const chartOption = computed(() => {
-  const { nodes, links } = buildTopologyEchartsData(filtered.value, focusId.value || undefined)
-  const textColor = isDark.value ? '#e5e7eb' : '#374151'
+  const dark = isDark.value
+  const chartLayout = effectiveLayout.value
+  const big = isBig.value
+  const { nodes, links } = buildTopologyEchartsData(filtered.value, {
+    dark,
+    focusId: focusId.value || undefined,
+    matchedIds: matchedIds.value,
+    labelLimit: LABEL_LIMIT,
+    mutedKinds: new Set(mutedKinds.value),
+    mutedLinkTypes: new Set(mutedLinkTypes.value),
+  })
+
   return {
-    backgroundColor: 'transparent',
-    tooltip: { trigger: 'item' },
-    toolbox: {
-      show: true,
-      feature: { saveAsImage: { title: t('operation.topology.exportPng') } },
-      iconStyle: { borderColor: textColor },
+    animation: !big,
+    tooltip: {
+      backgroundColor: dark ? '#1a1d27' : '#fff',
+      borderWidth: 0,
+      textStyle: { color: dark ? '#e5e7eb' : '#111' },
+      formatter: (p: { dataType: string; data: { name?: string; topoLabel?: string } }) =>
+        p.dataType === 'edge'
+          ? relationLabel((p.data as { name?: string }).name ?? '')
+          : (p.data.topoLabel ?? p.data.name ?? ''),
     },
     series: [
       {
         type: 'graph',
-        layout: layout.value,
+        layout: chartLayout,
         roam: true,
-        draggable: true,
+        draggable: chartLayout === 'force' && !big,
+        large: big,
+        largeThreshold: BIG_GRAPH,
+        circular: { rotateLabel: true },
+        force: {
+          repulsion: big ? 120 : 240,
+          edgeLength: big ? 80 : 130,
+          gravity: 0.08,
+          layoutAnimation: !big,
+        },
+        emphasis: { focus: 'adjacency', lineStyle: { width: 3 } },
+        ...(big ? {} : { labelLayout: { hideOverlap: true } }),
+        lineStyle: { curveness: 0.12 },
         data: nodes,
         links,
-        label: {
-          show: true,
-          color: textColor,
-          fontSize: 11,
-        },
-        lineStyle: { curveness: 0.12, opacity: 0.75 },
-        emphasis: { focus: 'adjacency' },
-        force: { repulsion: 220, edgeLength: [80, 160] },
       },
     ],
   }
@@ -127,6 +189,9 @@ async function loadGraph() {
       throw new Error(result.msg || t('operation.topology.loadFailed'))
     }
     rawGraph.value = result.data
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    lastRefreshedAt.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
     syncFocusFromRoute()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.topology.loadFailed'))
@@ -187,6 +252,40 @@ function entityGroupLabel(kind: 'server' | 'project' | 'component') {
   return t('operation.topology.entityGroupComponent')
 }
 
+function nodeKindLabel(kind: 'server' | 'project' | 'component') {
+  return entityGroupLabel(kind)
+}
+
+function relationLabel(type: string) {
+  const key = `operation.topology.relation.${type}`
+  const translated = t(key)
+  return translated === key ? type : translated
+}
+
+function toggleNodeKind(kind: 'server' | 'project' | 'component') {
+  const muted = new Set(mutedKinds.value)
+  if (muted.has(kind)) {
+    muted.delete(kind)
+  } else if (activeKinds.value.length <= 1) {
+    return
+  } else {
+    muted.add(kind)
+  }
+  mutedKinds.value = nodeKinds.filter((k) => muted.has(k))
+}
+
+function toggleLinkType(type: string) {
+  const muted = new Set(mutedLinkTypes.value)
+  if (muted.has(type)) {
+    muted.delete(type)
+  } else if (activeLinkTypes.value.length <= 1) {
+    return
+  } else {
+    muted.add(type)
+  }
+  mutedLinkTypes.value = allLinkTypes.value.filter((tp) => muted.has(tp))
+}
+
 function onEntitySearchBlur() {
   window.setTimeout(() => {
     entitySearchOpen.value = false
@@ -215,77 +314,122 @@ onMounted(() => {
 
 <template>
   <div>
-    <OperationPageHeader :title="t('operation.topology.title')" :subtitle="t('operation.topology.subtitle')">
-      <template #toolbar>
-        <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadGraph">
-          <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" />
-          {{ t('operation.common.refresh') }}
-        </button>
-      </template>
-    </OperationPageHeader>
+    <OperationPageHeader :title="t('operation.topology.title')" :subtitle="t('operation.topology.subtitle')" />
 
-    <div class="card space-y-4 p-5">
-      <div class="flex flex-wrap items-end gap-3">
-        <label class="operation-filter-field min-w-[12rem] flex-1">
-          <span>{{ t('operation.common.search') }}</span>
-          <div class="relative">
-            <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              v-model="entitySearch"
-              type="search"
-              class="field-input pl-9"
-              :placeholder="t('operation.topology.searchPlaceholder')"
-              @focus="entitySearchOpen = Boolean(entitySearch.trim())"
-              @blur="onEntitySearchBlur"
-            />
-            <div v-if="showEntitySearch" class="operation-topology-entity-search">
-              <template v-for="kind in (['server', 'project', 'component'] as const)" :key="kind">
-                <template v-if="groupedEntityHits[kind].length">
-                  <div class="operation-topology-entity-search__group">{{ entityGroupLabel(kind) }}</div>
-                  <button
-                    v-for="hit in groupedEntityHits[kind]"
-                    :key="hit.id"
-                    type="button"
-                    class="operation-topology-entity-search__item"
-                    @mousedown.prevent="onEntitySearchPick(hit)"
-                  >
-                    <span class="font-medium text-gray-800 dark:text-gray-100">{{ hit.label }}</span>
-                    <span v-if="hit.sublabel" class="text-xs text-gray-400">{{ hit.sublabel }}</span>
-                  </button>
-                </template>
-              </template>
-              <p v-if="!entitySearchHits.length" class="operation-topology-entity-search__empty">{{ t('operation.topology.searchEmpty') }}</p>
-            </div>
-          </div>
-        </label>
-        <div class="operation-filter-field">
-          <span>{{ t('operation.common.environment') }}</span>
-          <EnvironmentSelect v-model="environment" include-all />
+    <div class="card flex flex-wrap items-center gap-3 p-3">
+      <label class="relative min-w-[12rem] flex-1">
+        <span class="sr-only">{{ t('operation.common.search') }}</span>
+        <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <input
+          v-model="entitySearch"
+          type="search"
+          class="field-input h-9 w-full pl-9"
+          :placeholder="t('operation.topology.searchPlaceholder')"
+          @focus="entitySearchOpen = Boolean(entitySearch.trim())"
+          @blur="onEntitySearchBlur"
+        />
+        <div v-if="showEntitySearch" class="operation-topology-entity-search">
+          <template v-for="kind in (['server', 'project', 'component'] as const)" :key="kind">
+            <template v-if="groupedEntityHits[kind].length">
+              <div class="operation-topology-entity-search__group">{{ entityGroupLabel(kind) }}</div>
+              <button
+                v-for="hit in groupedEntityHits[kind]"
+                :key="hit.id"
+                type="button"
+                class="operation-topology-entity-search__item"
+                @mousedown.prevent="onEntitySearchPick(hit)"
+              >
+                <span class="font-medium text-gray-800 dark:text-gray-100">{{ hit.label }}</span>
+                <span v-if="hit.sublabel" class="text-xs text-gray-400">{{ hit.sublabel }}</span>
+              </button>
+            </template>
+          </template>
+          <p v-if="!entitySearchHits.length" class="operation-topology-entity-search__empty">{{ t('operation.topology.searchEmpty') }}</p>
         </div>
-        <div class="operation-filter-field">
-          <span>{{ t('operation.serverRole.label') }}</span>
-          <ServerRoleSelect v-model="serverRole" include-all />
-        </div>
-        <div class="operation-filter-field">
-          <span>{{ t('operation.serverTags.label') }}</span>
-          <AppSelect v-model="tag" :options="tagFilterOptions" />
-        </div>
-        <SegmentControl v-model="layout" :options="layoutOptions" />
+      </label>
+      <div class="operation-filter-field">
+        <span>{{ t('operation.common.environment') }}</span>
+        <EnvironmentSelect v-model="environment" include-all />
       </div>
-
-      <p class="text-sm text-gray-500 dark:text-gray-400">
-        {{ t('operation.topology.stats', stats) }}
-        <span v-if="stats.downServers" class="ml-2 text-red-600 dark:text-red-400">
-          {{ t('operation.topology.downServers', { n: stats.downServers }) }}
-        </span>
-      </p>
-
-      <div v-if="loading" class="py-16 text-center text-gray-400">{{ t('operation.common.loading') }}</div>
-      <div v-else-if="!filtered.servers.length && !filtered.projects.length && !filtered.components.length" class="py-16 text-center text-gray-400">
-        {{ t('operation.topology.empty') }}
+      <div class="operation-filter-field">
+        <span>{{ t('operation.serverRole.label') }}</span>
+        <ServerRoleSelect v-model="serverRole" include-all />
       </div>
-      <VChart v-else class="operation-topology-chart" :option="chartOption" autoresize @click="onChartClick" />
+      <div class="operation-filter-field">
+        <span>{{ t('operation.serverTags.label') }}</span>
+        <AppSelect v-model="tag" :options="tagFilterOptions" />
+      </div>
+      <SegmentControl v-model="layout" :options="layoutOptions" />
+      <button
+        type="button"
+        class="operation-toolbar-refresh ml-auto"
+        :disabled="loading"
+        :title="lastRefreshedAt ? t('operation.topology.refreshedAt', { time: lastRefreshedAt }) : undefined"
+        @click="loadGraph"
+      >
+        <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" />
+        {{ loading ? t('operation.common.loading') : t('operation.common.refresh') }}
+      </button>
     </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="text-xs text-gray-400">{{ t('operation.topology.nodeTypes') }}</span>
+      <button
+        v-for="kind in nodeKinds"
+        :key="kind"
+        type="button"
+        class="operation-toggle-chip"
+        :class="{ 'operation-toggle-chip--off': !activeKinds.includes(kind) }"
+        :aria-pressed="activeKinds.includes(kind)"
+        @click="toggleNodeKind(kind)"
+      >
+        <span class="h-2.5 w-2.5 rounded-full ring-1 ring-black/10" :style="{ backgroundColor: NODE_KIND_COLORS[kind] }" />
+        {{ nodeKindLabel(kind) }}
+      </button>
+    </div>
+
+    <div v-if="allLinkTypes.length" class="flex flex-wrap items-center gap-2">
+      <span class="text-xs text-gray-400">{{ t('operation.topology.relationTypes') }}</span>
+      <button
+        v-for="type in allLinkTypes"
+        :key="type"
+        type="button"
+        class="operation-toggle-chip"
+        :class="{ 'operation-toggle-chip--off': !activeLinkTypes.includes(type) }"
+        :aria-pressed="activeLinkTypes.includes(type)"
+        @click="toggleLinkType(type)"
+      >
+        <span class="h-2.5 w-2.5 rounded-full ring-1 ring-black/10" :style="{ backgroundColor: topologyLinkColor(type, isDark) }" />
+        {{ relationLabel(type) }}
+      </button>
+    </div>
+
+    <p class="text-sm text-gray-500 dark:text-gray-400">
+      {{ t('operation.topology.stats', stats) }}
+      <span v-if="stats.downServers" class="ml-2 text-red-600 dark:text-red-400">
+        {{ t('operation.topology.downServers', { n: stats.downServers }) }}
+      </span>
+      <span v-if="lastRefreshedAt" class="ml-2 text-xs text-gray-400">
+        · {{ t('operation.topology.refreshedAt', { time: lastRefreshedAt }) }}
+      </span>
+    </p>
+
+    <div class="card p-2">
+      <div class="relative h-[64vh] w-full">
+        <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center text-sm text-gray-400">
+          {{ t('operation.common.loading') }}
+        </div>
+        <p
+          v-else-if="!filtered.servers.length && !filtered.projects.length && !filtered.components.length"
+          class="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-gray-400"
+        >
+          {{ t('operation.topology.empty') }}
+        </p>
+        <VChart v-else class="h-full w-full" :option="chartOption" autoresize @click="onChartClick" />
+      </div>
+    </div>
+
+    <p class="text-xs text-gray-400">{{ t('operation.topology.tip') }}</p>
 
     <ServerDetailModal :open="serverDetailOpen" :server-id="serverDetailId" @close="serverDetailOpen = false" />
     <RelationDrawer
@@ -298,10 +442,3 @@ onMounted(() => {
     />
   </div>
 </template>
-
-<style scoped>
-.operation-topology-chart {
-  height: min(70vh, 640px);
-  width: 100%;
-}
-</style>

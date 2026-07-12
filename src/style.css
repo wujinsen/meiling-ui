@@ -383,6 +383,33 @@
     @apply inline-flex h-4 w-4 items-center justify-center rounded-full text-brand-500 transition hover:bg-brand-100 hover:text-brand-700 dark:hover:bg-brand-500/20;
   }
 
+  /** 拓扑/筛选：可点击切换 chip（on=品牌色底，off=描边灰底） */
+  .operation-toggle-chip {
+    @apply inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition;
+    @apply border-brand-200/90 bg-brand-50 text-brand-800 ring-1 ring-brand-200/60;
+    @apply hover:border-brand-300 hover:bg-brand-100 hover:shadow-md;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-white;
+    @apply dark:border-brand-500/35 dark:bg-brand-500/15 dark:text-brand-200 dark:ring-brand-500/25;
+    @apply dark:hover:border-brand-400/50 dark:hover:bg-brand-500/25 dark:focus-visible:ring-offset-gray-950;
+  }
+
+  .operation-toggle-chip--off {
+    @apply border-gray-200 bg-white text-gray-500 opacity-80 ring-0 shadow-none;
+    @apply hover:border-gray-300 hover:bg-gray-50 hover:text-gray-700 hover:opacity-100 hover:shadow-sm;
+    @apply dark:border-white/15 dark:bg-white/5 dark:text-gray-400;
+    @apply dark:hover:border-white/25 dark:hover:bg-white/10 dark:hover:text-gray-200;
+  }
+
+  /** 工具栏内刷新等次要操作：实心描边，避免与纯文字混淆 */
+  .operation-toolbar-refresh {
+    @apply inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition;
+    @apply hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 hover:shadow;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white;
+    @apply disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-gray-200 disabled:hover:bg-white disabled:hover:shadow-sm;
+    @apply dark:border-white/15 dark:bg-white/5 dark:text-gray-200;
+    @apply dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10 dark:hover:text-brand-200 dark:focus-visible:ring-offset-gray-950;
+  }
+
   .operation-topology-entity-search {
     @apply absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-100 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-gray-900;
   }
@@ -392,7 +419,9 @@
   }
 
   .operation-topology-entity-search__item {
-    @apply flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition hover:bg-gray-50 dark:hover:bg-white/5;
+    @apply flex w-full cursor-pointer flex-col items-start gap-0.5 border-l-2 border-transparent px-3 py-2 text-left text-sm transition;
+    @apply hover:border-brand-500 hover:bg-brand-50/80 dark:hover:bg-brand-500/10;
+    @apply focus-visible:outline-none focus-visible:border-brand-500 focus-visible:bg-brand-50/80;
   }
 
   .operation-topology-entity-search__empty {
