@@ -108,10 +108,10 @@ async function loadList() {
     const rows = result.data.list ?? []
     list.value = await enrichRowsWithLinks(rows, async (id) => {
       const linksRes = await getProjectLinksApi(id)
-      return linksRes.code === API_SUCCESS_CODE ? linksRes.data?.serverIds : undefined
+      return linksRes.code === API_SUCCESS_CODE ? (linksRes.data?.serverIds ?? []) : undefined
     })
     total.value = result.data.total ?? 0
-    void hydrateRows(list.value)
+    await hydrateRows(list.value)
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.project.loadFailed'))
   } finally {

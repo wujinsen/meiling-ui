@@ -557,7 +557,7 @@ export const getDeployPresetsApi = (serverId?: number | string | null) => {
 | 编辑弹窗 | 不含关联 UI；已关联时 IP 只读，提示去列表配置 |
 | 提交字段 | `serverIds: string[]` + 主 `serverId`（`serverIds[0]`） |
 | 列表展示 | 主服务器 **`服务器名 · IP`**（`OperationLinkedServersCell`）+ `+N`；点击主标签 → `ServerDetailModal`；`+N` → `LinkedServersPickModal`；行内「关联服务器」编辑 N:N |
-| 数据补全 | `useOperationServerLabelCache`：列表缺 `serverIds` 时补拉 `GET .../links`；按 id 批量 `getServerApi` 解析名称 |
+| 数据补全 | `useOperationServerLabelCache.enrichRowsWithLinks`：列表每行补拉 `GET .../links`（含空数组 `[]`）；空关联时清空行内 `serverIds`/`serverId`；按 id 批量 `getServerApi` 解析名称 |
 | 独立 links API | `GET/PUT /operation/project/{id}/links` · `GET/PUT /operation/component/{id}/links` |
 | 工具 | `src/utils/operationServerLinks.ts` · `formatOperationServerLabel` · `resolvePrimaryServerLabel` |
 

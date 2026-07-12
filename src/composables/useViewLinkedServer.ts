@@ -4,7 +4,7 @@ import { showToast } from '@/composables/useToast'
 import type { LinkedServerRow, OperationServer } from '@/types/operation'
 import { linkedServerCount, resolveEntityServerIds } from '@/utils/operationServerLinks'
 
-export function useViewLinkedServer(serverCache: Ref<ReadonlyMap<string, OperationServer>>) {
+export function useViewLinkedServer(_serverCache: Ref<ReadonlyMap<string, OperationServer>>) {
   const { t } = useI18n()
 
   const detailOpen = ref(false)

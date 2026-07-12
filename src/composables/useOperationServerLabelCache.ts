@@ -2,7 +2,7 @@ import { shallowRef } from 'vue'
 import { getServerApi } from '@/api/operation'
 import { API_SUCCESS_CODE } from '@/types/api'
 import type { OperationComponent, OperationProject, OperationServer } from '@/types/operation'
-import { entityHasServer, resolveEntityServerIds } from '@/utils/operationServerLinks'
+import { resolveEntityServerIds } from '@/utils/operationServerLinks'
 
 type LinkedEntity = Pick<OperationProject | OperationComponent, 'id' | 'serverId' | 'serverIds'>
 
@@ -20,7 +20,7 @@ export function useOperationServerLabelCache() {
     rows: T[],
     fetchLinks: (id: string | number) => Promise<(number | string)[] | undefined>,
   ): Promise<T[]> {
-    const targets = rows.filter((row) => row.id != null && entityHasServer(row) && !(row.serverIds?.length))
+    const targets = rows.filter((row) => row.id != null)
     if (!targets.length) return rows
 
     const patch = new Map<string, (number | string)[]>()
@@ -28,7 +28,7 @@ export function useOperationServerLabelCache() {
       targets.map(async (row) => {
         try {
           const serverIds = await fetchLinks(row.id!)
-          if (serverIds?.length) patch.set(String(row.id), serverIds)
+          if (serverIds !== undefined) patch.set(String(row.id), serverIds)
         } catch {
           /* ignore */
         }
@@ -37,8 +37,11 @@ export function useOperationServerLabelCache() {
     if (!patch.size) return rows
 
     return rows.map((row) => {
-      const serverIds = patch.get(String(row.id))
-      if (!serverIds?.length) return row
+      if (!patch.has(String(row.id))) return row
+      const serverIds = patch.get(String(row.id))!
+      if (!serverIds.length) {
+        return { ...row, serverIds: undefined, serverId: undefined }
+      }
       return { ...row, serverIds, serverId: serverIds[0] }
     })
   }
