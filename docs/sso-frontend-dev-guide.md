@@ -123,9 +123,9 @@ curl -s http://127.0.0.1:8888/menu/getRouters -H "token: <sessionId>"
 
 ## 5. 待开发任务
 
-### 任务 A：系统注册管理页（优先，当前缺失）
+### 任务 A：系统注册管理页（✅ 已实现）
 
-超管维护 `sys_system` 登记表。后端 CRUD 已有，**前端无管理界面**。
+超管维护 `sys_system` 登记表。后端 CRUD 已有；前端 **`SystemManageView.vue`**（`system/system/index`）已落地，含分组视图 + 表格 CRUD。
 
 #### 5.1 页面
 

@@ -213,6 +213,7 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-07-12 | 健康体检 **O9**：质量 Tab 展示 `kb.lint.schedule-enabled`、最近 scan 落库、待处理工单数（`KbLintScanStatusBar`） |
+| 2026-07-12 | 运营管理：**S6-b+** 项目/组件列表关联列显示 `服务器名 · IP`；**SVR-21d** 端口矩阵文档对齐 |
 | 2026-07-10 | T16f Wiki 治理全链路 API 联调（lint/merge-hint/sync/auto-fix） |
 | 2026-07-10 | T19d 平台 LLM 联调验收（GET/PUT/test、权限、脱敏、provider 预设） |
 | 2026-07-10 | 前端：O1–O4、`KbSyncOpsPanel`、T20f Tab1/3 UI、治理 `KbGovernWorkflowLinks` |

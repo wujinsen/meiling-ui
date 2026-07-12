@@ -1,6 +1,6 @@
 # 服务器运维模块 · 演进规划（技术端运维）
 
-> 更新：2026-07-11 · 状态：**P0–P2 已落地**；**SVR-21d 端口矩阵管理页** ✅  
+> 更新：2026-07-12 · 状态：**P0–P2 已落地**；**SVR-21d 端口矩阵管理页** ✅；**S6-b+ 关联服务器列展示** ✅  
 > 归属：`moli-user-center` · `operation_*` 表 · 菜单「运营/运维管理」(id 400)  
 > 边界：**只管服务器/基础设施资产运维**；知识库内容管道运维见 [knowledge-ops-frontend.md](../api/knowledge-ops-frontend.md)（另一条独立路线，互不重叠）  
 > **浏览镜像**：工程契约权威仍在 `moli-project-distribute/docs/design/server-ops-module-roadmap.md`；改设计请先改 distribute 再同步本文件。

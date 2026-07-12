@@ -74,3 +74,4 @@ npm run kb:e2e:script-fix # T16f script-fix metadata（PUT 植入 → 写盘 →
 - [ ] `npm run build` 通过
 - [ ] i18n zh / en / ja 同步（若改了文案）
 - [ ] 不破坏登录 → 选系统 → 进入 → 切换 流程
+- [ ] 前端缺口见 [docs/frontend-gaps.md](docs/frontend-gaps.md)

@@ -323,7 +323,7 @@ export function publishIngestJobApi(
 | Express 选项 | 列表页：`expressSkeletonPlan` → `useLlmPlan`；`templateMode` → `useLlmGenerate` |
 | Express 进度 | `src/components/knowledge/IngestExpressProgressPanel.vue`（6 步，仅请求进行中展示） |
 | nextSteps 组件 | `src/components/knowledge/KbWorkflowNextSteps.vue`（commit / publish 成功路径已接入） |
-| raw 虚拟树 | `src/components/knowledge/IngestRawTreeList.vue`（**未接入**，仍用页内 flat 树） |
+| raw 虚拟树 | `src/components/knowledge/IngestRawTreeList.vue`（**已接入** Expert Tab raw 选择区） |
 
 ### 12.1 与本文档的差异（实现侧说明）
 
