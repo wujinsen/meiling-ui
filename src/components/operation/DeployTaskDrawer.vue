@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useReducedMotion } from '@vueuse/motion'
 import AppModal from '@/components/ui/AppModal.vue'
+import { useSmoothProgress } from '@/composables/useSmoothProgress'
 import type { OperationTask } from '@/types/operation'
 
 const props = defineProps<{
@@ -16,8 +18,25 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const reducedMotion = useReducedMotion()
 
-const progress = computed(() => Math.min(100, Math.max(0, props.task?.progress ?? 0)))
+const targetProgress = computed(() => Math.min(100, Math.max(0, props.task?.progress ?? 0)))
+const isRunning = computed(() => props.polling && !props.task?.finished)
+const isActive = computed(() => props.open)
+
+const { display: smoothProgress, reset: resetProgress, start: startProgress } = useSmoothProgress(
+  targetProgress,
+  isRunning,
+  isActive,
+  { speedPerSecond: 10 },
+)
+
+const progressLabel = computed(() => {
+  if (reducedMotion.value) return targetProgress.value
+  return Math.min(100, Math.floor(smoothProgress.value + 0.001))
+})
+
+const barWidth = computed(() => (reducedMotion.value ? targetProgress.value : smoothProgress.value))
 
 const statusLabel = computed(() => {
   const s = props.task?.status
@@ -28,11 +47,31 @@ const statusLabel = computed(() => {
 
 const statusClass = computed(() => {
   const s = props.task?.status
-  if (s === 'success') return 'text-emerald-600'
-  if (s === 'failed') return 'text-red-600'
-  if (s === 'running') return 'text-blue-600'
+  if (s === 'success') return 'text-emerald-600 dark:text-emerald-400'
+  if (s === 'failed') return 'text-red-600 dark:text-red-400'
+  if (s === 'running') return 'text-blue-600 dark:text-blue-400'
   return 'text-gray-500'
 })
+
+const barStateClass = computed(() => {
+  const s = props.task?.status
+  if (s === 'success') return 'operation-task-progress__bar--success'
+  if (s === 'failed') return 'operation-task-progress__bar--failed'
+  if (isRunning.value) return 'operation-task-progress__bar--running'
+  return ''
+})
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) {
+      resetProgress()
+      return
+    }
+    resetProgress()
+    startProgress()
+  },
+)
 </script>
 
 <template>
@@ -44,21 +83,21 @@ const statusClass = computed(() => {
         <span v-if="task?.targetName" class="truncate text-gray-400">{{ task.targetName }}</span>
       </div>
       <div>
-        <div class="mb-1 flex justify-between text-xs text-gray-500">
+        <div class="mb-1.5 flex justify-between text-xs font-medium text-gray-500 dark:text-gray-400">
           <span>{{ t('operation.task.progress') }}</span>
-          <span>{{ progress }}%</span>
+          <span class="tabular-nums">{{ progressLabel }}%</span>
         </div>
-        <div class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
+        <div class="operation-task-progress" role="progressbar" :aria-valuenow="progressLabel" aria-valuemin="0" aria-valuemax="100">
           <div
-            class="h-full rounded-full bg-blue-500 transition-all duration-300"
-            :class="{ 'animate-pulse': polling && !task?.finished }"
-            :style="{ width: `${progress}%` }"
+            class="operation-task-progress__bar"
+            :class="barStateClass"
+            :style="{ width: `${barWidth}%` }"
           />
         </div>
       </div>
       <p v-if="task?.message" class="text-sm text-gray-600 dark:text-gray-300">{{ task.message }}</p>
       <div
-        class="max-h-80 overflow-y-auto rounded-lg bg-gray-900 p-3 font-mono text-xs leading-relaxed text-green-400"
+        class="max-h-80 overflow-y-auto rounded-lg bg-gray-900 p-3 font-mono text-xs leading-relaxed text-green-400 shadow-inner ring-1 ring-gray-800"
       >
         <pre class="whitespace-pre-wrap break-all">{{ logText || t('operation.task.logEmpty') }}</pre>
       </div>

@@ -218,6 +218,7 @@ async function runDeployAction(key: string, action: DeployExecAction) {
         name: serviceLabel(key),
         action: t(`operation.deploy.action.${action}`),
       }),
+      danger: false,
     }))
   ) {
     return
@@ -289,6 +290,7 @@ async function submitUpload() {
           server: selectedServer.value?.serverName ?? '',
           command: postCommand,
         }),
+        danger: false,
       }))
     ) {
       return
@@ -333,6 +335,7 @@ async function submitRemoteCommand() {
         server: selectedServer.value?.serverName ?? '',
         command: cmd,
       }),
+      danger: false,
     }))
   ) {
     return
