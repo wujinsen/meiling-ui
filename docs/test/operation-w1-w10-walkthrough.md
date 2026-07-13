@@ -14,7 +14,7 @@
 | 项 | 状态 |
 |----|------|
 | **前端开发** | ✅ S-VO · DC-2/3 · W7–W10 均已落地；**无待开发阻塞项** |
-| **联合走查** | 🟡 待前后端按本文逐项勾选（约 30–45 分钟） |
+| **联合走查** | ✅ W1–W10 API 点验通过（W9 需先 `npm run op:seed:w9`） |
 | **后端需保证** | `toVo()` `*Count` · create 返回 id · `POST /deploy/batch/task` · `POST /task/{id}/cancel` · `ops.upload/deploy.enabled` |
 
 ---
@@ -25,7 +25,7 @@
 |---|-----|------|
 | P0 | user-center `:8888` | **`b4ac176a`**：`mvn -pl moli-user-center-server -am install` + 重启（非仅 push `ebf16fd7`） |
 | P1 | 运维开关 | `ops.upload.enabled=true`（W8）；`ops.deploy.enabled=true`（W9/W10） |
-| P2 | 测试数据 | ≥1 项目（可映射 `user-center`/`gateway`/`knowledge`）；≥2 台 **SSH 已配置** 服务器 |
+| P2 | 测试数据 | ≥1 项目；**W9** 先执行 **`npm run op:seed:w9`**（双机 + SSH 克隆） |
 | P3 | 权限 | 联调账号含 `operation:deploy:exec`、`operation:file:upload`、`operation:server:add` 等 |
 | P4 | dev 路由 | 大文件上传走 Vite → `8888`，**勿经 Gateway** |
 
@@ -146,19 +146,24 @@ W1 → W2 → W2b → W3 → W4 → W5 → W6 → W7 → W8 → W9 → W10
 
 | ID | 结果 | 后端接口 / 备注 |
 |----|------|-----------------|
-| W1 | ☐ | list `*Count`；无 links 水合 |
-| W2 | ☐ | list vs `GET /{id}` |
-| W2b | ☐ | `serverCount === serverIds.length` |
-| W3 | ☐ | `GET /operation/relations/...` |
-| W4 | ☐ | `PUT .../links` |
-| W5 | ☐ | list 反向 query |
-| W6 | ☐ | topology · component-links |
-| W7 | ☐ | `POST /operation/server` → id |
-| W8 | ☐ | upload · `ops.upload.enabled` |
-| W9 | ☐ | `POST /deploy/batch/task` |
-| W10 | ☐ | `POST /task/{id}/cancel` |
+| W1 | ✅ | list `*Count`；`pageNum/pageSize` 分页；无 links 水合（API） |
+| W2 | ✅ | list vs `GET /{id}` 同行 `serverCount`/`componentCount` 一致 |
+| W2b | ✅ | `serverCount === serverIds.length`（list + detail） |
+| W3 | ✅ | `GET /operation/relations/server/{id}` · `recentTasks[]` |
+| W4 | ✅ | `PUT .../links` 后 chips/`GET /{id}` 计数同步（已还原） |
+| W5 | ✅ | `GET /operation/project/list?serverId=` 反向过滤 |
+| W6 | ✅ | topology 12 节点 · component-links GET |
+| W7 | ✅ | `POST /operation/server` → snowflake id（测后 DELETE） |
+| W8 | ✅ | upload → taskId · poll `finished=true` `status=success` · path=`/opt/moli/frontend/dist/` |
+| W9 | ✅ | `POST /deploy/batch/task` 双机 · 种子项目 `w9-batch-smoke`（`npm run op:seed:w9`） |
+| W10 | ✅ | `POST /task/{id}/cancel` → `status=cancelled` `finished=true` · 日志 `[BATCH]`/`[CANCEL]` |
 
-**走查人**：________　**日期**：________　**8888 构建**：________
+**走查人**：Cursor Agent　**日期**：2026-07-13　**8888 构建**：`b4ac176a`（本地）
+
+**自动化**：`npm run op:walkthrough`（日志 `operation-w1-w10-walkthrough.log`）  
+**W9 种子**：`npm run op:seed:w9` · SQL 说明见 [docs/sql/31_operation_w9_dual_server_seed.sql](../sql/31_operation_w9_dual_server_seed.sql)
+
+**W9 部署中心**：项目 **`w9-batch-smoke`**（`moli-user-center`）→ 勾选 **201 + w9-smoke-b** → restart → 单次 `POST /operation/deploy/batch/task`。
 
 ---
 

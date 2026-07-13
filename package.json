@@ -14,7 +14,9 @@
     "kb:e2e": "node scripts/kb-e2e-walkthrough.mjs",
     "kb:e2e:extended": "node scripts/kb-e2e-extended.mjs",
     "kb:e2e:script-fix": "node scripts/kb-e2e-script-fix.mjs",
-    "kb:prd": "node scripts/kb-prd-acceptance.mjs"
+    "kb:prd": "node scripts/kb-prd-acceptance.mjs",
+    "op:walkthrough": "node scripts/operation-w1-w10-walkthrough.mjs",
+    "op:seed:w9": "node scripts/seed-operation-w9-dual-server.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",
