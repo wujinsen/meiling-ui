@@ -1,7 +1,10 @@
 # 运营管理 · 前端交付说明（给 moli-server / user-center 后端）
 
 > **读者**：meiling-ui 前端、联调同学。  
-> **更新**：2026-07-13 · **后端已全部就绪**（见 §1 · [`moli-project-distribute` 联调通知](../../moli-project-distribute/docs/api/operation-backend-handoff.md)）  
+> **更新**：2026-07-13（**对齐 monorepo `b4ac176a`**）  
+> **后端 `:8888`**：commit **`b4ac176a`** 本地可联调 W1–W10；共享环境需 push+部署  
+> **Monorepo 镜像**：[moli-project-distribute operation-frontend-handoff.md](../../moli-project-distribute/docs/api/operation-frontend-handoff.md)  
+> **联合走查**：[test/operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)
 > **前端仓库**：`meiling-ui` · 分支 `main`  
 > **HTTP 索引**：[user-center-api-map.md](user-center-api-map.md) §4 · **UI 细节**：[operation-frontend.md](operation-frontend.md) §16
 
@@ -13,10 +16,14 @@
 |----|------|
 | **SVR-25 / SVR-26b / SVR-28 前端** | ✅ **已全部落地**，可联调验收 |
 | **S0–S13 / SVR-21d 前端** | ✅ 此前已完成 |
-| **后端 API（user-center）** | ✅ **2026-07-13 联调通过**；无阻塞项 |
-| **前端待改（Breaking）** | **`POST` project/component 返回 `number` id**（见 §4.1） |
+| **后端 API（user-center）** | ✅ **`b4ac176a`** 本地全集；共享需 push+部署；待 **W1–W10 联合走查** |
+| **前端待改（Breaking）** | —（create 三实体返回 id · S-VO · W7–W10 均已对齐，2026-07-13） |
 
-前端缺口清单（全仓）：[frontend-gaps.md](../frontend-gaps.md) §1.1（已完成）· §1.2（后端项）。
+**S-VO 契约（必读）**：`serverCount === serverIds.length`（恒等）；**勿**为 chips 批量 `GET .../links`；links **仅**关联弹窗 GET/PUT。开工详稿：[`moli-project-distribute` operation-frontend-handoff §0–§2](../../moli-project-distribute/docs/api/operation-frontend-handoff.md)。
+
+前端缺口清单（全仓）：[frontend-gaps.md](../frontend-gaps.md) §1.1（已完成）· §1.2（联合走查）。  
+**W1–W10 走查稿（给后端）**：[test/operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)。  
+**跨模块后端依赖**：[frontend-backend-dependencies.md](frontend-backend-dependencies.md) · §7 可复制转发。
 
 ---
 
@@ -67,53 +74,71 @@
 | `projectId` | 弹窗上下文 |
 | `componentIds[]` | 多选组件依赖维护 |
 
-### 3.4 列表 enrichment（行内展示）
+### 3.4 列表 / 详情 enrichment（行内展示）
 
 | 接口 | 字段 | 前端展示 |
 |------|------|----------|
-| `GET /operation/project/list` | `deployRunning` · `portMatchStatus` · `expectedPort` | 列表徽章 |
-| `GET /operation/component/list` | `portMatchStatus` · `expectedPort` | 列表徽章 |
-| `GET /operation/server/list` | `projectCount` · `componentCount`（或等价） | 关联 chips 数字 |
+| `GET /operation/project/list` · **`GET /operation/project/{id}`** | `deployRunning` · `portMatchStatus` · `expectedPort` · **`serverCount`** · **`componentCount`** | 列表徽章 |
+| `GET /operation/component/list` · **`GET /operation/component/{id}`** | `portMatchStatus` · `expectedPort` · **`serverCount`** · **`projectCount`** | 列表徽章 |
+| `GET /operation/server/list` · **`GET /operation/server/{id}`** | **`projectCount`** · **`componentCount`** | 关联 chips 数字 |
 
 ### 3.5 任务历史 / 部署中心
 
 | 接口 | 字段 | 前端 |
 |------|------|------|
 | `GET /operation/task/list` | `serverId` · `projectId` · `targetName` | `OperationEntityLink` 点开 relations |
-| `POST /operation/file/upload` | 返回 `taskId` | `DeployTaskDrawer` 轮询；dev **走 Vite → 8888**，勿经 Gateway 大文件上传 |
+| `POST /operation/file/upload` | 返回 `taskId` | `DeployTaskDrawer` 轮询；dev **走 Vite → 8888** |
+| `POST /operation/deploy/batch/task` | 返回单父 `taskId` | 部署中心多机 **restart/stop/start**（W9） |
+| `POST /operation/task/{id}/cancel` | `status=cancelled` | 任务抽屉「取消任务」（W10） |
 
 ---
 
-## 4. 后端已就绪 · 前端必改
+## 4. 前端已对齐（2026-07-13 ✅）
 
-### 4.1 Breaking · `POST` create 返回 id（2026-07-13）
+### 4.1 Breaking · `POST` create 返回 id
 
-| API | 旧 `data` | 新 `data` |
-|-----|-----------|-----------|
-| `POST /operation/project` | `true` | **`number`**（新建 id） |
-| `POST /operation/component` | `true` | **`number`**（新建 id） |
+| API | `data` | 前端 |
+|-----|--------|------|
+| `POST /operation/project` | 新建 **id** | `addProjectApi` → `request<number \| string>` ✅ |
+| `POST /operation/component` | 新建 **id** | `addComponentApi` → `request<number \| string>` ✅ |
+| `POST /operation/server` | 新建 **id** | `addServerApi` → `request<number \| string>` ✅（**W7**） |
 
-```typescript
-// src/api/operation.ts — 请更新
-export const addProjectApi = (body: OperationProjectSave) =>
-  request<number>(`${OP}/project`, { method: 'POST', data: body })
-export const addComponentApi = (body: OperationComponentSave) =>
-  request<number>(`${OP}/component`, { method: 'POST', data: body })
-```
+三管理页创建时均校验 `result.data` 非空。
 
-### 4.2 后端已验收（无需再等）
+### 4.2 后端契约（请持续保证）
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| create 带 `serverIds` | ✅ | 写入 N:N；主 `serverId` = `serverIds[0]` |
-| `PUT/GET .../links` 同步 | ✅ | 主表 `serverId` / `serverIp` / `innerIp` 一致 |
+| create 带 `serverIds` | ✅ | N:N；主 `serverId` = `serverIds[0]` |
+| `PUT/GET .../links` 同步 | ✅ | 主表 IP 字段一致 |
 | L7/L8 关联回归 | ✅ | 单选 1 台无幽灵计数 |
 | `presets.serviceKeys` | ✅ | 含 order、bi |
-| `serverCount` | ⚠️ | **仅 list** 有；`GET /{id}` 无——chips 用 list 或 relations |
+| `GET /{id}` `*Count` | ✅ | `toVo()`；`serverCount === serverIds.length` |
 
-权威说明：[`moli-project-distribute/docs/api/operation-backend-handoff.md`](../../moli-project-distribute/docs/api/operation-backend-handoff.md)
+### 4.3 S-VO（关系计数 · W1–W6）
 
-### 4.3 环境
+| ID | 落点 | 状态 |
+|----|------|------|
+| S-VO-1 | `src/types/operation.ts` | ✅ |
+| S-VO-2 | 三管理页 `loadList` | ✅ 无 `enrichRowsWithLinks` 计数 |
+| S-VO-3 | 编辑弹窗 | ✅ 仅 `GET /{id}` |
+| S-VO-4 | `OperationRelationChips` | ✅ VO `*Count` |
+| S-VO-5 | 关联弹窗 | ✅ 仅 `GET/PUT .../links` |
+
+### 4.4 部署与任务（W7–W10）
+
+| ID | API | 前端落点 | 状态 |
+|----|-----|----------|------|
+| **W7** | `POST /operation/server` → id | `addServerApi` · `ServerManageView` | ✅ |
+| **W8** | `POST /operation/file/upload` → taskId | `uploadFileApi` · `DeployCenterView` 单机 → `DeployTaskDrawer` | ✅ |
+| **W9** | `POST /operation/deploy/batch/task` | `createDeployBatchTaskApi` · 多机 deploy 单父任务 | ✅ |
+| **W10** | `POST /operation/task/{id}/cancel` | `cancelOperationTaskApi` · `useOperationTaskPoll` · `DeployTaskDrawer` | ✅ |
+
+多机 **上传/远程命令** 仍用 `useDeployBatchTasks` 扇出（设计如此，非 W9 范围）。
+
+**联合走查步骤**：见 [test/operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)。
+
+### 4.5 环境
 
 | 项 | 值 |
 |----|-----|
@@ -121,11 +146,22 @@ export const addComponentApi = (body: OperationComponentSave) =>
 | 前端 dev | `http://127.0.0.1:5141`（proxy `/operation` → 8888） |
 | 登录 | `admin` / `123456` |
 
-~~§4 旧「需后端联调」P1/P2 项均已关闭。~~
+~~§4 旧「需后端联调 / 前端必改」项均已关闭。~~
 
 ---
 
-## 5. 联调 smoke（后端自测清单）
+## 5. 联合走查 W1–W10（前后端）
+
+**主文档**：[test/operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)（含记录表 §5，联调后勾选转发）。
+
+| 组 | ID | 后端关键接口 |
+|----|-----|--------------|
+| S-VO | W1–W6 | `list` `*Count` · `GET /{id}` · `relations` · `links` · `topology` |
+| 部署 | W7–W10 | `POST /server` · `file/upload` · **`deploy/batch/task`** · **`task/{id}/cancel`** |
+
+---
+
+## 6. 联调 smoke（后端自测清单）
 
 在 `8888` 启动 user-center，`meiling-ui` 设 `VITE_USE_MOCK_AUTH=false`：
 
@@ -148,14 +184,19 @@ GET /operation/component/list?projectId=xxx
 
 # 5. 大文件上传（部署中心）
 POST /operation/file/upload  (multipart)
-# dev 前端路径：/operation/file/upload → Vite proxy → 8888（不经 21000 Gateway）
+
+# 6. 批量滚动重启（W9）
+POST /operation/deploy/batch/task  { "steps": [...], "projectId": ... }
+
+# 7. 任务取消（W10）
+POST /operation/task/{id}/cancel
 ```
 
 前端验收表：[operation-frontend.md](operation-frontend.md) §10 · §16.3。
 
 ---
 
-## 6. 相关文件（meiling-ui）
+## 7. 相关文件（meiling-ui）
 
 | 类型 | 路径 |
 |------|------|
@@ -164,12 +205,26 @@ POST /operation/file/upload  (multipart)
 | 拓扑图 | `src/views/operation/OperationTopologyGraphView.vue` |
 | 关联抽屉 | `src/components/operation/RelationDrawer.vue` |
 | 组件依赖 | `src/components/operation/OperationProjectComponentLinksModal.vue` |
-| 菜单 SQL | `docs/sql/28_operation_topology_menu.sql` |
+| 走查稿 | `docs/test/operation-w1-w10-walkthrough.md` |
+| 任务轮询/取消 | `src/composables/useOperationTaskPoll.ts` |
 
 ---
 
-## 7. 变更记录
+## 8. 前端仍依赖后端（跨模块）
+
+运营契约、KB 环境、SSO 菜单等待办已汇总至专稿，便于一次性转发后端：
+
+**[frontend-backend-dependencies.md](frontend-backend-dependencies.md)**
+
+---
+
+## 9. 变更记录
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-13 | 对齐 monorepo `b4ac176a` · §8.4③ · DC-BE-1 关闭 |
+| 2026-07-13 | **W7–W10** 前端完工；走查稿 |
+| 2026-07-13 | **S-VO**：去掉列表 links 水合；chips 用 `toVo()` `*Count` |
+| 2026-07-13 | `GET /operation/{project,component,server}/{id}` 回填 `*Count`；见 [frontend-backend-dependencies.md](frontend-backend-dependencies.md) |
+| 2026-07-13 | 新增跨模块依赖专稿 `frontend-backend-dependencies.md` |
 | 2026-07-13 | 后端联调通过：create 返回 id · links 同步 · order/bi；前端改 `addProjectApi`/`addComponentApi` 返回 `number` |

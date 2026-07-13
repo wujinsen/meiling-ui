@@ -19,7 +19,8 @@
 - Agent Skill：`.cursor/skills/meiling-kb-ingest-tab/SKILL.md`
 
 后端仓库：`../moli-project-single`（moli-admin，模块名 `moli-server`）。  
-运营管理 **前端交付给后端**：[docs/api/operation-frontend-handoff.md](docs/api/operation-frontend-handoff.md)
+运营管理 **前端交付给后端**：[docs/api/operation-frontend-handoff.md](docs/api/operation-frontend-handoff.md)  
+**跨模块后端依赖汇总**（运营 + KB + SSO）：[docs/api/frontend-backend-dependencies.md](docs/api/frontend-backend-dependencies.md)
 
 ## 技术约定
 

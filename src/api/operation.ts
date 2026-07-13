@@ -17,6 +17,7 @@ import type {
   OperationPortAudit,
   OperationStats,
   DeployExecAction,
+  OperationDeployBatchTaskRequest,
   OperationCommandExec,
   OperationDeployPresets,
   OperationDeployStatus,
@@ -72,14 +73,16 @@ const component = createCrudApi<OperationComponent>('/operation/component')
 
 export const listProjectApi = (params?: ProjectQuery) => project.list(params as Record<string, string | number | undefined>)
 export const getProjectApi = project.get
-export const addProjectApi = project.add
+export const addProjectApi = (body: OperationProject) =>
+  request<number | string>('/operation/project', { method: 'POST', body: JSON.stringify(body) })
 export const updateProjectApi = project.update
 export const deleteProjectApi = project.remove
 
 export const listServerApi = (params?: ServerQuery) => server.list(params as Record<string, string | number | undefined>)
 export const getServerTagOptionsApi = () => request<string[]>('/operation/server/tag-options', { method: 'GET' })
 export const getServerApi = server.get
-export const addServerApi = server.add
+export const addServerApi = (body: OperationServer) =>
+  request<number | string>('/operation/server', { method: 'POST', body: JSON.stringify(body) })
 export const updateServerApi = server.update
 export const deleteServerApi = server.remove
 
@@ -131,7 +134,8 @@ export const revealPlatformSecretApi = (id: number | string) =>
 
 export const listComponentApi = (params?: ComponentQuery) => component.list(params as Record<string, string | number | undefined>)
 export const getComponentApi = component.get
-export const addComponentApi = component.add
+export const addComponentApi = (body: OperationComponent) =>
+  request<number | string>('/operation/component', { method: 'POST', body: JSON.stringify(body) })
 export const updateComponentApi = component.update
 export const deleteComponentApi = component.remove
 export const revealComponentSecretApi = (id: number | string) =>
@@ -177,8 +181,19 @@ export const createDeployTaskApi = (
   return request<number>(`/operation/deploy/${serviceKey}/${action}/task${qs}`, { method: 'POST', timeoutMs: 15_000 })
 }
 
+/** 多机滚动启停：单父任务 taskType=deploy_batch */
+export const createDeployBatchTaskApi = (body: OperationDeployBatchTaskRequest) =>
+  request<number | string>('/operation/deploy/batch/task', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    timeoutMs: 30_000,
+  })
+
 export const getTaskApi = (id: number | string, logOffset = 0) =>
   request<OperationTask>(`/operation/task/${id}?logOffset=${logOffset}`, { method: 'GET', timeoutMs: 15_000 })
+
+export const cancelOperationTaskApi = (id: number | string) =>
+  request<OperationTask>(`/operation/task/${id}/cancel`, { method: 'POST', timeoutMs: 15_000 })
 
 export const listTaskApi = (params?: TaskQuery) =>
   request<PageRes<OperationTask>>(`/operation/task/list${buildQuery(params as Record<string, string | number | undefined>)}`, {

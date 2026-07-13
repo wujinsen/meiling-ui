@@ -21,7 +21,7 @@ import { FileText, RefreshCw, Search } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
-const { drawerOpen, task, logText, polling, openTask, closeDrawer } = useOperationTaskPoll()
+const { drawerOpen, task, logText, polling, cancelling, openTask, cancelTask, closeDrawer, sendToBackground } = useOperationTaskPoll()
 const {
   relationOpen,
   relationType,
@@ -283,7 +283,10 @@ onUnmounted(stopAutoRefresh)
       :task="task"
       :log-text="logText"
       :polling="polling"
+      :cancelling="cancelling"
+      @cancel="cancelTask"
       @close="closeDrawer"
+      @background="sendToBackground"
     />
 
     <OperationRelationDrawerHost

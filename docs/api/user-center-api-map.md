@@ -15,7 +15,7 @@
 | **SVR-25** 全局拓扑 + 抽屉增强 | ✅ | `GET /operation/topology` · relations 字段 |
 | **SVR-26b** 项目组件依赖弹窗 | ✅ | `GET/PUT .../component-links` |
 | **SVR-28** 关联 chips · 导航 · 深链 | ✅ | relations · list 反向 query |
-| links / create `serverIds` | UI ✅ | **待后端** 见 handoff §4 |
+| links / create `serverIds` | UI ✅ | **后端 ✅**（2026-07-13）；见 [frontend-backend-dependencies.md](frontend-backend-dependencies.md) |
 
 详情：[operation-frontend-handoff.md](operation-frontend-handoff.md)
 

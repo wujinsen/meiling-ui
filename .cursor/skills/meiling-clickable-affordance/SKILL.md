@@ -22,6 +22,9 @@ description: >-
 | 主/次按钮 | `btn-primary` · `btn-secondary` · `btn-ghost` | 表单、弹窗、通用操作 |
 | 工具栏按钮组 | `toolbar-actions` + 内嵌 `btn-primary` / `btn-ghost` | 列表页头部成组操作 |
 | 工具栏独立刷新 | `operation-toolbar-refresh` | 卡片工具栏内刷新/重载（勿用无描边 `btn-ghost` 单独放工具栏） |
+| 工具栏紧凑操作 | `operation-toolbar-action` | 全选/清空、任务历史、关联关系、展开日志等 |
+| 行内图标按钮 | `operation-icon-action-btn` | 卡片内关联/跳转图标 |
+| 部署服务器卡片 | `operation-deploy-server-card` + `--checked` / `--disabled` | 部署中心多选服务器行 |
 | 行内操作 | `btn-action` · `btn-action-edit` · `btn-action-danger` | 表格行按钮 |
 | 可切换筛选 chip | `operation-toggle-chip` + `operation-toggle-chip--off` | 拓扑节点/关系类型、图例开关 |
 | 只读筛选标签 | `operation-relation-filter-chip` | URL 反向过滤（带 × 清除） |
@@ -33,6 +36,9 @@ description: >-
 ```
 需要用户明确「这是按钮」？
   ├─ 工具栏次要操作（刷新）→ operation-toolbar-refresh
+  ├─ 工具栏紧凑操作（全选/关联/历史）→ operation-toolbar-action（可包在 toolbar-actions 内）
+  ├─ 卡片内图标操作 → operation-icon-action-btn
+  ├─ 部署中心服务器多选行 → operation-deploy-server-card
   ├─ 成组 CRUD → toolbar-actions
   ├─ 开/关筛选、图例 → operation-toggle-chip（off 加 --off）
   ├─ 列表行编辑/删除 → btn-action-*
@@ -52,6 +58,7 @@ description: >-
 ## 参考实现
 
 - 拓扑页：`src/views/operation/OperationTopologyGraphView.vue`（刷新 + 节点/关系 chip + 实体搜索）
+- 部署中心：`src/views/operation/DeployCenterView.vue`（工具栏操作 + 服务器卡片 + AppSelect 下拉项）
 - 关联过滤：`src/components/operation/OperationRelationFilterChips.vue`
 - 运营模块总览：[meiling-operation-feature](../meiling-operation-feature/SKILL.md)
 

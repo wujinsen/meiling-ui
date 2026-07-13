@@ -62,3 +62,30 @@ export function linkedServerCount(row: Pick<OperationProject | OperationComponen
   if (n > 0) return n
   return isOperationOrphan(row.serverId) ? 0 : 1
 }
+
+/** list / detail / checkHealth：优先 `serverCount`；旧后端兜底 `serverIds.length` */
+export function resolveServerRelationCount(
+  row: Pick<OperationProject | OperationComponent, 'serverCount' | 'serverId' | 'serverIds'>,
+): number {
+  if (row.serverCount != null) return row.serverCount
+  return linkedServerCount(row)
+}
+
+export function resolveProjectRelationCount(row: { projectCount?: number | null }): number {
+  return row.projectCount ?? 0
+}
+
+export function resolveComponentRelationCount(row: { componentCount?: number | null }): number {
+  return row.componentCount ?? 0
+}
+
+/** 用 VO 内 `serverIds` 规范化列表行，勿再批量 `GET .../links` */
+export function normalizeListRowServerIds<T extends LinkedServerRow>(rows: T[]): T[] {
+  return rows.map((row) => {
+    const serverIds = resolveEntityServerIds(row.serverIds, row.serverId)
+    if (!serverIds.length) {
+      return { ...row, serverIds: undefined, serverId: row.serverId === '' ? '' : row.serverId }
+    }
+    return { ...row, serverIds, serverId: serverIds[0] }
+  })
+}

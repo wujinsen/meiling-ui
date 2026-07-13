@@ -410,6 +410,44 @@
     @apply dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10 dark:hover:text-brand-200 dark:focus-visible:ring-offset-gray-950;
   }
 
+  /** 工具栏/区块内紧凑操作（全选、关联、任务历史等） */
+  .operation-toolbar-action {
+    @apply inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition;
+    @apply hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 hover:shadow;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/35 focus-visible:ring-offset-1 focus-visible:ring-offset-white;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply dark:border-white/15 dark:bg-white/5 dark:text-gray-200;
+    @apply dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10 dark:hover:text-brand-200 dark:focus-visible:ring-offset-gray-950;
+  }
+
+  /** 卡片行内图标操作（关联关系等） */
+  .operation-icon-action-btn {
+    @apply inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-gray-200 bg-white p-1.5 text-gray-500 shadow-sm transition;
+    @apply hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 hover:shadow;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/35 focus-visible:ring-offset-1;
+    @apply dark:border-white/15 dark:bg-white/5 dark:text-gray-400;
+    @apply dark:hover:border-brand-500/40 dark:hover:bg-brand-500/10 dark:hover:text-brand-300 dark:focus-visible:ring-offset-gray-950;
+  }
+
+  /** 部署中心：可勾选服务器卡片 */
+  .operation-deploy-server-card {
+    @apply flex cursor-pointer items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition;
+    @apply hover:border-brand-200 hover:shadow-md hover:ring-1 hover:ring-brand-200/40;
+    @apply focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-500/25;
+    @apply dark:border-white/10 dark:bg-transparent;
+    @apply dark:hover:border-brand-500/35 dark:hover:ring-brand-500/20;
+  }
+
+  .operation-deploy-server-card--checked {
+    @apply border-brand-300 bg-brand-50/50 shadow-md ring-1 ring-brand-200/50;
+    @apply dark:border-brand-500/40 dark:bg-brand-500/5 dark:ring-brand-500/25;
+  }
+
+  .operation-deploy-server-card--disabled {
+    @apply cursor-not-allowed opacity-60 hover:border-gray-200 hover:shadow-sm hover:ring-0;
+    @apply dark:hover:border-white/10;
+  }
+
   .operation-topology-entity-search {
     @apply absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-100 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-gray-900;
   }
@@ -426,6 +464,57 @@
 
   .operation-topology-entity-search__empty {
     @apply px-3 py-3 text-sm text-gray-400;
+  }
+
+  .operation-topology-page {
+    @apply space-y-5;
+  }
+
+  .operation-topology-toolbar {
+    @apply flex flex-wrap items-center gap-4 p-4 md:gap-5 md:p-5;
+  }
+
+  .operation-topology-filters {
+    @apply space-y-5 p-4 md:p-5;
+  }
+
+  .operation-topology-legend-row {
+    @apply flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-5;
+  }
+
+  .operation-topology-legend-label {
+    @apply shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400;
+    @apply sm:min-w-[5.5rem] sm:pt-0.5;
+  }
+
+  .operation-topology-chip-group {
+    @apply flex flex-wrap items-center gap-2.5;
+  }
+
+  .operation-topology-stats {
+    @apply flex flex-col gap-2 border-t border-gray-100 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2;
+    @apply dark:border-white/10;
+  }
+
+  .operation-topology-stats__summary {
+    @apply text-sm text-gray-600 dark:text-gray-300;
+  }
+
+  .operation-topology-stats__alert {
+    @apply inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-sm font-medium text-red-700;
+    @apply dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300;
+  }
+
+  .operation-topology-stats__time {
+    @apply text-xs text-gray-400 sm:ml-auto;
+  }
+
+  .operation-topology-chart-card {
+    @apply p-3 md:p-4;
+  }
+
+  .operation-topology-tip {
+    @apply px-1 text-xs leading-relaxed text-gray-400;
   }
 
   .btn-tree-toggle {
@@ -612,6 +701,12 @@
     animation: none;
   }
 
+  .operation-task-progress__bar--cancelled {
+    background: linear-gradient(90deg, #d97706 0%, #f59e0b 100%);
+    box-shadow: 0 0 10px rgb(245 158 11 / 0.35);
+    animation: none;
+  }
+
   @keyframes operation-task-progress-flow {
     0%,
     100% {
@@ -634,6 +729,85 @@
       transform: translateX(320%);
       opacity: 0;
     }
+  }
+
+  .operation-task-progress--sm {
+    @apply h-1.5;
+  }
+
+  /** 运维后台任务浮层（右下角） */
+  .operation-task-floater {
+    @apply fixed bottom-4 right-4 z-[60] w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-gray-200/90 bg-white/95 shadow-xl backdrop-blur;
+    @apply dark:border-white/10 dark:bg-surface-dark-card/95;
+  }
+
+  .operation-task-floater--expanded {
+    @apply max-h-[min(28rem,calc(100vh-6rem))];
+  }
+
+  .operation-task-floater__header {
+    @apply flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-50;
+    @apply dark:text-gray-200 dark:hover:bg-white/5;
+  }
+
+  .operation-task-floater__header-left {
+    @apply flex min-w-0 flex-1 items-center gap-2;
+  }
+
+  .operation-task-floater__header-actions {
+    @apply shrink-0 text-gray-400;
+  }
+
+  .operation-task-floater__badge {
+    @apply rounded-full bg-brand-100 px-2 py-0.5 text-[11px] font-medium text-brand-700;
+    @apply dark:bg-brand-500/20 dark:text-brand-300;
+  }
+
+  .operation-task-floater__body {
+    @apply max-h-[22rem] overflow-y-auto border-t border-gray-100 px-2 py-2;
+    @apply dark:border-white/10;
+  }
+
+  .operation-task-floater__item {
+    @apply rounded-lg border border-transparent;
+  }
+
+  .operation-task-floater__item--open {
+    @apply border-gray-100 bg-gray-50/80 dark:border-white/10 dark:bg-white/[0.03];
+  }
+
+  .operation-task-floater__item-head {
+    @apply flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-gray-50;
+    @apply dark:hover:bg-white/5;
+  }
+
+  .operation-task-floater__item-detail {
+    @apply px-2 pb-2;
+  }
+
+  .operation-task-floater__status--success {
+    @apply text-emerald-600 dark:text-emerald-400;
+  }
+
+  .operation-task-floater__status--failed {
+    @apply text-red-600 dark:text-red-400;
+  }
+
+  .operation-task-floater__status--cancelled {
+    @apply text-amber-600 dark:text-amber-400;
+  }
+
+  .operation-task-floater__status--running {
+    @apply text-blue-600 dark:text-blue-400;
+  }
+
+  .operation-task-header-badge {
+    @apply relative inline-flex cursor-pointer items-center justify-center rounded-lg p-2 text-brand-600 transition hover:bg-brand-50;
+    @apply dark:text-brand-400 dark:hover:bg-brand-500/10;
+  }
+
+  .operation-task-header-badge__count {
+    @apply absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-semibold leading-none text-white;
   }
 
   .badge {
@@ -1111,89 +1285,6 @@
     @apply w-auto min-w-[8.5rem];
   }
 
-  .deploy-server-picker {
-    @apply flex min-h-0 min-w-0 flex-col rounded-xl border border-gray-100 bg-white p-4 shadow-sm;
-    @apply dark:border-white/10 dark:bg-gray-900/40;
-  }
-
-  .deploy-server-picker__head {
-    @apply mb-3 flex items-start justify-between gap-2;
-  }
-
-  .deploy-server-picker__title {
-    @apply text-sm font-semibold text-gray-900 dark:text-white;
-  }
-
-  .deploy-server-picker__meta {
-    @apply shrink-0 text-xs text-gray-400;
-  }
-
-  .deploy-server-picker__filters {
-    @apply mb-3 space-y-2;
-  }
-
-  .deploy-server-picker__search {
-    @apply relative;
-  }
-
-  .deploy-server-picker__search-icon {
-    @apply pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400;
-  }
-
-  .deploy-server-picker__search-input {
-    @apply w-full py-1.5 pl-8 pr-3 text-sm;
-  }
-
-  .deploy-server-picker__env {
-    @apply flex items-center gap-2;
-  }
-
-  .deploy-server-picker__env-label {
-    @apply shrink-0 text-xs text-gray-500 dark:text-gray-400;
-  }
-
-  .deploy-server-picker__env .kb-space-dropdown {
-    @apply min-w-0 flex-1 sm:min-w-0;
-  }
-
-  .deploy-server-picker__list {
-    @apply -mx-1 max-h-[min(52vh,28rem)] space-y-1 overflow-y-auto px-1;
-  }
-
-  .deploy-server-picker__item {
-    @apply relative w-full rounded-lg px-3 py-2 text-left text-sm transition;
-    @apply hover:bg-gray-50 dark:hover:bg-white/5;
-  }
-
-  .deploy-server-picker__item--active {
-    @apply bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300;
-  }
-
-  .deploy-server-picker__item--pinned {
-    @apply mb-2 border border-brand-200/80 dark:border-brand-500/25;
-  }
-
-  .deploy-server-picker__item-top {
-    @apply flex items-start justify-between gap-2;
-  }
-
-  .deploy-server-picker__name {
-    @apply min-w-0 truncate;
-  }
-
-  .deploy-server-picker__relation-btn {
-    @apply inline-flex shrink-0 items-center justify-center rounded p-0.5 text-gray-400 transition hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-500/15 dark:hover:text-brand-300;
-  }
-
-  .deploy-server-picker__env-badge {
-    @apply shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500;
-    @apply dark:bg-white/10 dark:text-gray-400;
-  }
-
-  .deploy-server-picker__item--active .operation-env-badge {
-    @apply bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300;
-  }
-
   .operation-env-badge {
     @apply inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-xs font-medium;
   }
@@ -1220,34 +1311,6 @@
 
   .operation-env-badge--unknown {
     @apply bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400;
-  }
-
-  .deploy-server-picker__sub {
-    @apply mt-0.5 text-xs text-gray-400;
-  }
-
-  .deploy-server-picker__ssh {
-    @apply ml-1 text-emerald-600 dark:text-emerald-400;
-  }
-
-  .deploy-server-picker__pinned-tag {
-    @apply mt-1 inline-block text-[10px] font-medium uppercase tracking-wide text-brand-600 dark:text-brand-300;
-  }
-
-  .deploy-server-picker__state {
-    @apply py-8 text-center text-sm text-gray-400;
-  }
-
-  .deploy-server-picker__pagination {
-    @apply mt-3 border-t border-gray-100 pt-3 dark:border-white/5;
-  }
-
-  .deploy-server-picker__pagination > div {
-    @apply flex-col items-stretch gap-2;
-  }
-
-  .deploy-server-picker__pagination > div > div {
-    @apply justify-center;
   }
 
   .operation-orphan-badge {
@@ -1300,6 +1363,10 @@
 
   .operation-task-status--failed {
     @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300;
+  }
+
+  .operation-task-status--cancelled {
+    @apply bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300;
   }
 
   .operation-task-status--unknown {
@@ -1376,6 +1443,18 @@
 
   .operation-server-pick-modal__item--pinned {
     @apply mb-2 border-dashed;
+  }
+
+  .operation-server-pick-modal__item--check {
+    @apply flex cursor-pointer items-center gap-3;
+  }
+
+  .operation-server-pick-modal__item--disabled {
+    @apply cursor-not-allowed opacity-50 hover:border-transparent hover:bg-transparent dark:hover:border-transparent dark:hover:bg-transparent;
+  }
+
+  .operation-server-pick-modal__hint {
+    @apply mb-3 text-sm text-gray-500;
   }
 
   .operation-server-pick-modal__item-top {
@@ -1532,7 +1611,11 @@
   }
 
   .kb-space-dropdown-trigger {
-    @apply flex w-full cursor-pointer items-center justify-between gap-2 py-2 pl-3 pr-3 text-left text-sm;
+    @apply flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white py-2 pl-3 pr-3 text-left text-sm shadow-sm transition;
+    @apply hover:border-brand-300 hover:shadow;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:ring-offset-1;
+    @apply dark:border-white/15 dark:bg-white/5;
+    @apply dark:hover:border-brand-500/40 dark:focus-visible:ring-offset-gray-950;
   }
 
   .kb-space-dropdown-trigger-open {
@@ -1555,13 +1638,51 @@
     width: auto;
   }
 
+  .kb-space-dropdown-panel--searchable {
+    @apply flex max-h-80 flex-col overflow-hidden py-0;
+  }
+
+  .kb-space-dropdown-panel__search {
+    @apply relative shrink-0 border-b border-gray-100 px-2 py-2 dark:border-white/5;
+  }
+
+  .kb-space-dropdown-panel__search-icon {
+    @apply pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400;
+  }
+
+  .kb-space-dropdown-panel__search-input {
+    @apply w-full py-1.5 pl-8 pr-3 text-sm;
+  }
+
+  .kb-space-dropdown-panel__list {
+    @apply min-h-0 flex-1 overflow-y-auto py-1;
+  }
+
+  .kb-space-dropdown-panel__empty {
+    @apply px-3 py-6 text-center text-xs text-gray-400;
+  }
+
   .kb-space-dropdown-item {
-    @apply flex w-full px-3 py-2 text-left text-sm text-gray-800 transition hover:bg-gray-50;
-    @apply dark:text-gray-100 dark:hover:bg-white/5;
+    @apply flex w-full cursor-pointer border-l-2 border-transparent px-3 py-2 text-left text-sm text-gray-800 transition;
+    @apply hover:border-brand-500 hover:bg-brand-50/80;
+    @apply focus-visible:outline-none focus-visible:border-brand-500 focus-visible:bg-brand-50/80;
+    @apply dark:text-gray-100 dark:hover:bg-brand-500/10 dark:focus-visible:bg-brand-500/10;
+  }
+
+  .kb-space-dropdown-item__main {
+    @apply flex min-w-0 flex-1 items-center justify-between gap-3;
+  }
+
+  .kb-space-dropdown-item__hint {
+    @apply shrink-0 text-xs text-gray-400 dark:text-gray-500;
+  }
+
+  .kb-space-dropdown-item-active .kb-space-dropdown-item__hint {
+    @apply text-brand-600/80 dark:text-brand-300/80;
   }
 
   .kb-space-dropdown-item-active {
-    @apply bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300;
+    @apply border-brand-500 bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300;
   }
 
   .kb-space-dropdown-divider {

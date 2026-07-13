@@ -19,6 +19,7 @@ const badgeClass = computed(() => {
   const s = props.status
   if (s === 'success') return 'operation-task-status--success'
   if (s === 'failed') return 'operation-task-status--failed'
+  if (s === 'cancelled') return 'operation-task-status--cancelled'
   if (s === 'running') return 'operation-task-status--running'
   if (s === 'pending') return 'operation-task-status--pending'
   return 'operation-task-status--unknown'

@@ -52,7 +52,10 @@ const {
   task: taskDetail,
   logText: taskLogText,
   polling: taskPolling,
+  cancelling: taskCancelling,
   closeDrawer: closeTaskDrawer,
+  sendToBackground,
+  cancelTask,
   probeAll: probeAllFromCockpit,
   busy: probingAll,
 } = useProbeAllHealth({ onFinished: loadOverview })
@@ -322,7 +325,10 @@ function onEnvBreakdownClick(env: number) {
       :task="taskDetail"
       :log-text="taskLogText"
       :polling="taskPolling"
+      :cancelling="taskCancelling"
+      @cancel="cancelTask"
       @close="closeTaskDrawer"
+      @background="sendToBackground"
     />
   </div>
 </template>

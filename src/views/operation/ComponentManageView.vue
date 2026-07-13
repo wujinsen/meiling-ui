@@ -32,7 +32,7 @@ import { showToast, formatDateTime } from '@/composables/useToast'
 import { useOperationRelationListFilter } from '@/composables/useOperationRelationListFilter'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyComponent, type OperationComponent } from '@/types/operation'
-import { applyServerIdsToLinkedRow, entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
+import { applyServerIdsToLinkedRow, entityHasServer, normalizeListRowServerIds, normalizeServerIds, resolveEntityServerIds, resolveProjectRelationCount, resolveServerRelationCount } from '@/utils/operationServerLinks'
 import { Pencil, Plus, RefreshCw, Search, Trash2, Activity, ClipboardList, KeyRound, Link2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
@@ -61,7 +61,7 @@ const relationOpen = ref(false)
 const relationRow = ref<OperationComponent | null>(null)
 const relationTab = ref<RelationDrawerTab>('servers')
 
-const { serverCache, enrichRowsWithLinks, hydrateRows } = useOperationServerLabelCache()
+const { serverCache, hydrateRows } = useOperationServerLabelCache()
 const {
   detailOpen: serverDetailOpen,
   detailServerId,
@@ -82,17 +82,18 @@ const { activeFilters, applyQueryFromRoute, clearFilter } = useOperationRelation
   else void loadList()
 })
 
-async function applyFormServerLinks(componentId: string | number, detail?: OperationComponent) {
-  const linksRes = await getComponentLinksApi(componentId)
-  const base = detail ?? form.value
-  const serverIds = resolveEntityServerIds(
-    linksRes.code === API_SUCCESS_CODE ? linksRes.data?.serverIds : undefined,
-    base.serverId,
-  )
+async function refreshFormFromDetail(componentId: string | number) {
+  const detailRes = await getComponentApi(componentId)
+  if (detailRes.code !== API_SUCCESS_CODE || !detailRes.data) {
+    throw new Error(detailRes.msg || t('operation.component.loadFailed'))
+  }
+  const data = detailRes.data
+  const serverIds = resolveEntityServerIds(data.serverIds, data.serverId)
   form.value = {
-    ...base,
+    ...form.value,
+    ...data,
     serverIds: serverIds.length ? serverIds : undefined,
-    serverId: serverIds[0] ?? base.serverId ?? '',
+    serverId: serverIds[0] ?? data.serverId ?? '',
   }
   await hydrateRows([form.value])
 }
@@ -125,10 +126,7 @@ async function loadList() {
     })
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.component.loadFailed'))
     const rows = result.data.list ?? []
-    list.value = await enrichRowsWithLinks(rows, async (id) => {
-      const linksRes = await getComponentLinksApi(id)
-      return linksRes.code === API_SUCCESS_CODE ? (linksRes.data?.serverIds ?? []) : undefined
-    })
+    list.value = normalizeListRowServerIds(rows)
     total.value = result.data.total ?? 0
     await hydrateRows(list.value)
   } catch (e) {
@@ -149,13 +147,10 @@ function openCreate() {
 async function openEdit(row: OperationComponent) {
   if (!guardAction(PERM.OP_COMPONENT_EDIT)) return
   try {
-    const [detailRes, linksRes] = await Promise.all([
-      getComponentApi(row.id!),
-      getComponentLinksApi(row.id!),
-    ])
+    const detailRes = await getComponentApi(row.id!)
     if (detailRes.code !== API_SUCCESS_CODE || !detailRes.data) throw new Error(detailRes.msg || t('operation.component.loadFailed'))
     const data = detailRes.data
-    const serverIds = resolveEntityServerIds(linksRes.data?.serverIds ?? data.serverIds, data.serverId)
+    const serverIds = resolveEntityServerIds(data.serverIds, data.serverId)
     form.value = { ...data, serverIds, serverId: serverIds[0] ?? data.serverId ?? '' }
     passwordInput.value = ''
     modalTitle.value = t('operation.common.edit')
@@ -184,16 +179,11 @@ async function openComponentLinks(row: OperationComponent) {
   if (!guardAction(PERM.OP_COMPONENT_EDIT) || row.id == null) return
   linksRow.value = row
   try {
-    const [detailRes, linksRes] = await Promise.all([
-      getComponentApi(row.id),
-      getComponentLinksApi(row.id),
-    ])
-    if (detailRes.code !== API_SUCCESS_CODE || !detailRes.data) {
-      throw new Error(detailRes.msg || t('operation.component.loadFailed'))
+    const linksRes = await getComponentLinksApi(row.id)
+    if (linksRes.code !== API_SUCCESS_CODE) {
+      throw new Error(linksRes.msg || t('operation.component.linksLoadFailed'))
     }
-    linksRow.value = detailRes.data
-    const serverIds = resolveEntityServerIds(linksRes.data?.serverIds ?? detailRes.data.serverIds, detailRes.data.serverId)
-    linksServerIds.value = serverIds.map(String)
+    linksServerIds.value = (linksRes.data?.serverIds ?? []).map(String)
     linksOpen.value = true
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.component.linksLoadFailed'))
@@ -250,7 +240,7 @@ async function saveComponentLinks(ids: string[]) {
     closeComponentLinks()
     if (modalOpen.value && form.value.id != null && String(form.value.id) === String(linksRow.value.id)) {
       try {
-        await applyFormServerLinks(form.value.id, form.value)
+        await refreshFormFromDetail(form.value.id)
       } catch {
         /* 保存已成功；刷新表单关联失败不阻断关弹窗 */
       }
@@ -295,6 +285,9 @@ async function submitForm() {
     }
     const result = isEdit.value ? await updateComponentApi(payload) : await addComponentApi(payload)
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.saveFailed'))
+    if (!isEdit.value && (result.data == null || result.data === '')) {
+      throw new Error(result.msg || t('operation.common.saveFailed'))
+    }
     showToast('success', isEdit.value ? t('operation.common.updateOk') : t('operation.common.createOk'))
     closeModal()
     await loadList()
@@ -444,8 +437,8 @@ onMounted(() => {
               </td>
               <td class="px-4 py-3">
                 <OperationRelationChips
-                  :server-count="row.serverCount"
-                  :project-count="row.projectCount"
+                  :server-count="resolveServerRelationCount(row)"
+                  :project-count="resolveProjectRelationCount(row)"
                   @open-servers="openRelationDrawer(row, 'servers')"
                   @open-projects="openRelationDrawer(row, 'projects')"
                 />

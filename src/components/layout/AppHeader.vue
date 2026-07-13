@@ -18,6 +18,8 @@ import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import AppUserMenu from '@/components/layout/AppUserMenu.vue'
 import SystemSwitcher from '@/components/layout/SystemSwitcher.vue'
 
+import OperationTaskHeaderBadge from '@/components/operation/OperationTaskHeaderBadge.vue'
+
 import { useCommandPalette } from '@/composables/useCommandPalette'
 
 import { useMobileSidebar } from '@/composables/useMobileSidebar'
@@ -151,6 +153,8 @@ const isPulse = computed(() => route.name === 'pulse')
       </button>
 
       <SystemSwitcher />
+
+      <OperationTaskHeaderBadge />
 
       <LanguageSwitcher />
 

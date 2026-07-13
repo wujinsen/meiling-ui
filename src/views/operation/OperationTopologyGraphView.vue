@@ -313,17 +313,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div class="page-shell operation-topology-page">
     <OperationPageHeader :title="t('operation.topology.title')" :subtitle="t('operation.topology.subtitle')" />
 
-    <div class="card flex flex-wrap items-center gap-3 p-3">
-      <label class="relative min-w-[12rem] flex-1">
+    <section class="card operation-topology-toolbar">
+      <label class="relative min-w-[14rem] flex-1">
         <span class="sr-only">{{ t('operation.common.search') }}</span>
         <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
         <input
           v-model="entitySearch"
           type="search"
-          class="field-input h-9 w-full pl-9"
+          class="field-input h-10 w-full pl-9"
           :placeholder="t('operation.topology.searchPlaceholder')"
           @focus="entitySearchOpen = Boolean(entitySearch.trim())"
           @blur="onEntitySearchBlur"
@@ -370,52 +370,60 @@ onMounted(() => {
         <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" />
         {{ loading ? t('operation.common.loading') : t('operation.common.refresh') }}
       </button>
-    </div>
+    </section>
 
-    <div class="flex flex-wrap items-center gap-2">
-      <span class="text-xs text-gray-400">{{ t('operation.topology.nodeTypes') }}</span>
-      <button
-        v-for="kind in nodeKinds"
-        :key="kind"
-        type="button"
-        class="operation-toggle-chip"
-        :class="{ 'operation-toggle-chip--off': !activeKinds.includes(kind) }"
-        :aria-pressed="activeKinds.includes(kind)"
-        @click="toggleNodeKind(kind)"
-      >
-        <span class="h-2.5 w-2.5 rounded-full ring-1 ring-black/10" :style="{ backgroundColor: NODE_KIND_COLORS[kind] }" />
-        {{ nodeKindLabel(kind) }}
-      </button>
-    </div>
+    <section class="card operation-topology-filters">
+      <div class="operation-topology-legend-row">
+        <span class="operation-topology-legend-label">{{ t('operation.topology.nodeTypes') }}</span>
+        <div class="operation-topology-chip-group">
+          <button
+            v-for="kind in nodeKinds"
+            :key="kind"
+            type="button"
+            class="operation-toggle-chip"
+            :class="{ 'operation-toggle-chip--off': !activeKinds.includes(kind) }"
+            :aria-pressed="activeKinds.includes(kind)"
+            @click="toggleNodeKind(kind)"
+          >
+            <span class="h-2.5 w-2.5 rounded-full ring-1 ring-black/10" :style="{ backgroundColor: NODE_KIND_COLORS[kind] }" />
+            {{ nodeKindLabel(kind) }}
+          </button>
+        </div>
+      </div>
 
-    <div v-if="allLinkTypes.length" class="flex flex-wrap items-center gap-2">
-      <span class="text-xs text-gray-400">{{ t('operation.topology.relationTypes') }}</span>
-      <button
-        v-for="type in allLinkTypes"
-        :key="type"
-        type="button"
-        class="operation-toggle-chip"
-        :class="{ 'operation-toggle-chip--off': !activeLinkTypes.includes(type) }"
-        :aria-pressed="activeLinkTypes.includes(type)"
-        @click="toggleLinkType(type)"
-      >
-        <span class="h-2.5 w-2.5 rounded-full ring-1 ring-black/10" :style="{ backgroundColor: topologyLinkColor(type, isDark) }" />
-        {{ relationLabel(type) }}
-      </button>
-    </div>
+      <div v-if="allLinkTypes.length" class="operation-topology-legend-row">
+        <span class="operation-topology-legend-label">{{ t('operation.topology.relationTypes') }}</span>
+        <div class="operation-topology-chip-group">
+          <button
+            v-for="type in allLinkTypes"
+            :key="type"
+            type="button"
+            class="operation-toggle-chip"
+            :class="{ 'operation-toggle-chip--off': !activeLinkTypes.includes(type) }"
+            :aria-pressed="activeLinkTypes.includes(type)"
+            @click="toggleLinkType(type)"
+          >
+            <span class="h-2.5 w-2.5 rounded-full ring-1 ring-black/10" :style="{ backgroundColor: topologyLinkColor(type, isDark) }" />
+            {{ relationLabel(type) }}
+          </button>
+        </div>
+      </div>
 
-    <p class="text-sm text-gray-500 dark:text-gray-400">
-      {{ t('operation.topology.stats', stats) }}
-      <span v-if="stats.downServers" class="ml-2 text-red-600 dark:text-red-400">
-        {{ t('operation.topology.downServers', { n: stats.downServers }) }}
-      </span>
-      <span v-if="lastRefreshedAt" class="ml-2 text-xs text-gray-400">
-        · {{ t('operation.topology.refreshedAt', { time: lastRefreshedAt }) }}
-      </span>
-    </p>
+      <div class="operation-topology-stats">
+        <p class="operation-topology-stats__summary">
+          {{ t('operation.topology.stats', stats) }}
+        </p>
+        <p v-if="stats.downServers" class="operation-topology-stats__alert">
+          {{ t('operation.topology.downServers', { n: stats.downServers }) }}
+        </p>
+        <p v-if="lastRefreshedAt" class="operation-topology-stats__time">
+          {{ t('operation.topology.refreshedAt', { time: lastRefreshedAt }) }}
+        </p>
+      </div>
+    </section>
 
-    <div class="card p-2">
-      <div class="relative h-[64vh] w-full">
+    <section class="card operation-topology-chart-card">
+      <div class="relative h-[64vh] w-full min-h-[20rem]">
         <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center text-sm text-gray-400">
           {{ t('operation.common.loading') }}
         </div>
@@ -427,9 +435,9 @@ onMounted(() => {
         </p>
         <VChart v-else class="h-full w-full" :option="chartOption" autoresize @click="onChartClick" />
       </div>
-    </div>
+    </section>
 
-    <p class="text-xs text-gray-400">{{ t('operation.topology.tip') }}</p>
+    <p class="operation-topology-tip">{{ t('operation.topology.tip') }}</p>
 
     <ServerDetailModal :open="serverDetailOpen" :server-id="serverDetailId" @close="serverDetailOpen = false" />
     <RelationDrawer

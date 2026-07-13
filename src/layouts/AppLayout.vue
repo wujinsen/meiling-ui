@@ -16,6 +16,8 @@ import CommandPalette from '@/components/ui/CommandPalette.vue'
 
 import AppToast from '@/components/ui/AppToast.vue'
 
+import OperationTaskFloater from '@/components/operation/OperationTaskFloater.vue'
+
 import AnalyticsFilterPanel from '@/components/ui/AnalyticsFilterPanel.vue'
 
 import AppPageTabs from '@/components/layout/AppPageTabs.vue'
@@ -118,6 +120,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
     <CommandPalette />
     <AppToast />
+    <OperationTaskFloater />
 
   </PerspectiveStage>
 

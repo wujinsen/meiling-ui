@@ -40,6 +40,14 @@ const DEPLOY_KEYS: Record<string, string> = {
   knowledge: 'knowledge',
   'moli-knowledge': 'knowledge',
   'knowledge-server': 'knowledge',
+  order: 'order',
+  'moli-order': 'order',
+  'order-server': 'order',
+  'order-service': 'order',
+  bi: 'bi',
+  'moli-bi': 'bi',
+  'bi-server': 'bi',
+  'bi-service': 'bi',
 }
 
 export function resolveDeployServiceKey(name?: string | null): string | null {

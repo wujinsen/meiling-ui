@@ -31,6 +31,7 @@ export type OperationProject = {
   portMatchStatus?: number | null
   deployRunning?: boolean | null
   lastDeployCheckTime?: string | number | null
+  /** 后端 toVo() 派生；恒等 `serverIds.length`（list / GET /{id} / check 一致） */
   serverCount?: number | null
   componentCount?: number | null
 }
@@ -56,6 +57,7 @@ export type OperationServer = {
   connPref?: string | null
   sshConfigured?: boolean | null
   uploadAllowedRoots?: string | null
+  /** 后端 toVo() 派生（list / GET /{id} / check 一致） */
   projectCount?: number | null
   componentCount?: number | null
 }
@@ -228,6 +230,7 @@ export type OperationComponent = {
   createTime?: string | number
   expectedPort?: string | null
   portMatchStatus?: number | null
+  /** 后端 toVo() 派生；恒等 `serverIds.length`（list / GET /{id} / check 一致） */
   serverCount?: number | null
   projectCount?: number | null
 }
@@ -399,6 +402,20 @@ export type OperationSshTest = {
   message?: string
 }
 
+export type OperationDeployBatchStep = {
+  serviceKey: string
+  action: DeployExecAction
+  serverId?: number | string
+  projectId?: number | string
+}
+
+export type OperationDeployBatchTaskRequest = {
+  steps: OperationDeployBatchStep[]
+  projectId?: number | string
+  stopOnFailure?: boolean
+  intervalSeconds?: number
+}
+
 export type OperationTask = {
   id?: number | string
   taskType?: string
@@ -424,7 +441,7 @@ export type TaskQuery = PageQuery & {
 }
 
 /** 异步任务类型（SVR-14） */
-export const OPERATION_TASK_TYPES = ['deploy', 'upload', 'command', 'health_probe'] as const
+export const OPERATION_TASK_TYPES = ['deploy', 'deploy_batch', 'upload', 'command', 'health_probe'] as const
 export type OperationTaskType = (typeof OPERATION_TASK_TYPES)[number]
 
 /** moli 三件套 serviceKey */

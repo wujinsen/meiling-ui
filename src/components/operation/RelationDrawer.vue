@@ -42,7 +42,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const router = useRouter()
-const { drawerOpen: taskDrawerOpen, task: taskDetail, logText: taskLogText, polling: taskPolling, openTask, closeDrawer: closeTaskDrawer } = useOperationTaskPoll()
+const { drawerOpen: taskDrawerOpen, task: taskDetail, logText: taskLogText, polling: taskPolling, cancelling: taskCancelling, openTask, cancelTask, closeDrawer: closeTaskDrawer, sendToBackground } = useOperationTaskPoll()
 
 const loading = ref(false)
 const data = ref<OperationRelations | null>(null)
@@ -330,6 +330,9 @@ watch(
     :task="taskDetail"
     :log-text="taskLogText"
     :polling="taskPolling"
+    :cancelling="taskCancelling"
+    @cancel="cancelTask"
     @close="closeTaskDrawer"
+    @background="sendToBackground"
   />
 </template>

@@ -30,6 +30,7 @@ import { showToast, formatDateTime } from '@/composables/useToast'
 import { useOperationRelationListFilter } from '@/composables/useOperationRelationListFilter'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { OPERATION_ERR_SERVER_TASK_RUNNING } from '@/constants/operationErrors'
+import { resolveComponentRelationCount, resolveProjectRelationCount } from '@/utils/operationServerLinks'
 import { createEmptyServer, type OperationServer } from '@/types/operation'
 import { Activity, GitBranch, KeyRound, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
 
@@ -133,8 +134,11 @@ const {
   task: taskDetail,
   logText: taskLogText,
   polling: taskPolling,
+  cancelling: taskCancelling,
   openTask,
+  cancelTask,
   closeDrawer: closeTaskDrawer,
+  sendToBackground,
   probeAll,
   busy: probingAll,
   resolveErrorMessage,
@@ -186,6 +190,9 @@ async function submitForm() {
     }
     const result = isEdit.value ? await updateServerApi(payload) : await addServerApi(payload)
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.saveFailed'))
+    if (!isEdit.value && (result.data == null || result.data === '')) {
+      throw new Error(result.msg || t('operation.common.saveFailed'))
+    }
     showToast('success', isEdit.value ? t('operation.common.updateOk') : t('operation.common.createOk'))
     closeModal()
     await Promise.all([loadList(), loadTagOptions()])
@@ -360,8 +367,8 @@ onMounted(() => {
               <td class="px-4 py-3"><ServerTagsBadges :tags="row.tags" size="sm" /></td>
               <td class="px-4 py-3">
                 <OperationRelationChips
-                  :project-count="row.projectCount"
-                  :component-count="row.componentCount"
+                  :project-count="resolveProjectRelationCount(row)"
+                  :component-count="resolveComponentRelationCount(row)"
                   @open-projects="openRelationDrawer(row, 'projects')"
                   @open-components="openRelationDrawer(row, 'components')"
                 />
@@ -473,7 +480,10 @@ onMounted(() => {
       :task="taskDetail"
       :log-text="taskLogText"
       :polling="taskPolling"
+      :cancelling="taskCancelling"
+      @cancel="cancelTask"
       @close="closeTaskDrawer"
+      @background="sendToBackground"
     />
   </div>
 </template>

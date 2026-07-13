@@ -25,3 +25,17 @@ export function operationErrorI18nKey(code?: number | null): string | null {
   if (code == null) return null
   return I18N_KEY_BY_CODE[code] ?? null
 }
+
+/** S-ERR-1：运营 API 失败文案；优先 10101–10109 i18n，其次后端 msg */
+export function resolveOperationErrorMessage(
+  t: (key: string) => string,
+  code?: number | null,
+  msg?: string | null,
+  fallback?: string,
+): string {
+  const key = operationErrorI18nKey(code)
+  if (key) return t(key)
+  const trimmed = msg?.trim()
+  if (trimmed) return trimmed
+  return fallback ?? ''
+}

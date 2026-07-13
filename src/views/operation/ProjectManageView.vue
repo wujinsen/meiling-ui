@@ -27,13 +27,14 @@ import { useOperationTaskPoll } from '@/composables/useOperationTaskPoll'
 import { confirm } from '@/composables/useConfirm'
 import { assertAction, guardAction, guardActionWithRefresh } from '@/composables/useActionPermissions'
 import { PERM } from '@/constants/permissions'
+import { resolveOperationErrorMessage } from '@/constants/operationErrors'
 import AppPagination from '@/components/ui/AppPagination.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { showToast, formatDateTime } from '@/composables/useToast'
 import { useOperationRelationListFilter } from '@/composables/useOperationRelationListFilter'
 import { API_SUCCESS_CODE } from '@/types/api'
 import { createEmptyProject, type DeployExecAction, type OperationDeployStatus, type OperationProject } from '@/types/operation'
-import { applyServerIdsToLinkedRow, entityHasServer, normalizeServerIds, resolveEntityServerIds } from '@/utils/operationServerLinks'
+import { applyServerIdsToLinkedRow, entityHasServer, normalizeListRowServerIds, normalizeServerIds, resolveComponentRelationCount, resolveEntityServerIds, resolveServerRelationCount } from '@/utils/operationServerLinks'
 import { resolveDeployServiceKey } from '@/utils/operationPort'
 import { ClipboardList, Link2, Pencil, Play, Plus, RefreshCw, RotateCcw, Search, Server, Square, Trash2 } from 'lucide-vue-next'
 
@@ -59,7 +60,7 @@ const deployServerId = ref<string | number | null>(null)
 const deployProjectId = ref<string | number | null>(null)
 const deployStatus = ref<OperationDeployStatus | null>(null)
 
-const { serverCache, enrichRowsWithLinks, hydrateRows } = useOperationServerLabelCache()
+const { serverCache, hydrateRows } = useOperationServerLabelCache()
 const {
   detailOpen: serverDetailOpen,
   detailServerId,
@@ -75,8 +76,11 @@ const { drawerOpen: taskDrawerOpen,
   task: taskDetail,
   logText: taskLogText,
   polling: taskPolling,
+  cancelling: taskCancelling,
   openTask,
+  cancelTask,
   closeDrawer: closeTaskDrawer,
+  sendToBackground,
 } = useOperationTaskPoll()
 const linksOpen = ref(false)
 const linksSaving = ref(false)
@@ -100,17 +104,18 @@ const { activeFilters, applyQueryFromRoute, clearFilter } = useOperationRelation
   else void loadList()
 })
 
-async function applyFormServerLinks(projectId: string | number, detail?: OperationProject) {
-  const linksRes = await getProjectLinksApi(projectId)
-  const base = detail ?? form.value
-  const serverIds = resolveEntityServerIds(
-    linksRes.code === API_SUCCESS_CODE ? linksRes.data?.serverIds : undefined,
-    base.serverId,
-  )
+async function refreshFormFromDetail(projectId: string | number) {
+  const detailRes = await getProjectApi(projectId)
+  if (detailRes.code !== API_SUCCESS_CODE || !detailRes.data) {
+    throw new Error(detailRes.msg || t('operation.project.loadFailed'))
+  }
+  const data = detailRes.data
+  const serverIds = resolveEntityServerIds(data.serverIds, data.serverId)
   form.value = {
-    ...base,
+    ...form.value,
+    ...data,
     serverIds: serverIds.length ? serverIds : undefined,
-    serverId: serverIds[0] ?? base.serverId ?? '',
+    serverId: serverIds[0] ?? data.serverId ?? '',
   }
   await hydrateRows([form.value])
 }
@@ -143,10 +148,7 @@ async function loadList() {
     })
     if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.project.loadFailed'))
     const rows = result.data.list ?? []
-    list.value = await enrichRowsWithLinks(rows, async (id) => {
-      const linksRes = await getProjectLinksApi(id)
-      return linksRes.code === API_SUCCESS_CODE ? (linksRes.data?.serverIds ?? []) : undefined
-    })
+    list.value = normalizeListRowServerIds(rows)
     total.value = result.data.total ?? 0
     await hydrateRows(list.value)
   } catch (e) {
@@ -166,13 +168,10 @@ function openCreate() {
 async function openEdit(row: OperationProject) {
   if (!guardAction(PERM.OP_PROJECT_EDIT)) return
   try {
-    const [detailRes, linksRes] = await Promise.all([
-      getProjectApi(row.id!),
-      getProjectLinksApi(row.id!),
-    ])
+    const detailRes = await getProjectApi(row.id!)
     if (detailRes.code !== API_SUCCESS_CODE || !detailRes.data) throw new Error(detailRes.msg || t('operation.project.loadFailed'))
     const data = detailRes.data
-    const serverIds = resolveEntityServerIds(linksRes.data?.serverIds ?? data.serverIds, data.serverId)
+    const serverIds = resolveEntityServerIds(data.serverIds, data.serverId)
     form.value = { ...data, serverIds, serverId: serverIds[0] ?? data.serverId ?? '' }
     modalTitle.value = t('operation.common.edit')
     modalOpen.value = true
@@ -199,16 +198,11 @@ async function openProjectLinks(row: OperationProject) {
   if (!guardAction(PERM.OP_PROJECT_EDIT) || row.id == null) return
   linksRow.value = row
   try {
-    const [detailRes, linksRes] = await Promise.all([
-      getProjectApi(row.id),
-      getProjectLinksApi(row.id),
-    ])
-    if (detailRes.code !== API_SUCCESS_CODE || !detailRes.data) {
-      throw new Error(detailRes.msg || t('operation.project.loadFailed'))
+    const linksRes = await getProjectLinksApi(row.id)
+    if (linksRes.code !== API_SUCCESS_CODE) {
+      throw new Error(linksRes.msg || t('operation.project.linksLoadFailed'))
     }
-    linksRow.value = detailRes.data
-    const serverIds = resolveEntityServerIds(linksRes.data?.serverIds ?? detailRes.data.serverIds, detailRes.data.serverId)
-    linksServerIds.value = serverIds.map(String)
+    linksServerIds.value = (linksRes.data?.serverIds ?? []).map(String)
     linksOpen.value = true
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.project.linksLoadFailed'))
@@ -307,7 +301,7 @@ async function saveProjectLinks(ids: string[]) {
     closeProjectLinks()
     if (modalOpen.value && form.value.id != null && String(form.value.id) === String(linksRow.value.id)) {
       try {
-        await applyFormServerLinks(form.value.id, form.value)
+        await refreshFormFromDetail(form.value.id)
       } catch {
         /* 保存已成功；刷新表单关联失败不阻断关弹窗 */
       }
@@ -349,6 +343,9 @@ async function submitForm() {
     }
     const result = isEdit.value ? await updateProjectApi(payload) : await addProjectApi(payload)
     if (result.code !== API_SUCCESS_CODE) throw new Error(result.msg || t('operation.common.saveFailed'))
+    if (!isEdit.value && (result.data == null || result.data === '')) {
+      throw new Error(result.msg || t('operation.common.saveFailed'))
+    }
     showToast('success', isEdit.value ? t('operation.common.updateOk') : t('operation.common.createOk'))
     closeModal()
     await loadList()
@@ -455,7 +452,9 @@ async function execDeploy(action: DeployExecAction) {
       deployProjectId.value ?? undefined,
     )
     if (result.code !== API_SUCCESS_CODE || result.data == null) {
-      throw new Error(result.msg || t('operation.deploy.execFailed'))
+      throw new Error(
+        resolveOperationErrorMessage(t, result.code, result.msg, t('operation.deploy.execFailed')),
+      )
     }
     openTask(result.data, {
       onFinished: async () => {
@@ -573,8 +572,8 @@ onMounted(() => {
               </td>
               <td class="px-4 py-3">
                 <OperationRelationChips
-                  :server-count="row.serverCount"
-                  :component-count="row.componentCount"
+                  :server-count="resolveServerRelationCount(row)"
+                  :component-count="resolveComponentRelationCount(row)"
                   @open-servers="openRelationDrawer(row, 'servers')"
                   @open-components="openRelationDrawer(row, 'components')"
                 />
@@ -779,7 +778,10 @@ onMounted(() => {
       :task="taskDetail"
       :log-text="taskLogText"
       :polling="taskPolling"
+      :cancelling="taskCancelling"
+      @cancel="cancelTask"
       @close="closeTaskDrawer"
+      @background="sendToBackground"
     />
 
     <ServerDetailModal :open="serverDetailOpen" :server-id="detailServerId" @close="closeServerDetail" />

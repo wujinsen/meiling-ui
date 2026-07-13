@@ -2,6 +2,7 @@
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useReducedMotion } from '@vueuse/motion'
+import { Loader2, Minimize2 } from 'lucide-vue-next'
 import AppModal from '@/components/ui/AppModal.vue'
 import { useSmoothProgress } from '@/composables/useSmoothProgress'
 import type { OperationTask } from '@/types/operation'
@@ -11,10 +12,13 @@ const props = defineProps<{
   task: OperationTask | null
   logText: string
   polling: boolean
+  cancelling?: boolean
 }>()
 
 const emit = defineEmits<{
   close: []
+  cancel: []
+  background: []
 }>()
 
 const { t } = useI18n()
@@ -45,10 +49,18 @@ const statusLabel = computed(() => {
   return t(key)
 })
 
+const canCancelTask = computed(() => {
+  const s = props.task?.status
+  return !props.task?.finished && (s === 'pending' || s === 'running')
+})
+
+const canBackground = computed(() => canCancelTask.value && props.polling)
+
 const statusClass = computed(() => {
   const s = props.task?.status
   if (s === 'success') return 'text-emerald-600 dark:text-emerald-400'
   if (s === 'failed') return 'text-red-600 dark:text-red-400'
+  if (s === 'cancelled') return 'text-amber-600 dark:text-amber-400'
   if (s === 'running') return 'text-blue-600 dark:text-blue-400'
   return 'text-gray-500'
 })
@@ -57,6 +69,7 @@ const barStateClass = computed(() => {
   const s = props.task?.status
   if (s === 'success') return 'operation-task-progress__bar--success'
   if (s === 'failed') return 'operation-task-progress__bar--failed'
+  if (s === 'cancelled') return 'operation-task-progress__bar--cancelled'
   if (isRunning.value) return 'operation-task-progress__bar--running'
   return ''
 })
@@ -103,7 +116,26 @@ watch(
       </div>
     </div>
     <template #footer>
-      <button type="button" class="btn-ghost" @click="emit('close')">{{ t('operation.common.cancel') }}</button>
+      <button
+        v-if="canBackground"
+        type="button"
+        class="btn-secondary"
+        @click="emit('background')"
+      >
+        <Minimize2 class="h-4 w-4" />
+        {{ t('operation.task.runInBackground') }}
+      </button>
+      <button
+        v-if="canCancelTask"
+        type="button"
+        class="btn-danger"
+        :disabled="cancelling"
+        @click="emit('cancel')"
+      >
+        <Loader2 v-if="cancelling" class="h-4 w-4 animate-spin" />
+        {{ cancelling ? t('operation.task.cancelling') : t('operation.task.cancelTask') }}
+      </button>
+      <button type="button" class="btn-ghost" @click="emit('close')">{{ t('operation.common.close') }}</button>
     </template>
   </AppModal>
 </template>

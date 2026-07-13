@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { probeAllHealthApi } from '@/api/operation'
 import { useOperationTaskPoll } from '@/composables/useOperationTaskPoll'
 import { showToast } from '@/composables/useToast'
-import { operationErrorI18nKey } from '@/constants/operationErrors'
+import { resolveOperationErrorMessage } from '@/constants/operationErrors'
 import { API_SUCCESS_CODE } from '@/types/api'
 
 type UseProbeAllHealthOptions = {
@@ -18,9 +18,7 @@ export function useProbeAllHealth(options: UseProbeAllHealthOptions = {}) {
   const busy = computed(() => starting.value || poll.polling.value)
 
   function resolveErrorMessage(code?: number, msg?: string) {
-    const key = operationErrorI18nKey(code)
-    if (key) return t(key)
-    return msg || t('operation.health.probeAllFailed')
+    return resolveOperationErrorMessage(t, code, msg, t('operation.health.probeAllFailed'))
   }
 
   async function probeAll() {

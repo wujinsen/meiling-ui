@@ -16,6 +16,7 @@ export function useOperationServerLabelCache() {
     serverCache.value = next
   }
 
+  /** @deprecated 列表 chips 勿用；仅保留供特殊场景。list 用 VO 的 `serverCount` + `normalizeListRowServerIds`。 */
   async function enrichRowsWithLinks<T extends LinkedEntity>(
     rows: T[],
     fetchLinks: (id: string | number) => Promise<(number | string)[] | undefined>,
