@@ -1,6 +1,6 @@
 # SSO-MENU-1 · 前端走查清单（meiling-ui）
 
-> **更新**：2026-07-13  
+> **更新**：2026-07-13 · **联合走查通过**（F-SSO-1～6 · S3～S7/S10 ✅）  
 > **读者**：meiling-ui 前端、user-center 后端联调  
 > **契约**：[sso-menu-frontend-handoff.md](../api/sso-menu-frontend-handoff.md)  
 > **Monorepo 镜像**：[moli-project-distribute/docs/test/sso-menu-frontend-walkthrough.md](../../moli-project-distribute/docs/test/sso-menu-frontend-walkthrough.md)  
@@ -24,24 +24,24 @@
 
 | ID | 结果 | 备注 |
 |----|------|------|
-| F-SSO-1 | ⬜ | `reloadRoutesFromServer` 统一入口 |
-| F-SSO-2 | ⬜ | 未 enter / 空 `getRouters` → 选系统 |
-| F-SSO-3 | ⬜ | enter/switch 后强制 `getRouters` |
-| F-SSO-4 | ⬜ | switch 清动态路由 / tabs |
-| F-SSO-5 | ⬜ | login 多系统不误注册旧路由 |
-| F-SSO-6 | ⬜ | Q5-A：admin 有 900 · 39 走 redirect |
-| S1 | ⬜ | 门户关闭回归 |
-| S2 | ⬜ | 单 INTERNAL 自动 enter |
-| S3 | ⬜ | enter admin 菜单范围 |
-| S4 | ⬜ | switch 不串台 |
-| S5 | ⬜ | EXTERNAL 39 |
-| S6 | ⬜ | 超管运行时过滤 |
-| S7 | ⬜ | 超管菜单管理全树 |
-| S8 | ⬜ | 角色仅勾子菜单 |
-| S9 | ⬜ | 祖先补齐 |
-| S10 | ⬜ | 未 enter 空树 |
+| F-SSO-1 | ✅ | API+UI：enter 后必有 `getRouters` |
+| F-SSO-2 | ✅ | login→`/system-select`；未 enter 时 `getRouters=[]` |
+| F-SSO-3 | ✅ | 选 moli-admin 后侧栏与 API 一致 |
+| F-SSO-4 | ✅ | SystemSwitcher 切换后 tab 全部消失（手验 2026-07-13） |
+| F-SSO-5 | ✅ | 多系统 login `menuVoList=[]` → 选系统页 |
+| F-SSO-6 | ✅ | admin 侧栏有 Knowledge Base；无 ChatGPT/BI |
+| S1 | ⬜ | 需 `sso.enabled=false` |
+| S2 | ⬜ | 需仅一条 INTERNAL 种子 |
+| S3 | ✅ | enter admin：6 顶栏；无 500/600；有 900 |
+| S4 | ✅ | switch→admin 后 `getRouters` 恢复 6 项 |
+| S5 | ✅ | enter 39：`redirectUrl` + `getRouters=[]` |
+| S6 | ✅ | admin 运行时无 500/600；zhangsan 仅 1 顶栏 |
+| S7 | ✅ | `getMenuTreeAll` count=8 |
+| S8 | ⬜ | 需角色仅勾子菜单账号 |
+| S9 | ⬜ | 需专测角色 |
+| S10 | ✅ | 未 enter `getRouters=[]` |
 
-**走查人**：　**日期**：　**8888 commit**：　**meiling-ui commit**：
+**走查人**：superadmin · **日期**：2026-07-13 · **8888**：本地 dev · **meiling-ui**：`:5141`
 
 ---
 

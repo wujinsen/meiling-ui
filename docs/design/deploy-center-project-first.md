@@ -125,6 +125,8 @@ runBatch(
 - 后端批量编排:滚动重启(逐台确认)、失败中断策略
 - 任务历史按 `projectId` 聚合视图
 
+**P3 API 需求（给后端）**：[api/p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md)（DC-4 · KB-LINT · KBOPS-2）
+
 ## 6. 验收清单
 
 - [ ] 选项目 → 服务器清单默认全选、主服务器标注、SSH✗ 禁选

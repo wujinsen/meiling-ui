@@ -150,6 +150,10 @@
     @apply dark:hover:border-white/10 dark:hover:bg-white/10;
   }
 
+  .toolbar-actions .segment-control {
+    @apply bg-transparent p-0 shadow-none;
+  }
+
   .operation-form-actions {
     @apply inline-flex shrink-0 items-center gap-1 rounded-lg border border-gray-200/80 bg-gray-50/60 p-1 shadow-sm;
     @apply dark:border-white/10 dark:bg-white/[0.03];
@@ -3083,6 +3087,11 @@
 
   .form-field-search.form-field-horizontal {
     grid-template-columns: auto minmax(0, 9.5rem);
+    align-items: center;
+  }
+
+  .form-field-search.form-field-horizontal.form-field-search-wide {
+    grid-template-columns: auto minmax(0, 10.5rem);
   }
 
   .form-field-search.form-field-horizontal .form-label {

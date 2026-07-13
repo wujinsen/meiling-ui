@@ -15,7 +15,7 @@
 |------|------|--------------|------------------|
 | **运营管理** | `8888` | **否** | **联合走查 W1–W10**（前端代码 ✅；见 [operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)） |
 | **知识库** | `8090` | **部分**（规模化/Lint） | **P0 点验**；**本地 dev** secret + O4 已就绪（§8.3） |
-| **SSO** | user-center | **是（P2 架构）** | **SSO-MENU-1** 纳入下迭代 P2（§8.4③）；设计见 distribute [sso-menu-system-isolation.md](../../moli-project-distribute/docs/design/sso-menu-system-isolation.md) |
+| **SSO** | user-center | **否** | **SSO-MENU-1 已交付**（走查 ✅ 2026-07-13） |
 
 ### 1.1 已与前端对齐（勿再 Breaking）
 
@@ -50,8 +50,7 @@
 |------|------|---------|
 | 🟢 **点验** | 无新 API；环境 + 走查 | W1–W10、§10/§16、KB-O4、KB-BROWSE-1、KB-LLM-DB、407 SQL |
 | 🟡 **可选开发** | 体验/规模化 **P3** | DC-4、KB-LINT-1/2、KBOPS-2 |
-| 🔴 **架构 P2** | 前端无法单独完成 | **SSO-MENU-1**（下迭代已纳入） |
-| ⚪ **已完成** | 前后端已对齐 | S-VO、W7–W10、DC-2/3、S-ERR-1、S-DEPLOY-1、create id、**batch deploy**（含原 DC-BE-1 滚动重启） |
+| ⚪ **已完成** | 前后端已对齐 | S-VO、W7–W10、DC-2/3、S-ERR-1、S-DEPLOY-1、create id、**batch deploy**、**SSO-MENU-1** |
 
 ### 2.1 联调点验（无新 API，需后端在场）
 
@@ -72,10 +71,10 @@
 
 | 任务 ID | 优先级 | 服务 | 后端待做 | 前端状态 |
 |---------|--------|------|----------|----------|
-| **DC-4** | P3 | `8888` | `task/list` 按 `projectId` 聚合 VO | 未开工 |
-| **KB-LINT-1/2** | P3 | `8090` | 服务端 `unassignedOnly` + 稳定分页 | 客户端兜底可用 |
-| **KBOPS-2** | P3 | `8090` | Dashboard 专用 API | 多接口聚合可用 |
-| **SSO-MENU-1** | **P2** | user-center | `system_id` + `getRouters` 过滤 | **下迭代** · 设计+SQL 草案已出 |
+| **DC-4** | P3 | `8888` | `task/groups` 或 list 聚合 VO | ⬜ 待 API · [p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §1 |
+| **KB-LINT-1/2** | P3 | `8090` | `GET /kb/lint/issues` 真分页 + `unassignedOnly` | ⬜ 待 API · 同上 §2 |
+| **KBOPS-2** | P3 | `8090` | `GET /kb/ops/dashboard` | ⬜ 待 API · 同上 §3 |
+| **SSO-MENU-1** | — | user-center | — | ✅ **已交付 + 走查**（2026-07-13） |
 
 > **DC-BE-1**：滚动批量重启已由 **`POST /operation/deploy/batch/task`**（`b4ac176a` + 前端 W9）覆盖，**可标为已交付**。
 
@@ -166,30 +165,37 @@ POST /operation/file/upload
 
 ### 4.2 Lint 分页（KB-LINT-1 / KB-LINT-2 · 可选）
 
+**详稿**：[p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §2
+
+```http
+GET /kb/lint/issues?pageNum=&pageSize=&unassignedOnly=true&spaceId=&status=0
+→ { records, total, current, size }
 ```
-GET /kb/lint/issues?pageNum=&pageSize=&unassignedOnly=
-→ { records, total, current, size } 或 MoliPage 等价结构
+
+`unassignedOnly=true` 时须服务端过滤；须同时返 `current` + `size` 触发前端服务端分页分支。
+
+### 4.3 运维 Dashboard（KBOPS-2 · 可选）
+
+**详稿**：[p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §3
+
+```http
+GET /kb/ops/dashboard?days=7&brokenTopN=10
+→ syncTrend · pendingIssues · brokenLinkTop · llm
 ```
 
-`unassignedOnly=true` 时须服务端过滤，勿返全量数组。
-
-### 4.3 可选（KBOPS-2）
-
-运维 Dashboard 专用 API — 非阻塞；前端现聚合 `sync/logs` + `lint/issues` + `ask/llm-config`。
+非阻塞；前端现聚合 `sync/logs` + `lint/issues` + `ask/llm-config`。
 
 ---
 
-## 5. SSO（SSO-MENU-1 · P2 下迭代）
+## 5. SSO（SSO-MENU-1 · ✅ 已交付）
 
 | 项 | 说明 |
 |----|------|
 | 需求 | 门户进入 INTERNAL 系统后，侧栏**仅**该系统菜单 |
 | 权威设计 | distribute [sso-menu-system-isolation.md](../../moli-project-distribute/docs/design/sso-menu-system-isolation.md) · SQL `30_sso_menu_system_id.sql` |
-| **前端开工** | [sso-menu-frontend-handoff.md](sso-menu-frontend-handoff.md)（F-SSO-1～6 · Q3/Q5 · `reloadRoutesFromServer`） |
-| **走查** | [sso-menu-frontend-walkthrough.md](../test/sso-menu-frontend-walkthrough.md) |
-| 本仓摘要 | [per-system-menu-isolation.md](../per-system-menu-isolation.md) |
-| 排期 | **✅ 纳入下迭代 P2**（约 2–3 人日，§8.4③） |
-| 阻塞度 | **不挡**运营/KB 主流程 |
+| **契约** | [sso-menu-frontend-handoff.md](sso-menu-frontend-handoff.md)（F-SSO-1～6） |
+| **走查** | [sso-menu-frontend-walkthrough.md](../test/sso-menu-frontend-walkthrough.md) ✅ 2026-07-13 |
+| 历史稿 | [per-system-menu-isolation.md](../per-system-menu-isolation.md)（**已废弃**） |
 
 ---
 
@@ -199,7 +205,7 @@ GET /kb/lint/issues?pageNum=&pageSize=&unassignedOnly=
 ① 8888：push/deploy b4ac176a（共享环境）或本地 install+重启 → W1–W10 走查
 ② 8090：KB_LLM_CONFIG_SECRET + KB-O4 → kb:prd-acceptance（本地 dev 已就绪）
 ③ DBA：407 SQL（老库按需）
-④ 下迭代 P2：SSO-MENU-1
+④ ~~SSO-MENU-1~~ ✅ 2026-07-13
 ⑤ 可选 P3：DC-4 · KB-LINT · KBOPS-2
 ```
 
@@ -224,7 +230,8 @@ GET /kb/lint/issues?pageNum=&pageSize=&unassignedOnly=
 8090 点验：
 · 本地 dev：secret + O4 已就绪 · npm run kb:prd-acceptance
 
-下迭代（已答）：SSO-MENU-1=P2；DC-4/KB-LINT/KBOPS-2=P3 可选
+SSO-MENU-1：✅ 已交付（走查 2026-07-13）
+下迭代可选：DC-4/KB-LINT/KBOPS-2=P3
 DC-BE-1：已由 batch/task 覆盖，可关闭
 
 详稿：moli-project-distribute/docs/api/frontend-backend-dependencies.md
@@ -241,7 +248,7 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 |------|------|
 | **运营** | **无 API 阻塞**；待 W1–W10 **联合走查** |
 | **知识库** | **点验级**；**本地 secret + O4 已就绪** |
-| **SSO** | **P2 架构**；**纳入下迭代**；设计+SQL 草案已出 |
+| **SSO** | **已交付**；F-SSO-1～6 + S3～S7/S10 走查 ✅（2026-07-13） |
 | **文档↔代码** | **与 monorepo `frontend-gaps` / handoff 互引一致** |
 
 ### 8.2 ① 8888 版本与联调
@@ -266,7 +273,7 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 
 | 项 | 排期 |
 |----|------|
-| **SSO-MENU-1** | ✅ **纳入下迭代 P2**（设计已出，约 2–3 人日） |
+| **SSO-MENU-1** | ✅ **已交付 + 走查通过**（2026-07-13） |
 | **DC-4** | ⬜ **P3 可选** |
 | **KB-LINT-1/2** · **KBOPS-2** | ⬜ **P3 可选** |
 | **DC-BE-1** | ✅ 由 **`POST /deploy/batch/task`** 覆盖（与 W9 一致） |
@@ -275,6 +282,7 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 
 ```text
 8888：□ install+重启（b4ac176a）  □ VITE_USE_MOCK_AUTH=false  □ 走查稿 W1–W10
+SSO：☑ 30_sso_menu_system_id.sql  ☑ sso-menu-frontend-walkthrough（2026-07-13）
 8090：□ 8090 重启  □ kb:prd-acceptance（本地 dev 通常已满足 secret+O4）
 ```
 

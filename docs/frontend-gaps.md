@@ -42,7 +42,7 @@
 | 任务 ID | 优先级 | 前端落点 | 说明 | 参考 |
 |---------|--------|----------|------|------|
 | **DC-3** | P2 | `DeployCenterView.vue` · `OperationServerMultiPickModal.vue` | ✅ 追加台账服务器（2026-07-13） | [deploy-center-project-first.md](design/deploy-center-project-first.md) §5 |
-| **DC-4** | P3 | `TaskHistoryView.vue` | 按 `projectId` 聚合/分组视图 | 同上 §5 · **需后端 · P3 可选** |
+| **DC-4** | P3 | `TaskHistoryView.vue` | 按 `projectId` 聚合/分组视图 | **待后端 API** · [p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md) §1 |
 | **S-ERR-1** | P2 | `operationErrors.ts` | ✅ 10101–10109 Toast（2026-07-13） | [operation-frontend.md](api/operation-frontend.md) §3.6 |
 | **S-DEPLOY-1** | P2 | `operationPort.ts` | ✅ order/bi 映射（2026-07-13） | handoff §4.2 |
 | ~~**DC-BE-1**~~ | — | — | ✅ 由 `POST /deploy/batch/task`（`b4ac176a` + W9）覆盖 | — |
@@ -69,9 +69,9 @@
 
 | 任务 ID | 优先级 | 前端落点 | 说明 | 阻塞 |
 |---------|--------|----------|------|------|
-| **KB-LINT-1** | P3 | `KnowledgeLintView.vue` · `normalizeLintIssuesResponse` | 服务端 `unassignedOnly` + 分页 | 后端分页字段 |
-| **KB-LINT-2** | P3 | `KnowledgeLintView.vue` | 工单真分页 | 后端稳定分页 |
-| **KBOPS-2** | P3 | `KnowledgeOpsDashboardView.vue` | 切运维 Dashboard **专用 API** | 后端可选 API |
+| **KB-LINT-1** | P3 | `KnowledgeLintView.vue` · `normalizeLintIssuesResponse` | 服务端 `unassignedOnly` + 分页 | [p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md) §2 |
+| **KB-LINT-2** | P3 | `KnowledgeLintView.vue` | 工单真分页 | 同上 §2 |
+| **KBOPS-2** | P3 | `KnowledgeOpsDashboardView.vue` | 切运维 Dashboard **专用 API** | [p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md) §3 |
 
 详见 [api/knowledge-ops-frontend.md](api/knowledge-ops-frontend.md) · [product/knowledge-ops-prd.md](product/knowledge-ops-prd.md) §8。
 
@@ -82,7 +82,7 @@
 | 任务 ID | 优先级 | 项 | 前端动作 | 阻塞 |
 |---------|--------|-----|----------|------|
 | **SSO-REG** | — | 系统注册 `SystemManageView` | ✅ 已完成 | — |
-| **SSO-MENU-1** | **P2** | 按系统隔离菜单 | ✅ **F-SSO-1～6 已落地**（`reloadRoutesFromServer`）；待后端 `system_id` + [走查](test/sso-menu-frontend-walkthrough.md) | distribute [sso-menu-system-isolation.md](../../moli-project-distribute/docs/design/sso-menu-system-isolation.md) |
+| **SSO-MENU-1** | **P2** | 按系统隔离菜单 | ✅ **已交付 + 走查通过**（2026-07-13） | [走查](test/sso-menu-frontend-walkthrough.md) · distribute [设计](../../moli-project-distribute/docs/design/sso-menu-system-isolation.md) |
 
 见 [sso-frontend-dev-guide.md](sso-frontend-dev-guide.md) · [per-system-menu-isolation.md](per-system-menu-isolation.md) · 走查 [sso-menu-frontend-walkthrough.md](test/sso-menu-frontend-walkthrough.md)。
 
@@ -110,10 +110,10 @@
 | 顺序 | 任务 ID | 模块 | 状态 |
 |------|---------|------|------|
 | — | **DC-3** · **S-ERR-1** · **S-DEPLOY-1** | 运营 | ✅ 2026-07-13 |
-| 1 | **DC-4** | 任务历史 project 聚合 | 待做 · P3 可选 |
-| 2 | **KB-LINT-1** · **KB-LINT-2** | Lint 分页收紧 | 待做 · P3 可选 |
-| 3 | **KBOPS-2** | 运维 Dashboard 专用 API | 待做 · P3 可选 |
-| — | **SSO-MENU-1** | 按系统隔离菜单 | 前端 ✅ · **待联合走查**（后端 P0/P1） |
+| 1 | **DC-4** | 任务历史 project 聚合 | **待后端 API** · 前端暂缓 |
+| 2 | **KB-LINT-1** · **KB-LINT-2** | Lint 分页收紧 | **待后端 API** · 前端暂缓 |
+| 3 | **KBOPS-2** | 运维 Dashboard 专用 API | **待后端 API** · 前端暂缓 |
+| — | **SSO-MENU-1** | 按系统隔离菜单 | ✅ **已交付 + 走查通过**（2026-07-13） |
 
 **运营主功能**：SVR-25/28/26b · S-VO · DC-2/3 · **W7–W10** 均已落地；联合走查见 [operation-w1-w10-walkthrough.md](test/operation-w1-w10-walkthrough.md)。
 
@@ -123,7 +123,7 @@
 
 | 类型 | 任务 ID |
 |------|---------|
-| **点验**（无新 API） | **W1–W10**、运营 §10/§16、KB-O4、KB-BROWSE-1、KB-GOV-LLM、KB-LLM-DB、KB-LINT-SCAN、407 SQL · **SSO-MENU-1 走查**（待后端） |
-| **需后端开发** | **SSO-MENU-1** 后端过滤 · **DC-4** / **KB-LINT-1/2** / **KBOPS-2**（**P3 可选**） |
+| **点验**（无新 API） | **W1–W10**、运营 §10/§16、KB-O4、KB-BROWSE-1、KB-GOV-LLM、KB-LLM-DB、KB-LINT-SCAN、407 SQL · ~~**SSO-MENU-1**~~ ✅ 2026-07-13 |
+| **需后端开发** | **DC-4** / **KB-LINT-1/2** / **KBOPS-2**（**P3** · [p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md)） |
 | ~~**DC-BE-1**~~ | ✅ 由 `batch/task` 覆盖 |
 | **纯前端** | ~~DC-3、S-ERR-1、S-DEPLOY-1~~ ✅ 2026-07-13 |

@@ -11,6 +11,7 @@ import { guardAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
 import { PERM } from '@/constants/permissions'
 import AppPagination from '@/components/ui/AppPagination.vue'
+import SegmentControl from '@/components/ui/SegmentControl.vue'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import SystemRegistryGroupView from '@/components/system/SystemRegistryGroupView.vue'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -28,7 +29,7 @@ import {
   type SystemQuery,
 } from '@/types/system'
 import { isCurrentUserSuperAdmin } from '@/utils/privilege'
-import { LayoutGrid, List, Pencil, Plus, RefreshCw, Search, Trash2, Users } from 'lucide-vue-next'
+import { Pencil, Plus, RefreshCw, Search, Trash2, Users } from 'lucide-vue-next'
 
 const GROUP_VIEW_PAGE_SIZE = 200
 
@@ -68,6 +69,11 @@ const allSelected = computed(
 )
 
 const hasSelection = computed(() => selectedIds.value.size > 0)
+
+const viewModeOptions = computed(() => [
+  { value: 'group', label: t('system.manage.viewGroup') },
+  { value: 'table', label: t('system.manage.viewTable') },
+])
 
 async function refreshSidebarCounts() {
   try {
@@ -320,8 +326,8 @@ onMounted(async () => {
         </p>
       </div>
 
-      <div class="mb-4 flex flex-wrap items-center gap-3">
-        <form class="form-search-toolbar contents" @submit.prevent="searchSystems">
+      <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <form class="form-search-toolbar min-w-0 flex-1 items-end" @submit.prevent="searchSystems">
           <FormField :label="t('system.manage.systemName')" horizontal class="form-field-search">
             <input
               v-model="query.systemName"
@@ -345,7 +351,7 @@ onMounted(async () => {
               <option :value="0">{{ t('system.manage.statusOff') }}</option>
             </select>
           </FormField>
-          <FormField :label="t('system.manage.systemGroup')" horizontal class="form-field-search">
+          <FormField :label="t('system.manage.systemGroup')" horizontal class="form-field-search form-field-search-wide">
             <select v-model="query.systemGroup" class="field-input">
               <option value="">{{ t('system.manage.systemGroupAll') }}</option>
               <option v-for="group in SYSTEM_GROUP_ORDER" :key="group" :value="group">
@@ -353,34 +359,21 @@ onMounted(async () => {
               </option>
             </select>
           </FormField>
-          <button type="submit" class="btn-primary shrink-0">
-            <Search class="h-4 w-4" /> {{ t('system.manage.search') }}
-          </button>
-          <button type="button" class="btn-ghost shrink-0" @click="resetQuery">
-            <RefreshCw class="h-4 w-4" /> {{ t('system.manage.reset') }}
-          </button>
-        </form>
-        <div class="toolbar-actions">
-          <div class="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-white/10">
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs transition"
-              :class="viewMode === 'group' ? 'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'"
-              @click="setViewMode('group')"
-            >
-              <LayoutGrid class="h-3.5 w-3.5" />
-              {{ t('system.manage.viewGroup') }}
+          <div class="inline-flex shrink-0 items-center gap-2">
+            <button type="submit" class="btn-primary">
+              <Search class="h-4 w-4" /> {{ t('system.manage.search') }}
             </button>
-            <button
-              type="button"
-              class="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs transition"
-              :class="viewMode === 'table' ? 'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-300' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'"
-              @click="setViewMode('table')"
-            >
-              <List class="h-3.5 w-3.5" />
-              {{ t('system.manage.viewTable') }}
+            <button type="button" class="btn-ghost" @click="resetQuery">
+              <RefreshCw class="h-4 w-4" /> {{ t('system.manage.reset') }}
             </button>
           </div>
+        </form>
+        <div class="toolbar-actions shrink-0 self-end">
+          <SegmentControl
+            :model-value="viewMode"
+            :options="viewModeOptions"
+            @update:model-value="setViewMode($event as 'group' | 'table')"
+          />
           <template v-if="canManage">
           <button type="button" class="btn-ghost shrink-0" :disabled="!hasSelection" @click="removeSelected">
             <Trash2 class="h-4 w-4" /> {{ t('system.manage.deleteBatch') }}

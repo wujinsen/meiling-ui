@@ -1,11 +1,11 @@
 # SSO 菜单隔离 · 前端开工手册（meiling-ui · SSO-MENU-1）
 
-> **更新**：2026-07-13（**Q3/Q5 已定案** · 可与后端 P0 **并行开工**）  
+> **更新**：2026-07-13（**Q3/Q5 已定案** · 后端 P0/P1 **已实现** · 前端 F-SSO **已落地** · **联合走查通过**）  
 > **任务 ID**：**SSO-MENU-1**（P2）  
 > **前端仓库**：`meiling-ui` · 分支 `main`  
 > **Monorepo 镜像**：[moli-project-distribute/docs/api/sso-menu-frontend-handoff.md](../../moli-project-distribute/docs/api/sso-menu-frontend-handoff.md)  
 > **后端设计**：[sso-menu-system-isolation.md](../../moli-project-distribute/docs/design/sso-menu-system-isolation.md) · SQL：`moli-project-distribute/docs/sql/30_sso_menu_system_id.sql`  
-> **本仓后端摘要**：[per-system-menu-isolation.md](../per-system-menu-isolation.md)  
+> **本仓后端摘要**：[per-system-menu-isolation.md](../per-system-menu-isolation.md)（**已废弃**，以 monorepo 设计稿为准）  
 > **给后端**：[frontend-backend-dependencies.md](frontend-backend-dependencies.md) §5  
 > **走查**：[sso-menu-frontend-walkthrough.md](../test/sso-menu-frontend-walkthrough.md)  
 > **SSO 总览**：[sso-frontend-dev-guide.md](../sso-frontend-dev-guide.md)
@@ -28,11 +28,9 @@
 
 | 侧 | 内容 | 状态 |
 |----|------|------|
-| **后端 P0** | `sys_menu.system_id` · `resolveRoutersForCurrentSystem` · `getRouters` / `enter` / `switch` 委托 | ⬜ 待实现 |
-| **后端 P1** | backfill SQL · 新菜单 INSERT 带 `system_id` | ⬜ 待实现 |
-| **前端 P2** | 本稿 F-SSO-1～6 · 走查 S1–S10 | ⬜ **可开工** |
-
-**可并行**：前端先改 `usePermission` / `router` / `useSystemPortal`；联调前确认 `:8888` 已合入 SSO-MENU-1 后端 commit。
+| **后端 P0/P1** | `sys_menu.system_id` · `resolveRoutersForCurrentSystem` · backfill SQL | ✅ 已实现 |
+| **前端 F-SSO-1～6** | `reloadRoutesFromServer` · 守卫 · enter/switch · tab 清空 | ✅ 已落地 |
+| **联合走查** | S1–S10 + F-SSO-1～6 | ✅ **已通过**（2026-07-13） |
 
 **现状（2026-07-13）**：`useSystemPortal.applyEnterResult` 已在 enter/switch 后调用 `loadDynamicRoutes(true)`（即会再打 `getRouters`），但 **未** 统一封装、**未** 处理 Q3 空树、且 `getRoutersApi` 失败时会 **fallback 默认菜单**（与 Q3-A 冲突，见 F-SSO-1 注）。
 

@@ -426,7 +426,8 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 | LLM 可用 D3 | `GET /kb/ask/llm-config` | available 指示灯 |
 | 断链 Top N D4 | lint issues `broken_link` | P2 可选 |
 
-后端 Dashboard 专用 API **尚未实现**；当前由 `KnowledgeOpsDashboardView` 聚合 `sync/logs`、`lint/issues`、`ask/llm-config`。
+后端 Dashboard 专用 API **尚未实现**；当前由 `KnowledgeOpsDashboardView` 聚合 `sync/logs`、`lint/issues`、`ask/llm-config`。  
+**P3 API 需求**：[p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §3（KBOPS-2）。
 
 | 区块 | 前端落点 | 状态 |
 |------|----------|------|

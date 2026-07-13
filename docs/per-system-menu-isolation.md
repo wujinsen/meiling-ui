@@ -1,7 +1,10 @@
 # 按系统隔离菜单 · 后端变更说明（给 moli-server）
 
-最后更新: 2026-06-22
-提出方: meiling-ui 前端（T6 企业知识库）
+> **⚠️ 已废弃（2026-07-13）**  
+> 权威文档：[moli-project-distribute/docs/design/sso-menu-system-isolation.md](../../moli-project-distribute/docs/design/sso-menu-system-isolation.md) · [sso-menu-frontend-handoff.md](api/sso-menu-frontend-handoff.md) · Q5 以 **admin 内嵌 900（Q5-A）** 为准，非下文「仅知识库系统」方案。
+
+最后更新: 2026-06-22（历史稿）  
+提出方: meiling-ui 前端（T6 企业知识库）  
 目标读者: `moli-project-single` / 模块 `moli-server` 后端
 
 > 一句话需求：**用户从门户进入某个 INTERNAL 系统后，侧栏只显示「该系统」的菜单**（例如进入「企业知识库」只看到知识库菜单，不再混着 moli-admin 的用户/角色/菜单等）。
