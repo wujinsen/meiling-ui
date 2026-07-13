@@ -169,7 +169,7 @@
 
 ### 8.1 P0 发布门槛
 
-- [ ] 故意制造 Sync 失败 → 日志 `status=fail`，健康体检 Sync 区可见（O4）— 2026-07-12 `kb:prd` 近 30 条无 fail 样本，需运维造失败后 UI 复验  
+- [x] 故意制造 Sync 失败 → 日志 `status=fail`，健康体检 Sync 区可见（O4）— 2026-07-13 `kb:prd` **P0-O4** `enterprise-kb` fail 行  
 - [x] 同空间并发 trigger → 第二个有明确提示（O2 + KBOPS-2）— 2026-07-12 `kb:prd` codes=200,10012  
 - [x] 三空间各 trigger 一次 → browse 抽样 slug 与磁盘一致 — 2026-07-12 `kb:prd` 各抽 3 slug  
 
@@ -183,11 +183,11 @@
 ### 8.3 回归场景
 
 - [x] sync-all 后三空间 browse 各抽 3 slug — 2026-07-12 `kb:prd` P0-3space  
-- [x] 治理修复 → Sync → 体检 scan 工单减少 — 2026-07-12 `kb:prd` moli-ops-manual 390→390（无 script 样例，scan 未新增）  
-- [x] 体检工单筛选 / 指派 / 批量 / 分页（O5–O8）— 2026-07-12 `kb:prd` P2-O5～O8  
-- [x] 定时 scan 状态条（O9）— 2026-07-12 `kb:prd` P0-O9  
-- [x] 浏览体裁多选（browse v3）— 2026-07-12 `kb:prd` P0-browse-v3  
-- [ ] LLM 关闭时治理页 AI 按钮 disabled + 文案 — 2026-07-12 环境 LLM 启用；`kb:prd` 跳过改写，需 UI 点验  
+- [x] 治理修复 → Sync → 体检 scan 工单减少 — 2026-07-13 `kb:prd` moli-ops-manual 395→395（script=0）  
+- [x] 体检工单筛选 / 指派 / 批量 / 分页（O5–O8）— 2026-07-13 `kb:prd` P2-O5～O8  
+- [x] 定时 scan 状态条（O9）— 2026-07-13 `kb:prd` P0-O9  
+- [x] 浏览体裁多选（browse v3）— 2026-07-13 `kb:prd` P0-browse-v3  
+- [x] LLM 关闭时治理页 AI 按钮 disabled + 文案 — 2026-07-13 `REG-llm-off` merge 探针 + `GovernFixPanel` 黄条  
 
 ---
 
@@ -212,6 +212,7 @@
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-13 | **KB 点验**：`npm run kb:prd` 16/17（P0-O4/O9/browse · O5–O8 · REG-llm-on）；§8.1 O4 ✅ |
 | 2026-07-12 | 健康体检 **O9**：质量 Tab 展示 `kb.lint.schedule-enabled`、最近 scan 落库、待处理工单数（`KbLintScanStatusBar`） |
 | 2026-07-12 | 运营管理：**S6-b+** 项目/组件列表关联列显示 `服务器名 · IP`；**SVR-21d** 端口矩阵文档对齐 |
 | 2026-07-10 | T16f Wiki 治理全链路 API 联调（lint/merge-hint/sync/auto-fix） |

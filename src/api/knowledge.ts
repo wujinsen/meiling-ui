@@ -908,6 +908,8 @@ export {
   updateKbLintIssueApi,
 } from './knowledge/kbLint'
 
+export { getKbOpsDashboardApi } from './knowledge/kbOps'
+
 // ---------------------------------------------------------------------------
 // 3.2 问答历史与反馈
 // ---------------------------------------------------------------------------

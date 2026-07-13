@@ -1136,3 +1136,36 @@ export type KbIngestExpressStartResult = {
   job: KbIngestJob
   prepare: KbIngestPrepareResult
 }
+
+/** KBOPS-9 · GET /kb/ops/dashboard */
+export type KbOpsSyncTrendPoint = {
+  date: string
+  successBatches: number
+  failBatches: number
+}
+
+export type KbOpsLintSummary = {
+  openCount?: number
+  ignoredCount?: number
+  fixedCount?: number
+  openByType?: Record<string, number>
+  topBrokenLinks?: string[]
+}
+
+export type KbOpsLlmSummary = {
+  enabled?: boolean
+  available?: boolean
+  provider?: string
+  model?: string
+  source?: string
+  successRate?: number
+  totalCalls?: number
+}
+
+export type KbOpsDashboardVo = {
+  spaceId?: number | string | null
+  syncTrend?: KbOpsSyncTrendPoint[]
+  lintSummary?: KbOpsLintSummary
+  unresolvedRelationCount?: number
+  llm?: KbOpsLlmSummary
+}

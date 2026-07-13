@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { listTaskApi } from '@/api/operation'
+import { listTaskApi, listTaskGroupsApi } from '@/api/operation'
 import DeployTaskDrawer from '@/components/operation/DeployTaskDrawer.vue'
 import OperationEntityLink from '@/components/operation/OperationEntityLink.vue'
 import OperationPageHeader from '@/components/operation/OperationPageHeader.vue'
@@ -16,8 +16,8 @@ import { useOperationTaskPoll } from '@/composables/useOperationTaskPoll'
 import { formatDateTime, showToast } from '@/composables/useToast'
 import { DEFAULT_PAGE_SIZE } from '@/constants/pagination'
 import { API_SUCCESS_CODE } from '@/types/api'
-import { OPERATION_TASK_TYPES, type OperationTask } from '@/types/operation'
-import { FileText, RefreshCw, Search } from 'lucide-vue-next'
+import { OPERATION_TASK_TYPES, type OperationTask, type OperationTaskProjectGroup } from '@/types/operation'
+import { ChevronDown, ChevronRight, FileText, LayoutList, Layers, RefreshCw, Search } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -32,10 +32,15 @@ const {
   closeRelation,
 } = useOperationRelationDrawer()
 
+type ViewMode = 'flat' | 'group'
+
 const loading = ref(false)
+const viewMode = ref<ViewMode>('flat')
 const list = ref<OperationTask[]>([])
+const groups = ref<OperationTaskProjectGroup[]>([])
 const total = ref(0)
 const autoRefresh = ref(false)
+const expandedGroups = ref<Set<string>>(new Set())
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const query = reactive({
@@ -44,6 +49,7 @@ const query = reactive({
   taskType: '' as string,
   serverId: '' as string,
   projectId: '' as string,
+  tasksPerGroup: 20,
 })
 
 const taskTypeOptions = computed(() => [
@@ -54,8 +60,12 @@ const taskTypeOptions = computed(() => [
   })),
 ])
 
+const visibleTasks = computed(() =>
+  viewMode.value === 'flat' ? list.value : groups.value.flatMap((g) => g.tasks ?? []),
+)
+
 const hasRunningTasks = computed(() =>
-  list.value.some((row) => row.status === 'pending' || row.status === 'running'),
+  visibleTasks.value.some((row) => row.status === 'pending' || row.status === 'running'),
 )
 
 function taskTypeLabel(type?: string | null) {
@@ -72,6 +82,37 @@ function taskSummary(row: OperationTask) {
   return parts.length ? parts.join(' · ') : '-'
 }
 
+function groupKey(group: OperationTaskProjectGroup) {
+  return group.projectId == null || group.projectId === '' ? '_unassigned' : String(group.projectId)
+}
+
+function groupTitle(group: OperationTaskProjectGroup) {
+  if (group.projectId == null || group.projectId === '') {
+    return t('operation.taskHistory.unassignedProject')
+  }
+  return group.projectName || t('operation.taskHistory.projectIdLabel', { id: group.projectId })
+}
+
+function groupMeta(group: OperationTaskProjectGroup) {
+  return t('operation.taskHistory.groupMeta', {
+    count: group.taskCount ?? group.tasks?.length ?? 0,
+    running: group.runningCount ?? 0,
+    failed: group.failedCount ?? 0,
+  })
+}
+
+function isGroupExpanded(group: OperationTaskProjectGroup) {
+  return expandedGroups.value.has(groupKey(group))
+}
+
+function toggleGroup(group: OperationTaskProjectGroup) {
+  const key = groupKey(group)
+  const next = new Set(expandedGroups.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedGroups.value = next
+}
+
 function openTaskServer(row: OperationTask) {
   if (row.serverId == null || row.serverId === '') return
   openRelation('server', row.serverId, { name: row.targetName ?? undefined, tab: 'tasks' })
@@ -83,7 +124,7 @@ function openTaskProject(row: OperationTask) {
 }
 
 function search() {
-  if (query.pageNum === 1) loadList()
+  if (query.pageNum === 1) void loadList()
   else query.pageNum = 1
 }
 
@@ -101,7 +142,11 @@ function parseQueryParams() {
   const taskId = route.query.taskId
   if (typeof taskType === 'string') query.taskType = taskType
   if (typeof serverId === 'string') query.serverId = serverId
-  if (typeof projectId === 'string') query.projectId = projectId
+  if (typeof projectId === 'string') {
+    query.projectId = projectId
+    viewMode.value = 'group'
+    expandedGroups.value = new Set([projectId])
+  }
   if (typeof taskId === 'string' && taskId) {
     openTask(taskId)
   }
@@ -110,21 +155,48 @@ function parseQueryParams() {
 async function loadList() {
   loading.value = true
   try {
-    const result = await listTaskApi({
+    const baseParams = {
       pageNum: query.pageNum,
       pageSize: query.pageSize,
       taskType: query.taskType || undefined,
       serverId: query.serverId || undefined,
       projectId: query.projectId || undefined,
-    })
-    if (result.code !== API_SUCCESS_CODE || !result.data) throw new Error(result.msg || t('operation.taskHistory.loadFailed'))
-    list.value = result.data.list ?? []
-    total.value = result.data.total ?? 0
+    }
+    if (viewMode.value === 'group') {
+      const result = await listTaskGroupsApi({
+        ...baseParams,
+        tasksPerGroup: query.tasksPerGroup,
+      })
+      if (result.code !== API_SUCCESS_CODE || !result.data) {
+        throw new Error(result.msg || t('operation.taskHistory.groupsLoadFailed'))
+      }
+      groups.value = result.data.list ?? []
+      total.value = result.data.total ?? 0
+      list.value = []
+      if (query.projectId && groups.value.length === 1) {
+        expandedGroups.value = new Set([groupKey(groups.value[0])])
+      }
+    } else {
+      const result = await listTaskApi(baseParams)
+      if (result.code !== API_SUCCESS_CODE || !result.data) {
+        throw new Error(result.msg || t('operation.taskHistory.loadFailed'))
+      }
+      list.value = result.data.list ?? []
+      total.value = result.data.total ?? 0
+      groups.value = []
+    }
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('operation.taskHistory.loadFailed'))
   } finally {
     loading.value = false
   }
+}
+
+function setViewMode(mode: ViewMode) {
+  if (viewMode.value === mode) return
+  viewMode.value = mode
+  query.pageNum = 1
+  void loadList()
 }
 
 function viewLog(row: OperationTask) {
@@ -159,7 +231,7 @@ watch(hasRunningTasks, (running) => {
 watch(() => [query.pageNum, query.pageSize], loadList)
 onMounted(() => {
   parseQueryParams()
-  loadList()
+  void loadList()
 })
 onUnmounted(stopAutoRefresh)
 </script>
@@ -191,6 +263,26 @@ onUnmounted(stopAutoRefresh)
           </div>
         </form>
         <div class="toolbar-actions">
+          <div class="inline-flex rounded-lg border border-gray-200 p-0.5 dark:border-white/10">
+            <button
+              type="button"
+              class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition"
+              :class="viewMode === 'flat' ? 'bg-gray-100 font-medium text-gray-900 dark:bg-white/10 dark:text-white' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'"
+              @click="setViewMode('flat')"
+            >
+              <LayoutList class="h-4 w-4" />
+              {{ t('operation.taskHistory.viewFlat') }}
+            </button>
+            <button
+              type="button"
+              class="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition"
+              :class="viewMode === 'group' ? 'bg-gray-100 font-medium text-gray-900 dark:bg-white/10 dark:text-white' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'"
+              @click="setViewMode('group')"
+            >
+              <Layers class="h-4 w-4" />
+              {{ t('operation.taskHistory.viewGrouped') }}
+            </button>
+          </div>
           <label class="inline-flex items-center gap-2 text-sm text-gray-500">
             <input v-model="autoRefresh" type="checkbox" class="rounded border-gray-300" />
             {{ t('operation.taskHistory.autoRefresh') }}
@@ -205,7 +297,8 @@ onUnmounted(stopAutoRefresh)
 
     <div class="card p-5">
       <p class="mb-4 text-sm text-gray-500">{{ t('operation.taskHistory.hint') }}</p>
-      <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
+
+      <div v-if="viewMode === 'flat'" class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
         <table class="w-full min-w-[1040px] text-left text-sm">
           <thead class="bg-gray-50 text-xs uppercase text-gray-400 dark:bg-white/5">
             <tr>
@@ -275,7 +368,80 @@ onUnmounted(stopAutoRefresh)
           </tbody>
         </table>
       </div>
-      <div v-if="total > 0" class="mt-4"><AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" /></div>
+
+      <div v-else class="space-y-3">
+        <p v-if="loading" class="py-10 text-center text-sm text-gray-400">{{ t('operation.common.loading') }}</p>
+        <p v-else-if="!groups.length" class="py-10 text-center text-sm text-gray-400">{{ t('operation.common.empty') }}</p>
+        <section
+          v-for="group in groups"
+          v-else
+          :key="groupKey(group)"
+          class="overflow-hidden rounded-lg border border-gray-100 dark:border-white/5"
+        >
+          <button
+            type="button"
+            class="flex w-full cursor-pointer items-center justify-between gap-3 bg-gray-50 px-4 py-3 text-left dark:bg-white/5"
+            @click="toggleGroup(group)"
+          >
+            <div class="flex min-w-0 items-center gap-2">
+              <component :is="isGroupExpanded(group) ? ChevronDown : ChevronRight" class="h-4 w-4 shrink-0 text-gray-400" />
+              <div class="min-w-0">
+                <p class="truncate font-medium text-gray-900 dark:text-white">{{ groupTitle(group) }}</p>
+                <p class="text-xs text-gray-500">{{ groupMeta(group) }}</p>
+              </div>
+            </div>
+            <span v-if="group.latestCreateTime" class="shrink-0 text-xs text-gray-400">
+              {{ formatDateTime(group.latestCreateTime) }}
+            </span>
+          </button>
+          <div v-if="isGroupExpanded(group)" class="overflow-x-auto border-t border-gray-100 dark:border-white/5">
+            <table class="w-full min-w-[960px] text-left text-sm">
+              <thead class="bg-white text-xs uppercase text-gray-400 dark:bg-gray-900">
+                <tr>
+                  <th class="px-4 py-2">ID</th>
+                  <th class="px-4 py-2">{{ t('operation.taskHistory.taskType') }}</th>
+                  <th class="px-4 py-2">{{ t('operation.taskHistory.status') }}</th>
+                  <th class="px-4 py-2">{{ t('operation.taskHistory.target') }}</th>
+                  <th class="px-4 py-2">{{ t('operation.common.createTime') }}</th>
+                  <th class="px-4 py-2 text-right">{{ t('operation.common.actions') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!(group.tasks?.length)"><td colspan="6" class="px-4 py-6 text-center text-gray-400">{{ t('operation.common.empty') }}</td></tr>
+                <tr
+                  v-for="row in group.tasks"
+                  v-else
+                  :key="String(row.id)"
+                  class="border-t border-gray-50 dark:border-white/5"
+                >
+                  <td class="px-4 py-2 font-mono text-xs">{{ row.id }}</td>
+                  <td class="px-4 py-2">{{ taskTypeLabel(row.taskType) }}</td>
+                  <td class="px-4 py-2"><OperationTaskStatusBadge :status="row.status" /></td>
+                  <td class="max-w-[200px] truncate px-4 py-2 text-gray-600">{{ row.targetName || taskSummary(row) }}</td>
+                  <td class="px-4 py-2">{{ formatDateTime(row.createTime) }}</td>
+                  <td class="px-4 py-2">
+                    <div class="btn-action-group justify-end">
+                      <button type="button" class="btn-action-edit" @click="viewLog(row)">
+                        <FileText class="h-3.5 w-3.5" />{{ t('operation.taskHistory.viewLog') }}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p
+              v-if="(group.taskCount ?? 0) > (group.tasks?.length ?? 0)"
+              class="border-t border-gray-100 px-4 py-2 text-xs text-gray-400 dark:border-white/5"
+            >
+              {{ t('operation.taskHistory.tasksTruncated', { shown: group.tasks?.length ?? 0, total: group.taskCount ?? 0 }) }}
+            </p>
+          </div>
+        </section>
+      </div>
+
+      <div v-if="total > 0" class="mt-4">
+        <AppPagination v-model:page-num="query.pageNum" v-model:page-size="query.pageSize" :total="total" />
+      </div>
     </div>
 
     <DeployTaskDrawer

@@ -1,4 +1,4 @@
-import type { KbAccessibleSpace, KbLintIssue, KbSyncLog } from '@/types/knowledge'
+import type { KbAccessibleSpace, KbLintIssue, KbOpsDashboardVo, KbOpsLintSummary, KbOpsSyncTrendPoint, KbSyncLog } from '@/types/knowledge'
 import { isKbSyncLogFailed } from '@/utils/kbSyncStatus'
 
 export type KbSyncTrendDay = {
@@ -151,4 +151,69 @@ export function topBrokenLinkIssues(
   }
 
   return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, limit)
+}
+
+/** KBOPS-9 · dashboard API → D1 图表数据 */
+export function mapOpsDashboardSyncTrend(
+  points: KbOpsSyncTrendPoint[] | undefined,
+  locale = 'zh-CN',
+): KbSyncTrendDay[] {
+  if (!points?.length) return []
+  return points.map((row) => ({
+    date: row.date,
+    label: formatDayLabel(row.date, locale),
+    success: row.successBatches ?? 0,
+    fail: row.failBatches ?? 0,
+  }))
+}
+
+/** KBOPS-9 · openByType 无空间维度时用汇总行 */
+export function mapOpsDashboardPendingIssues(
+  summary: KbOpsLintSummary | undefined,
+  spaces: KbAccessibleSpace[],
+  allSpacesLabel: string,
+): KbPendingIssueBucket[] {
+  const openByType = summary?.openByType ?? {}
+  const entries = Object.entries(openByType)
+  if (!entries.length) return []
+  const defaultSpace = spaces[0]
+  const spaceId = defaultSpace ? String(defaultSpace.id) : '_all'
+  const spaceName = entries.length > 1 || !defaultSpace ? allSpacesLabel : (defaultSpace.spaceName || defaultSpace.spaceCode || allSpacesLabel)
+  return entries
+    .map(([issueType, count]) => ({
+      spaceId,
+      spaceName,
+      issueType,
+      count: Number(count) || 0,
+    }))
+    .sort((a, b) => b.count - a.count || a.issueType.localeCompare(b.issueType))
+}
+
+/** KBOPS-9 · topBrokenLinks 字符串列表 */
+export function mapOpsDashboardBrokenTop(
+  links: string[] | undefined,
+  allSpacesLabel: string,
+  limit = 10,
+): KbBrokenLinkRow[] {
+  if (!links?.length) return []
+  return links.slice(0, limit).map((detail, index) => ({
+    key: `dash-${index}:${detail}`,
+    detail,
+    spaceName: allSpacesLabel,
+    count: 1,
+  }))
+}
+
+/** 从 dashboard 响应填充看板（单请求路径） */
+export function applyKbOpsDashboardVo(
+  vo: KbOpsDashboardVo,
+  spaces: KbAccessibleSpace[],
+  allSpacesLabel: string,
+  locale = 'zh-CN',
+) {
+  const syncTrend = mapOpsDashboardSyncTrend(vo.syncTrend, locale)
+  const pendingBuckets = mapOpsDashboardPendingIssues(vo.lintSummary, spaces, allSpacesLabel)
+  const brokenTop = mapOpsDashboardBrokenTop(vo.lintSummary?.topBrokenLinks, allSpacesLabel)
+  const openCount = Number(vo.lintSummary?.openCount) || pendingBuckets.reduce((s, r) => s + r.count, 0)
+  return { syncTrend, pendingBuckets, brokenTop, openCount, llm: vo.llm }
 }

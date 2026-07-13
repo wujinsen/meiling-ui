@@ -14,7 +14,7 @@
 | 模块 | 端口 | 阻塞新 API？ | 后端现在要做什么 |
 |------|------|--------------|------------------|
 | **运营管理** | `8888` | **否** | ✅ **W1–W10 走查通过**（2026-07-13 · [operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)） |
-| **知识库** | `8090` | **部分**（规模化/Lint） | **P0 点验**；**本地 dev** secret + O4 已就绪（§8.3） |
+| **知识库** | `8090` | **否**（P3 接线可选） | ✅ **`npm run kb:prd` 点验通过**（2026-07-13 · 16/17 探针） |
 | **SSO** | user-center | **否** | **SSO-MENU-1 已交付**（走查 ✅ 2026-07-13） |
 
 ### 1.1 已与前端对齐（勿再 Breaking）
@@ -48,8 +48,8 @@
 
 | 状态 | 含义 | 任务 ID |
 |------|------|---------|
-| 🟢 **点验** | 无新 API；环境 + 走查 | ~~W1–W10~~ ✅ 2026-07-13、KB-O4、KB-BROWSE-1、KB-LLM-DB、407 SQL |
-| 🟡 **可选开发** | 体验/规模化 **P3** | DC-4、KB-LINT-1/2、KBOPS-2 |
+| 🟢 **点验** | 无新 API；环境 + 走查 | ~~W1–W10~~ ✅、~~KB-O4~~、~~KB-BROWSE-1~~、~~KB-LLM-DB~~、~~KB-LINT-SCAN~~ ✅ 2026-07-13；407 SQL（老库按需） |
+| 🟡 **可选开发** | 体验/规模化 **P3** | ~~DC-4~~ · ~~KBOPS-2~~ · ~~KB-LINT~~ ✅ 2026-07-13 |
 | ⚪ **已完成** | 前后端已对齐 | S-VO、W7–W10、DC-2/3、S-ERR-1、S-DEPLOY-1、create id、**batch deploy**、**SSO-MENU-1** |
 
 ### 2.1 联调点验（无新 API，需后端在场）
@@ -60,20 +60,20 @@
 | **W7–W10** | 前后端 | `POST /server` · upload · **`/deploy/batch/task`** · **`/task/{id}/cancel`** | 走查稿 §3 |
 | **运营 §10/§16** | 前后端 | 同上；`POST /operation/file/upload` dev 走 **8888** 勿经 Gateway | [operation-frontend.md](operation-frontend.md) §10 · §16 |
 | **DC-3**（前端已做） | 前端自验 | 无需新接口；确认 `listServerApi` 可搜台账机 | 部署中心追加非关联服务器后可执行命令/上传 |
-| **KB-O4** | 8090 | 部署含 **sync fail 样本** | `npm run kb:prd-acceptance` P0-O4 |
-| **KB-BROWSE-1** | 8090 | `kbTypes` / `categoryIds` 多值参数 | `kb:prd` P0-browse-v3 |
-| **KB-GOV-LLM** | 8090 | 可提供 `llmAvailable: false` 环境 | 治理页 AI 禁用态 |
-| **KB-LLM-DB** | 8090 + 配置 | **`KB_LLM_CONFIG_SECRET`** | 平台 LLM Key `persistedInDatabase` |
-| **KB-LINT-SCAN** | 8090 | `GET /kb/lint/scan/status` 非 404 | 健康体检 · 质量 Tab |
+| ~~**KB-O4**~~ | 8090 | sync fail 样本 `_p0o4-fail-test` | ✅ 2026-07-13 `kb:prd` **P0-O4** |
+| ~~**KB-BROWSE-1**~~ | 8090 | `kbTypes` / `categoryIds` 多值 | ✅ 2026-07-13 **P0-browse-v3** |
+| **KB-GOV-LLM** | 8090 | `llmAvailable: false` 环境（可选） | ✅ **REG-llm-on** + **REG-llm-off**（2026-07-13 · 17/17） |
+| ~~**KB-LLM-DB**~~ | 8090 + 配置 | **`KB_LLM_CONFIG_SECRET`** | ✅ 2026-07-13 `encryptionReady=true` · **REG-llm-on** |
+| ~~**KB-LINT-SCAN**~~ | 8090 | `GET /kb/lint/scan/status` | ✅ 2026-07-13 **P0-O9** · O5–O8 |
 | **SVR-25c / 407** | DBA | `docs/sql/28_operation_topology_menu.sql`（老库） | 拓扑菜单；用户重登 |
 
 ### 2.2 可选排期（P3 · 后端已答③）
 
 | 任务 ID | 优先级 | 服务 | 后端待做 | 前端状态 |
 |---------|--------|------|----------|----------|
-| **DC-4** | P3 | `8888` | `task/groups` 或 list 聚合 VO | ⬜ 待 API · [p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §1 |
-| **KB-LINT-1/2** | P3 | `8090` | `GET /kb/lint/issues` 真分页 + `unassignedOnly` | ⬜ 待 API · 同上 §2 |
-| **KBOPS-2** | P3 | `8090` | `GET /kb/ops/dashboard` | ⬜ 待 API · 同上 §3 |
+| **DC-4** | P3 | `8888` | `GET /operation/task/groups` | ✅ 已交付 + 前端接线 · 同上 §1 |
+| **KB-LINT-1/2** | P3 | `8090` | `GET /kb/lint/issues` 分页 + `unassignedOnly` | ✅ 已交付 + 前端收紧 · 同上 §2 |
+| **KBOPS-2** | P3 | `8090` | `GET /kb/ops/dashboard` | ✅ 已交付 + 前端接线 · 同上 §3 |
 | **SSO-MENU-1** | — | user-center | — | ✅ **已交付 + 走查**（2026-07-13） |
 
 > **DC-BE-1**：滚动批量重启已由 **`POST /operation/deploy/batch/task`**（`b4ac176a` + 前端 W9）覆盖，**可标为已交付**。
@@ -161,29 +161,24 @@ POST /operation/file/upload
 | **`KB-LLM-DB`** | **`KB_LLM_CONFIG_SECRET`**（本地 dev 默认已配） | P1 |
 | **KB-LINT-SCAN** | `GET /kb/lint/scan/status?spaceId=` 非 404 | P2 |
 
-**本地 dev（2026-07-13 · 与 monorepo §4 一致）**：8090 `application-dev.yml` 已设 secret 默认 + O4 样本路径；重启后 `encryptionReady=true`，可跑 `kb:prd-acceptance`。
+**点验结果（2026-07-13）**：`npm run kb:prd` → **17/17**（含 **REG-llm-off** merge 探针）。O4 样本目录已清理；历史 fail 日志仍可验 P0-O4。
 
-### 4.2 Lint 分页（KB-LINT-1 / KB-LINT-2 · 可选）
+### 4.2 Lint 分页（KB-LINT-1 / KB-LINT-2 · ✅ 8090 已交付）
 
 **详稿**：[p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §2
 
 ```http
-GET /kb/lint/issues?pageNum=&pageSize=&unassignedOnly=true&spaceId=&status=0
+GET /kb/lint/issues?pageNum=1&pageSize=20&unassignedOnly=true&spaceId=&status=0
 → { records, total, current, size }
 ```
 
-`unassignedOnly=true` 时须服务端过滤；须同时返 `current` + `size` 触发前端服务端分页分支。
+**前端**：`kbLint.ts` 在 `current`+`size` 存在时走服务端分页；`npm run kb:prd` P2-O5-unassigned ✅。
 
-### 4.3 运维 Dashboard（KBOPS-2 · 可选）
+### 4.3 运维 Dashboard（KBOPS-2 · ✅ 8090 已交付 · ✅ 前端已接线）
 
 **详稿**：[p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §3
 
-```http
-GET /kb/ops/dashboard?days=7&brokenTopN=10
-→ syncTrend · pendingIssues · brokenLinkTop · llm
-```
-
-非阻塞；前端现聚合 `sync/logs` + `lint/issues` + `ask/llm-config`。
+`KnowledgeOpsDashboardView` 首选 **`GET /kb/ops/dashboard`**（`getKbOpsDashboardApi`）；若 8090 缺 `kb_llm_call_log` 等导致 500，自动降级原 3 请求聚合。
 
 ---
 
@@ -203,10 +198,10 @@ GET /kb/ops/dashboard?days=7&brokenTopN=10
 
 ```text
 ① 8888：push/deploy b4ac176a（共享环境）或本地 install+重启 → W1–W10 走查
-② 8090：KB_LLM_CONFIG_SECRET + KB-O4 → kb:prd-acceptance（本地 dev 已就绪）
+② ~~8090：KB 点验~~ ✅ 2026-07-13（`npm run kb:prd` 16/17）
 ③ DBA：407 SQL（老库按需）
 ④ ~~SSO-MENU-1~~ ✅ 2026-07-13
-⑤ 可选 P3：DC-4 · KB-LINT · KBOPS-2
+⑤ ~~可选 P3：KBOPS-2 · KB-LINT · DC-4~~ ✅ 2026-07-13
 ```
 
 ---
@@ -227,11 +222,10 @@ GET /kb/ops/dashboard?days=7&brokenTopN=10
 · POST /operation/deploy/batch/task · POST /operation/task/{id}/cancel
 · 新建服务器 body 字段 ip（非 serverIp）
 
-8090 点验：
-· 本地 dev：secret + O4 已就绪 · npm run kb:prd-acceptance
-
 SSO-MENU-1：✅ 已交付（走查 2026-07-13）
-下迭代可选：DC-4/KB-LINT/KBOPS-2=P3
+
+8090 点验：✅ 2026-07-13 npm run kb:prd（17/17）
+P3：✅ DC-4 TaskHistoryView 分组 · KBOPS-2 dashboard · KB-LINT 分页收紧（2026-07-13）
 DC-BE-1：已由 batch/task 覆盖，可关闭
 
 详稿：moli-project-distribute/docs/api/frontend-backend-dependencies.md
@@ -247,7 +241,7 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 | 维度 | 评估 |
 |------|------|
 | **运营** | **无 API 阻塞**；**W1–W10 走查 ✅**（2026-07-13） |
-| **知识库** | **点验级**；**本地 secret + O4 已就绪** |
+| **知识库** | ✅ **点验 + P3 接线完成**（2026-07-13 · `kb:prd` 17/17） |
 | **SSO** | **已交付**；F-SSO-1～6 + S3～S7/S10 走查 ✅（2026-07-13） |
 | **文档↔代码** | **与 monorepo `frontend-gaps` / handoff 互引一致** |
 
@@ -266,7 +260,7 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 | 项 | 状态 |
 |----|------|
 | 功能 API | facet · Lint 分页 · chunk ask ✅ |
-| **本地 P0** | `KB_LLM_CONFIG_SECRET` dev 默认 · O4 样本 · `encryptionReady=true` ✅ |
+| **本地 P0** | secret + O4 样本 · `encryptionReady=true` ✅ · **`kb:prd` 16/17** ✅ 2026-07-13 |
 | **生产** | 运维注入真实 secret + 定时任务 |
 
 ### 8.4 ③ 下迭代（后端已回复）
@@ -274,8 +268,9 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 | 项 | 排期 |
 |----|------|
 | **SSO-MENU-1** | ✅ **已交付 + 走查通过**（2026-07-13） |
-| **DC-4** | ⬜ **P3 可选** |
-| **KB-LINT-1/2** · **KBOPS-2** | ⬜ **P3 可选** |
+| **DC-4** | ✅ 8888 已交付 + 前端接线 |
+| **KB-LINT-1/2** | ✅ 8090 已交付 + 前端收紧 |
+| **KBOPS-2** | ✅ 8090 已交付 + 前端接线 |
 | **DC-BE-1** | ✅ 由 **`POST /deploy/batch/task`** 覆盖（与 W9 一致） |
 
 ### 8.5 联调前置
@@ -283,7 +278,8 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 ```text
 8888：☑ install+重启（b4ac176a）  ☑ VITE_USE_MOCK_AUTH=false  ☑ 走查稿 W1–W10（2026-07-13）
 SSO：☑ 30_sso_menu_system_id.sql  ☑ sso-menu-frontend-walkthrough（2026-07-13）
-8090：□ 8090 重启  □ kb:prd-acceptance（本地 dev 通常已满足 secret+O4）
+8090：☑ kb:prd（2026-07-13 · 17/17）
+8888：☑ task/groups（DC-4 API 探针）
 ```
 
 ---
@@ -292,6 +288,7 @@ SSO：☑ 30_sso_menu_system_id.sql  ☑ sso-menu-frontend-walkthrough（2026-07
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-13 | **P3 完工**：DC-4 · KBOPS-2 · KB-LINT；`kb:prd` **17/17**（REG-llm-off merge 探针） |
 | 2026-07-13 | **对齐 monorepo**：`b4ac176a` · §8.4③ 落定 · DC-BE-1→batch · 8090 本地就绪 |
 | 2026-07-13 | **W1–W10 联合走查通过**（API + 浏览器 · W9 远端 exit 1 不计入失败） |
 | 2026-07-13 | W7–W10 前端完工；走查稿 `docs/test/operation-w1-w10-walkthrough.md` |

@@ -23,6 +23,8 @@ import type {
   OperationDeployStatus,
   OperationSshTest,
   OperationTask,
+  OperationTaskProjectGroup,
+  TaskGroupsQuery,
   TaskQuery,
   PlatformQuery,
   PortMatrixQuery,
@@ -199,6 +201,13 @@ export const listTaskApi = (params?: TaskQuery) =>
   request<PageRes<OperationTask>>(`/operation/task/list${buildQuery(params as Record<string, string | number | undefined>)}`, {
     method: 'GET',
   })
+
+/** DC-4 · 任务历史按项目分组（分页在组维度） */
+export const listTaskGroupsApi = (params?: TaskGroupsQuery) =>
+  request<PageRes<OperationTaskProjectGroup>>(
+    `/operation/task/groups${buildQuery(params as Record<string, string | number | undefined>)}`,
+    { method: 'GET' },
+  )
 
 export const uploadFileApi = (formData: FormData) =>
   request<number>('/operation/file/upload', { method: 'POST', body: formData, timeoutMs: 600_000 })

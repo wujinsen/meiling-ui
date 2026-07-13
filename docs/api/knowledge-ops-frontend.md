@@ -7,7 +7,7 @@
 
 ---
 
-## 0. meiling-ui 现状审计（2026-07-12）
+## 0. meiling-ui 现状审计（2026-07-13）
 
 | 模块 | 代码落点 | 状态 | 与目标差距 |
 |------|----------|------|------------|
@@ -19,6 +19,8 @@
 | Ingest 三 Tab T20f | `KnowledgeIngestWorkbenchView.vue` | ✅ UI + 直联 | Tab1 `KbRawUploadPanel`、Tab3 `KbWikiImportPanel` 排版与联调就绪；`VITE_MOCK_KB_IMPORT=false` |
 | Lint / Sync API | `src/api/knowledge/kbLint.ts` + `knowledge.ts`（Sync） | ✅ | 类型在 `src/types/knowledge.ts`；Sync 归一化 `src/utils/kbSyncStatus.ts` |
 | 空间解析 | `src/utils/kbSyncScope.ts` | ✅ | 已禁止静默默认 enterprise-kb |
+
+**本轮完成（2026-07-13）**：P3 **DC-4** `TaskHistoryView` 分组 · **KBOPS-2** `getKbOpsDashboardApi` · **KB-LINT** 分页收紧；`kb:prd` **17/17**（含 REG-llm-off merge 探针）。
 
 **本轮完成（2026-07-12 晚）**：O4 日志「仅显示失败」筛选 + Mock fail 样本；`kbLint` 服务端分页信任 + `scan/status` 仅 HTTP 404 降级；`GovernFixPanel` LLM 关闭时仅-AI 选中提示；`kb:prd` 增 `P2-O5-unassigned` · `P0-browse-v3` 探针（17 项 / 15 通过）。
 
@@ -415,26 +417,26 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 
 ---
 
-## 8. P2 · 运维 Dashboard（规划 · KBOPS-9）
+## 8. P2 · 运维 Dashboard（KBOPS-9） ✅ 后端 · 🟡 前端可接线
 
-**路由建议**：`knowledge/ops/dashboard` · perm `kb:ops:dashboard`（SQL 待补）
+**路由**：`knowledge/ops/dashboard` · perm `kb:ops:dashboard` · `KnowledgeOpsDashboardView.vue`
 
-| 区块 | 数据源 | 说明 |
-|------|--------|------|
-| Sync 趋势 D1 | `GET /kb/sync/logs` 聚合 | 近 7 日 success/fail 计数 |
-| 待处理工单 D2 | `GET /kb/lint/issues` + `resolved=0` | 按 space / issueType |
-| LLM 可用 D3 | `GET /kb/ask/llm-config` | available 指示灯 |
-| 断链 Top N D4 | lint issues `broken_link` | P2 可选 |
+| 区块 | 现网数据源 | 推荐改接（P3） |
+|------|------------|----------------|
+| D1 Sync 趋势 | `GET /kb/sync/logs` + `aggregateSyncTrendByDay` | `GET /kb/ops/dashboard` → `syncTrend` |
+| D2 待处理工单 | `GET /kb/lint/issues?status=0` 全量 | `lintSummary.openByType` |
+| D3 LLM 可用 | `getKbLlmConfigApi` | `dashboard.llm`（可保留降级） |
+| D4 断链 Top | `topBrokenLinkIssues` | `lintSummary.topBrokenLinks` |
 
-后端 Dashboard 专用 API **尚未实现**；当前由 `KnowledgeOpsDashboardView` 聚合 `sync/logs`、`lint/issues`、`ask/llm-config`。  
-**P3 API 需求**：[p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §3（KBOPS-2）。
+**后端** `GET /kb/ops/dashboard` ✅（Query 参数 **`trendDays`**，默认 7）。  
+**前端 P3**：[p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §3 · 新增 `getKbOpsDashboardApi` 替换 `loadDashboard()` 三请求。
 
 | 区块 | 前端落点 | 状态 |
 |------|----------|------|
-| D1 Sync 趋势 | `KbOpsSyncTrendChart` + `aggregateSyncTrendByDay` | ✅ |
-| D2 待处理工单 | `aggregatePendingIssues` | ✅ |
-| D3 LLM 可用 | `getKbLlmConfigApi` 指示灯 | ✅ |
-| D4 断链 Top N | `topBrokenLinkIssues` | ✅ |
+| D1 Sync 趋势 | `KbOpsSyncTrendChart` | ✅ 客户端聚合 · 可改 dashboard |
+| D2 待处理工单 | `aggregatePendingIssues` | ✅ · 可改 dashboard |
+| D3 LLM 可用 | `getKbLlmConfigApi` 指示灯 | ✅ · 可改 dashboard |
+| D4 断链 Top N | `topBrokenLinkIssues` | ✅ · 可改 dashboard |
 
 菜单 SQL：`docs/sql/13_kb_ops_dashboard_menu.sql`；未执行时由 `knowledgeSupplementRoutes` 补侧栏。
 
@@ -538,6 +540,7 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-13 | **KB 点验**：`kb:prd` 16/17；§0 审计更新；P0-O4/O9/browse · O5–O8 探针 ✅ |
 | 2026-07-12（晚） | O4 fail-only 筛选；`kbLint` 分页信任 + scan/status 404-only 降级；`GovernFixPanel` LLM-off 提示；`kb:prd` 探针扩展；浏览多选 facet 文档 §7 结案 |
 | 2026-07-12 | O7 改调 `PUT /kb/lint/issues/batch`（去掉并行 PUT 兜底）；§3.7.1/§10 对齐；与 distribute `TASKS.md` 同步 |
 | 2026-07-12 | **O9** `KbLintScanStatusBar` + §3.8；§0/§3.1/§9/§10/§11 对齐；Lint API 拆 `src/api/knowledge/kbLint.ts`；§3.7 O5–O8 验收勾选 |

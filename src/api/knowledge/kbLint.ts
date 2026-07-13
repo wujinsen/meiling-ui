@@ -73,14 +73,13 @@ function paginateLintIssuesClientSide(
   params?: KbLintIssueQuery,
   totalHint?: number,
 ): MoliPage<KbLintIssue> {
-  let filtered = rows
-  if (params?.unassignedOnly) filtered = filtered.filter((r) => r.assigneeId == null)
+  // 裸数组 / 无 current+size 时客户端分页；unassignedOnly 由 filterMockIssues 或调用方预过滤
   const pageNum = Math.max(1, params?.pageNum ?? 1)
-  const pageSize = Math.max(1, params?.pageSize ?? (filtered.length || 10))
+  const pageSize = Math.max(1, params?.pageSize ?? (rows.length || 10))
   const start = (pageNum - 1) * pageSize
   return {
-    records: filtered.slice(start, start + pageSize),
-    total: totalHint ?? filtered.length,
+    records: rows.slice(start, start + pageSize),
+    total: totalHint ?? rows.length,
     current: pageNum,
     size: pageSize,
   }
@@ -91,7 +90,8 @@ function normalizeLintIssuesResponse(
   params?: KbLintIssueQuery,
 ): MoliPage<KbLintIssue> {
   if (Array.isArray(data)) {
-    return paginateLintIssuesClientSide(data as KbLintIssue[], params)
+    const filtered = params?.unassignedOnly ? (data as KbLintIssue[]).filter((r) => r.assigneeId == null) : (data as KbLintIssue[])
+    return paginateLintIssuesClientSide(filtered, params)
   }
   const raw = (data ?? {}) as Record<string, unknown>
   const page = normalizeKbPageRecords<KbLintIssue>(data as MoliPage<KbLintIssue>)

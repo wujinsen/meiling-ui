@@ -198,7 +198,30 @@ async function testRegLlmDisabled(token) {
   const available = opts.data?.llmAvailable ?? cfg.data?.available
   if (enabled && available) {
     ok('REG-llm-on', 'LLM 启用且 govern/options.llmAvailable=true（AI 按钮应可用）')
-    skip('REG-llm-off', '未改写 enabled=false（避免影响环境）；关闭时 UI 应 disabled，请人工点验')
+    if (process.env.KB_PRD_SKIP_LLM_OFF === '1') {
+      skip('REG-llm-off', 'KB_PRD_SKIP_LLM_OFF=1 跳过临时关 LLM 探针')
+      return
+    }
+    const restoreEnabled = enabled
+    const putBody = {
+      enabled: false,
+      provider: cfg.data?.provider ?? 'zhipu',
+      baseUrl: cfg.data?.baseUrl ?? '',
+      model: cfg.data?.model ?? '',
+      temperature: cfg.data?.temperature,
+      timeoutSeconds: cfg.data?.timeoutSeconds,
+    }
+    const off = await kb('PUT', '/platform/llm-config', putBody, token)
+    const cfgOff = await kb('GET', '/platform/llm-config', null, token)
+    const optsOff = await kb('GET', '/wiki/govern/options', null, token)
+    const platformEnabled = cfgOff.data?.enabled
+    const mergedAvailable = Boolean(optsOff.data?.llmAvailable) && platformEnabled === true
+    await kb('PUT', '/platform/llm-config', { ...putBody, enabled: restoreEnabled }, token)
+    if (off.code === 200 && platformEnabled === false && mergedAvailable === false) {
+      ok('REG-llm-off', '临时 enabled=false → 治理页 merge 后 llmAvailable=false（已恢复）')
+    } else {
+      bad('REG-llm-off', `PUT off=${off.code} enabled=${platformEnabled} merged=${mergedAvailable}`)
+    }
     return
   }
   if (!enabled || !available) {

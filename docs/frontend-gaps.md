@@ -44,7 +44,7 @@
 | 任务 ID | 优先级 | 前端落点 | 说明 | 参考 |
 |---------|--------|----------|------|------|
 | **DC-3** | P2 | `DeployCenterView.vue` · `OperationServerMultiPickModal.vue` | ✅ 追加台账服务器（2026-07-13） | [deploy-center-project-first.md](design/deploy-center-project-first.md) §5 |
-| **DC-4** | P3 | `TaskHistoryView.vue` | 按 `projectId` 聚合/分组视图 | **待后端 API** · [p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md) §1 |
+| **DC-4** | P3 | `TaskHistoryView.vue` | ✅ 平铺/按项目分组 · `listTaskGroupsApi` | ✅ 2026-07-13 |
 | **S-ERR-1** | P2 | `operationErrors.ts` | ✅ 10101–10109 Toast（2026-07-13） | [operation-frontend.md](api/operation-frontend.md) §3.6 |
 | **S-DEPLOY-1** | P2 | `operationPort.ts` | ✅ order/bi 映射（2026-07-13） | handoff §4.2 |
 | ~~**DC-BE-1**~~ | — | — | ✅ 由 `POST /deploy/batch/task`（`b4ac176a` + W9）覆盖 | — |
@@ -61,19 +61,18 @@
 
 | 任务 ID | 优先级 | 项 | 前端动作 | 阻塞 |
 |---------|--------|-----|----------|------|
-| **KB-O4** | **P0** | Sync 失败行 UI | ✅ 着色 + 展开 +「仅显示失败」 | 本地 dev O4 样本已就绪 · `kb:prd-acceptance` |
-| **KB-BROWSE-1** | **P0** | 浏览体裁/分类多选 facet | ✅ 已接入 | `kb:prd` P0-browse-v3 |
-| **KB-GOV-LLM** | **P1** | 治理页 LLM 关闭态 | ✅ `GovernFixPanel` 禁用态 | 8090 关 LLM 时点验 |
-| **KB-LLM-DB** | **P1** | 平台 LLM Key 入库 / 清 DB | UI 已有 | 本地 dev `encryptionReady=true` |
-| **KB-LINT-SCAN** | **P2** | `GET /kb/lint/scan/status` | ✅ 8090 已部署；404 降级 | — |
+| **KB-O4** | **P0** | Sync 失败行 UI | ✅ 着色 + 展开 +「仅显示失败」 | ✅ 2026-07-13 `kb:prd` **P0-O4** |
+| **KB-BROWSE-1** | **P0** | 浏览体裁/分类多选 facet | ✅ 已接入 | ✅ 2026-07-13 **P0-browse-v3** |
+| **KB-GOV-LLM** | **P1** | 治理页 LLM 关闭态 | ✅ `GovernFixPanel` 禁用态 | ✅ 2026-07-13 **REG-llm-off**（merge 探针） |
+| **KB-LLM-DB** | **P1** | 平台 LLM Key 入库 / 清 DB | UI 已有 | ✅ 2026-07-13 `encryptionReady=true` |
+| **KB-LINT-SCAN** | **P2** | `GET /kb/lint/scan/status` | ✅ 8090 已部署；404 降级 | ✅ 2026-07-13 **P0-O9** · O5–O8 |
 
-### 2.2 可选增强（前端可排期 · 未开工）
+### 2.2 可选增强（P3 · 8090 API 已就绪）
 
 | 任务 ID | 优先级 | 前端落点 | 说明 | 阻塞 |
 |---------|--------|----------|------|------|
-| **KB-LINT-1** | P3 | `KnowledgeLintView.vue` · `normalizeLintIssuesResponse` | 服务端 `unassignedOnly` + 分页 | [p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md) §2 |
-| **KB-LINT-2** | P3 | `KnowledgeLintView.vue` | 工单真分页 | 同上 §2 |
-| **KBOPS-2** | P3 | `KnowledgeOpsDashboardView.vue` | 切运维 Dashboard **专用 API** | [p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md) §3 |
+| **KB-LINT-1/2** | P3 | `kbLint.ts` · `KbLintIssuesPanel.vue` | ✅ 服务端分页信任；裸数组仅 mock/降级路径客户端 slice | ✅ 2026-07-13 |
+| **KBOPS-2** | P3 | `KnowledgeOpsDashboardView.vue` | ✅ 首选 `GET /kb/ops/dashboard`；失败降级 3 请求 | ✅ 2026-07-13 |
 
 详见 [api/knowledge-ops-frontend.md](api/knowledge-ops-frontend.md) · [product/knowledge-ops-prd.md](product/knowledge-ops-prd.md) §8。
 
@@ -104,17 +103,15 @@
 ### 5.1 点验（优先）
 
 1. ~~**运营** S-VO W1–W10~~ ✅ 2026-07-13
-2. **KB** `kb:prd-acceptance`（KB-O4 · KB-BROWSE-1）
-3. **KB** KB-LLM-DB · `kb:prd-acceptance`（8090 本地 dev 通常已满足 secret + O4）
+2. ~~**KB** `npm run kb:prd`~~ ✅ 2026-07-13（**17/17** 全通过）
+3. ~~**KB** KB-LLM-DB · KB-LINT-SCAN~~ ✅ 2026-07-13（`REG-llm-on` · `P0-O9` · O5–O8）
 
 ### 5.2 可选增强（有空再做）
 
 | 顺序 | 任务 ID | 模块 | 状态 |
 |------|---------|------|------|
 | — | **DC-3** · **S-ERR-1** · **S-DEPLOY-1** | 运营 | ✅ 2026-07-13 |
-| 1 | **DC-4** | 任务历史 project 聚合 | **待后端 API** · 前端暂缓 |
-| 2 | **KB-LINT-1** · **KB-LINT-2** | Lint 分页收紧 | **待后端 API** · 前端暂缓 |
-| 3 | **KBOPS-2** | 运维 Dashboard 专用 API | **待后端 API** · 前端暂缓 |
+| — | ~~**DC-4**~~ · ~~**KBOPS-2**~~ · ~~**KB-LINT-1/2**~~ | P3 可选 | ✅ 2026-07-13 |
 | — | **SSO-MENU-1** | 按系统隔离菜单 | ✅ **已交付 + 走查通过**（2026-07-13） |
 
 **运营主功能**：SVR-25/28/26b · S-VO · DC-2/3 · **W7–W10** · **W1–W10 走查** ✅（2026-07-13）。
@@ -125,7 +122,7 @@
 
 | 类型 | 任务 ID |
 |------|---------|
-| **点验**（无新 API） | ~~**W1–W10**~~ ✅ 2026-07-13、KB-O4、KB-BROWSE-1、KB-GOV-LLM、KB-LLM-DB、KB-LINT-SCAN、407 SQL · ~~**SSO-MENU-1**~~ ✅ 2026-07-13 |
-| **需后端开发** | **DC-4** / **KB-LINT-1/2** / **KBOPS-2**（**P3** · [p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md)） |
+| **点验**（无新 API） | ~~全部~~ ✅ 2026-07-13（含 **REG-llm-off** · O4 样本已清理/历史日志可验） |
+| **P3 可选** | ~~**DC-4**~~ · ~~**KBOPS-2**~~ · ~~**KB-LINT-1/2**~~ ✅ 2026-07-13 |
 | ~~**DC-BE-1**~~ | ✅ 由 `batch/task` 覆盖 |
 | **纯前端** | ~~DC-3、S-ERR-1、S-DEPLOY-1~~ ✅ 2026-07-13 |

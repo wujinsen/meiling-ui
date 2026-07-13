@@ -440,6 +440,23 @@ export type TaskQuery = PageQuery & {
   projectId?: number | string
 }
 
+/** DC-4 · GET /operation/task/groups */
+export type OperationTaskProjectGroup = {
+  projectId?: number | string | null
+  projectName?: string | null
+  taskCount?: number
+  runningCount?: number
+  failedCount?: number
+  successCount?: number
+  latestCreateTime?: string | number
+  tasks?: OperationTask[]
+}
+
+export type TaskGroupsQuery = TaskQuery & {
+  tasksPerGroup?: number
+  status?: string
+}
+
 /** 异步任务类型（SVR-14） */
 export const OPERATION_TASK_TYPES = ['deploy', 'deploy_batch', 'upload', 'command', 'health_probe'] as const
 export type OperationTaskType = (typeof OPERATION_TASK_TYPES)[number]

@@ -13,7 +13,7 @@ import {
 } from 'lucide-vue-next'
 import KbAccessDenied from '@/components/knowledge/KbAccessDenied.vue'
 import KbOpsSyncTrendChart from '@/components/knowledge/KbOpsSyncTrendChart.vue'
-import { getKbLintIssuesApi, getKbLlmConfigApi, getKbSyncLogsApi } from '@/api/knowledge'
+import { getKbLintIssuesApi, getKbLlmConfigApi, getKbOpsDashboardApi, getKbSyncLogsApi } from '@/api/knowledge'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { assertAction } from '@/composables/useActionPermissions'
 import { showToast } from '@/composables/useToast'
@@ -23,6 +23,7 @@ import { PERM } from '@/constants/permissions'
 import {
   aggregatePendingIssues,
   aggregateSyncTrendByDay,
+  applyKbOpsDashboardVo,
   topBrokenLinkIssues,
   type KbBrokenLinkRow,
   type KbPendingIssueBucket,
@@ -42,6 +43,7 @@ const pendingBuckets = ref<KbPendingIssueBucket[]>([])
 const brokenTop = ref<KbBrokenLinkRow[]>([])
 const llmConfig = ref<KbLlmConfig | null>(null)
 const syncLogTotal = ref(0)
+const dashboardSource = ref<'api' | 'legacy'>('api')
 
 const pendingTotal = computed(() => pendingBuckets.value.reduce((sum, row) => sum + row.count, 0))
 const syncWeekTotal = computed(() =>
@@ -63,36 +65,68 @@ function issueTypeLabel(type: string) {
   return translated === key ? type : translated
 }
 
+async function loadDashboardLegacy() {
+  const [llmRes, issuesRes, logsRes] = await Promise.all([
+    getKbLlmConfigApi(),
+    getKbLintIssuesApi({ status: 0, pageNum: 1, pageSize: 20 }),
+    getKbSyncLogsApi({ pageNum: 1, pageSize: 500 }),
+  ])
+
+  if (llmRes.code === API_SUCCESS_CODE) llmConfig.value = llmRes.data ?? null
+
+  const issues = issuesRes.code === API_SUCCESS_CODE ? issuesRes.data?.records ?? [] : []
+  if (issuesRes.code !== API_SUCCESS_CODE) {
+    showToast('error', issuesRes.msg || t('knowledge.opsDashboard.loadIssuesFailed'))
+  }
+
+  const logs = logsRes.code === API_SUCCESS_CODE ? logsRes.data?.records ?? [] : []
+  syncLogTotal.value = logsRes.data?.total ?? logs.length
+  if (logsRes.code !== API_SUCCESS_CODE) {
+    showToast('error', logsRes.msg || t('knowledge.opsDashboard.loadLogsFailed'))
+  }
+
+  const localeTag = locale.value === 'ja' ? 'ja-JP' : locale.value === 'en' ? 'en-US' : 'zh-CN'
+  syncTrend.value = aggregateSyncTrendByDay(logs, 7).map((row) => ({
+    ...row,
+    label: new Date(`${row.date}T12:00:00`).toLocaleDateString(localeTag, { month: 'numeric', day: 'numeric' }),
+  }))
+  pendingBuckets.value = aggregatePendingIssues(issues, spaces.value)
+  brokenTop.value = topBrokenLinkIssues(issues, spaces.value, 10)
+}
+
 async function loadDashboard() {
   if (!canView.value) return
   loading.value = true
   try {
-    const [llmRes, issuesRes, logsRes] = await Promise.all([
-      getKbLlmConfigApi(),
-      getKbLintIssuesApi({ status: 0 }),
-      getKbSyncLogsApi({ pageNum: 1, pageSize: 500 }),
-    ])
-
-    if (llmRes.code === API_SUCCESS_CODE) llmConfig.value = llmRes.data ?? null
-
-    const issues = issuesRes.code === API_SUCCESS_CODE ? issuesRes.data?.records ?? [] : []
-    if (issuesRes.code !== API_SUCCESS_CODE) {
-      showToast('error', issuesRes.msg || t('knowledge.opsDashboard.loadIssuesFailed'))
+    const dashRes = await getKbOpsDashboardApi({ trendDays: 7 })
+    if (dashRes.code === API_SUCCESS_CODE && dashRes.data) {
+      dashboardSource.value = 'api'
+      const localeTag = locale.value === 'ja' ? 'ja-JP' : locale.value === 'en' ? 'en-US' : 'zh-CN'
+      const mapped = applyKbOpsDashboardVo(
+        dashRes.data,
+        spaces.value,
+        t('knowledge.opsDashboard.allSpaces'),
+        localeTag,
+      )
+      syncTrend.value = mapped.syncTrend.map((row) => ({
+        ...row,
+        label: new Date(`${row.date}T12:00:00`).toLocaleDateString(localeTag, { month: 'numeric', day: 'numeric' }),
+      }))
+      pendingBuckets.value = mapped.pendingBuckets
+      brokenTop.value = mapped.brokenTop
+      syncLogTotal.value = mapped.openCount
+      const llm = dashRes.data.llm
+      llmConfig.value = {
+        configEnabled: Boolean(llm?.enabled),
+        available: Boolean(llm?.available),
+        apiKeyConfigured: Boolean(llm?.available || llm?.enabled),
+        provider: llm?.provider,
+        model: llm?.model,
+      }
+      return
     }
-
-    const logs = logsRes.code === API_SUCCESS_CODE ? logsRes.data?.records ?? [] : []
-    syncLogTotal.value = logsRes.data?.total ?? logs.length
-    if (logsRes.code !== API_SUCCESS_CODE) {
-      showToast('error', logsRes.msg || t('knowledge.opsDashboard.loadLogsFailed'))
-    }
-
-    const localeTag = locale.value === 'ja' ? 'ja-JP' : locale.value === 'en' ? 'en-US' : 'zh-CN'
-    syncTrend.value = aggregateSyncTrendByDay(logs, 7).map((row) => ({
-      ...row,
-      label: new Date(`${row.date}T12:00:00`).toLocaleDateString(localeTag, { month: 'numeric', day: 'numeric' }),
-    }))
-    pendingBuckets.value = aggregatePendingIssues(issues, spaces.value)
-    brokenTop.value = topBrokenLinkIssues(issues, spaces.value, 10)
+    dashboardSource.value = 'legacy'
+    await loadDashboardLegacy()
   } catch (e) {
     showToast('error', e instanceof Error ? e.message : t('knowledge.opsDashboard.loadFailed'))
   } finally {
@@ -181,7 +215,7 @@ onMounted(async () => {
             <p v-else class="rounded-lg bg-gray-50 px-4 py-8 text-center text-sm text-gray-500 dark:bg-gray-800/50 dark:text-gray-400">
               {{ t('knowledge.opsDashboard.syncEmpty') }}
             </p>
-            <p v-if="syncLogTotal > 500" class="mt-2 text-xs text-gray-400">
+            <p v-if="dashboardSource === 'legacy' && syncLogTotal > 500" class="mt-2 text-xs text-gray-400">
               {{ t('knowledge.opsDashboard.logTruncated', { total: syncLogTotal }) }}
             </p>
           </section>
