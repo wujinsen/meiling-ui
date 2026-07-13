@@ -16,12 +16,12 @@
 |----|------|
 | **SVR-25 / SVR-26b / SVR-28 前端** | ✅ **已全部落地**，可联调验收 |
 | **S0–S13 / SVR-21d 前端** | ✅ 此前已完成 |
-| **后端 API（user-center）** | ✅ **`b4ac176a`** 本地全集；共享需 push+部署；待 **W1–W10 联合走查** |
+| **后端 API（user-center）** | ✅ **`b4ac176a`** 本地全集；共享需 push+部署；**W1–W10 走查 ✅**（2026-07-13） |
 | **前端待改（Breaking）** | —（create 三实体返回 id · S-VO · W7–W10 均已对齐，2026-07-13） |
 
 **S-VO 契约（必读）**：`serverCount === serverIds.length`（恒等）；**勿**为 chips 批量 `GET .../links`；links **仅**关联弹窗 GET/PUT。开工详稿：[`moli-project-distribute` operation-frontend-handoff §0–§2](../../moli-project-distribute/docs/api/operation-frontend-handoff.md)。
 
-前端缺口清单（全仓）：[frontend-gaps.md](../frontend-gaps.md) §1.1（已完成）· §1.2（联合走查）。  
+前端缺口清单（全仓）：[frontend-gaps.md](../frontend-gaps.md) §1.1（已完成）· ~~§1.2 走查~~ ✅ 2026-07-13。  
 **W1–W10 走查稿（给后端）**：[test/operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)。  
 **跨模块后端依赖**：[frontend-backend-dependencies.md](frontend-backend-dependencies.md) · §7 可复制转发。
 
@@ -136,7 +136,7 @@
 
 多机 **上传/远程命令** 仍用 `useDeployBatchTasks` 扇出（设计如此，非 W9 范围）。
 
-**联合走查步骤**：见 [test/operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)。
+**联合走查步骤**：见 [test/operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md) · **✅ 已通过**（2026-07-13）。
 
 ### 4.5 环境
 

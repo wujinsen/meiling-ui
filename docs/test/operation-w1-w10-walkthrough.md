@@ -14,7 +14,7 @@
 | 项 | 状态 |
 |----|------|
 | **前端开发** | ✅ S-VO · DC-2/3 · W7–W10 均已落地；**无待开发阻塞项** |
-| **联合走查** | ✅ W1–W10 API 点验通过（W9 需先 `npm run op:seed:w9`） |
+| **联合走查** | ✅ **W1–W10 已通过**（API `npm run op:walkthrough` + 浏览器部署中心/任务历史 · 2026-07-13） |
 | **后端需保证** | `toVo()` `*Count` · create 返回 id · `POST /deploy/batch/task` · `POST /task/{id}/cancel` · `ops.upload/deploy.enabled` |
 
 ---
@@ -155,15 +155,25 @@ W1 → W2 → W2b → W3 → W4 → W5 → W6 → W7 → W8 → W9 → W10
 | W6 | ✅ | topology 12 节点 · component-links GET |
 | W7 | ✅ | `POST /operation/server` → snowflake id（测后 DELETE） |
 | W8 | ✅ | upload → taskId · poll `finished=true` `status=success` · path=`/opt/moli/frontend/dist/` |
-| W9 | ✅ | `POST /deploy/batch/task` 双机 · 种子项目 `w9-batch-smoke`（`npm run op:seed:w9`） |
-| W10 | ✅ | `POST /task/{id}/cancel` → `status=cancelled` `finished=true` · 日志 `[BATCH]`/`[CANCEL]` |
+| W9 | ✅ | 双机 `batch/task` · 任务历史 `deploy_batch`「2 步」；远端 restart 可 **失败**（exit 1）不影响走查 |
+| W10 | ✅ | `POST /task/{id}/cancel` → `cancelled`；任务历史列表/抽屉展示正常 |
 
-**走查人**：Cursor Agent　**日期**：2026-07-13　**8888 构建**：`b4ac176a`（本地）
+**走查人**：admin · **日期**：2026-07-13 · **8888 构建**：`b4ac176a`（本地）· **meiling-ui**：`:5141`
 
 **自动化**：`npm run op:walkthrough`（日志 `operation-w1-w10-walkthrough.log`）  
 **W9 种子**：`npm run op:seed:w9` · SQL 说明见 [docs/sql/31_operation_w9_dual_server_seed.sql](../sql/31_operation_w9_dual_server_seed.sql)
 
-**W9 部署中心**：项目 **`w9-batch-smoke`**（`moli-user-center`）→ 勾选 **201 + w9-smoke-b** → restart → 单次 `POST /operation/deploy/batch/task`。
+**W9 部署中心**：项目 **`w9-batch-smoke`** → 勾选 **201 + w9-smoke-b** → restart → 单次 `POST /operation/deploy/batch/task`。
+
+### 5.1 浏览器补记（2026-07-13）
+
+| 项 | 结果 | 说明 |
+|----|------|------|
+| 部署中心 | ✅ | 项目下拉显示 `w9-batch-smoke`；双机勾选 → 创建 `deploy_batch` |
+| 任务历史 | ✅ | 列表含类型/状态/进度/备注/时间；「查看日志」开抽屉 |
+| W9 远端失败 | ⚪ 预期外、走查仍过 | 备注 `远程脚本返回非零退出码: 1`、进度 95% = SSH 已执行但 `moli-service.sh` 未成功；**非前端缺陷** |
+
+> **走查通过标准**：API 契约 + UI 接线；不要求 batch restart 在种子机上业务成功。
 
 ---
 

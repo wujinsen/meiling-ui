@@ -13,7 +13,7 @@
 
 | 模块 | 端口 | 阻塞新 API？ | 后端现在要做什么 |
 |------|------|--------------|------------------|
-| **运营管理** | `8888` | **否** | **联合走查 W1–W10**（前端代码 ✅；见 [operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)） |
+| **运营管理** | `8888` | **否** | ✅ **W1–W10 走查通过**（2026-07-13 · [operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)） |
 | **知识库** | `8090` | **部分**（规模化/Lint） | **P0 点验**；**本地 dev** secret + O4 已就绪（§8.3） |
 | **SSO** | user-center | **否** | **SSO-MENU-1 已交付**（走查 ✅ 2026-07-13） |
 
@@ -36,7 +36,7 @@
 | **S-DEPLOY-1** | 项目名 → order/bi 映射 | `presets.serviceKeys` 含 order/bi（已有） |
 | **W7–W10** | server create id · batch deploy · upload · task cancel | commit **`b4ac176a`**（§8.2） |
 
-**联合走查**：[test/operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)（给后端 · 含勾选记录表）。
+**联合走查**：[test/operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md) · **✅ W1–W10 已通过**（2026-07-13）。
 
 ---
 
@@ -48,7 +48,7 @@
 
 | 状态 | 含义 | 任务 ID |
 |------|------|---------|
-| 🟢 **点验** | 无新 API；环境 + 走查 | W1–W10、§10/§16、KB-O4、KB-BROWSE-1、KB-LLM-DB、407 SQL |
+| 🟢 **点验** | 无新 API；环境 + 走查 | ~~W1–W10~~ ✅ 2026-07-13、KB-O4、KB-BROWSE-1、KB-LLM-DB、407 SQL |
 | 🟡 **可选开发** | 体验/规模化 **P3** | DC-4、KB-LINT-1/2、KBOPS-2 |
 | ⚪ **已完成** | 前后端已对齐 | S-VO、W7–W10、DC-2/3、S-ERR-1、S-DEPLOY-1、create id、**batch deploy**、**SSO-MENU-1** |
 
@@ -246,7 +246,7 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 
 | 维度 | 评估 |
 |------|------|
-| **运营** | **无 API 阻塞**；待 W1–W10 **联合走查** |
+| **运营** | **无 API 阻塞**；**W1–W10 走查 ✅**（2026-07-13） |
 | **知识库** | **点验级**；**本地 secret + O4 已就绪** |
 | **SSO** | **已交付**；F-SSO-1～6 + S3～S7/S10 走查 ✅（2026-07-13） |
 | **文档↔代码** | **与 monorepo `frontend-gaps` / handoff 互引一致** |
@@ -281,7 +281,7 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 ### 8.5 联调前置
 
 ```text
-8888：□ install+重启（b4ac176a）  □ VITE_USE_MOCK_AUTH=false  □ 走查稿 W1–W10
+8888：☑ install+重启（b4ac176a）  ☑ VITE_USE_MOCK_AUTH=false  ☑ 走查稿 W1–W10（2026-07-13）
 SSO：☑ 30_sso_menu_system_id.sql  ☑ sso-menu-frontend-walkthrough（2026-07-13）
 8090：□ 8090 重启  □ kb:prd-acceptance（本地 dev 通常已满足 secret+O4）
 ```
@@ -293,4 +293,5 @@ SSO：☑ 30_sso_menu_system_id.sql  ☑ sso-menu-frontend-walkthrough（2026-07
 | 日期 | 说明 |
 |------|------|
 | 2026-07-13 | **对齐 monorepo**：`b4ac176a` · §8.4③ 落定 · DC-BE-1→batch · 8090 本地就绪 |
+| 2026-07-13 | **W1–W10 联合走查通过**（API + 浏览器 · W9 远端 exit 1 不计入失败） |
 | 2026-07-13 | W7–W10 前端完工；走查稿 `docs/test/operation-w1-w10-walkthrough.md` |

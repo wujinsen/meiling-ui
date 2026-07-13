@@ -24,16 +24,18 @@
 | **S-VO** | 三管理页 · `operationServerLinks.ts` | `toVo()` `*Count`；去掉列表 links 水合（2026-07-13） |
 | **DC-2** | `DeployCenterView` · `useDeployBatchTasks` | 项目优先 + 多服务器批量扇出（2026-07-13） |
 | **W7–W10** | `operation.ts` · `DeployCenterView` · `DeployTaskDrawer` | server create 返回 id · 多机 deploy batch API · 任务取消（2026-07-13） |
+| **W1–W10 走查** | `npm run op:walkthrough` · 部署中心/任务历史 | ✅ **联合走查通过**（2026-07-13） |
 
 契约与验收：[api/operation-frontend.md](api/operation-frontend.md) §10 · §16。  
-**给后端**：[api/operation-frontend-handoff.md](api/operation-frontend-handoff.md) · **[test/operation-w1-w10-walkthrough.md](test/operation-w1-w10-walkthrough.md)**（W1–W10 走查稿）。
+**给后端**：[api/operation-frontend-handoff.md](api/operation-frontend-handoff.md) · **[test/operation-w1-w10-walkthrough.md](test/operation-w1-w10-walkthrough.md)**（W1–W10 走查稿 · ✅）。
 
-### 1.2 剩余（联合走查 · 非新代码）
+### 1.2 剩余（非新代码）
 
 | 类型 | 项 | 负责方 | 文档 |
 |------|-----|--------|------|
-| 点验 | **W1–W10** 浏览器走查 + §10/§16 | 前端 + 后端 | [operation-w1-w10-walkthrough.md](test/operation-w1-w10-walkthrough.md) |
 | DBA | 菜单 407 SQL（老库未执行时 supplement 路由兜底） | DBA | `docs/sql/28_operation_topology_menu.sql` |
+
+~~**W1–W10** 浏览器走查~~ → ✅ **2026-07-13**（见 [operation-w1-w10-walkthrough.md](test/operation-w1-w10-walkthrough.md) §5 · §5.1）。
 
 ~~create serverIds / links 同步~~ → **后端 ✅**（2026-07-13）。详见 [operation-frontend-handoff.md](api/operation-frontend-handoff.md) §4。
 
@@ -101,7 +103,7 @@
 
 ### 5.1 点验（优先）
 
-1. **运营** S-VO W1–W10 + §10/§16（`:8888` 本地最新版已重启即可走查）
+1. ~~**运营** S-VO W1–W10~~ ✅ 2026-07-13
 2. **KB** `kb:prd-acceptance`（KB-O4 · KB-BROWSE-1）
 3. **KB** KB-LLM-DB · `kb:prd-acceptance`（8090 本地 dev 通常已满足 secret + O4）
 
@@ -115,7 +117,7 @@
 | 3 | **KBOPS-2** | 运维 Dashboard 专用 API | **待后端 API** · 前端暂缓 |
 | — | **SSO-MENU-1** | 按系统隔离菜单 | ✅ **已交付 + 走查通过**（2026-07-13） |
 
-**运营主功能**：SVR-25/28/26b · S-VO · DC-2/3 · **W7–W10** 均已落地；联合走查见 [operation-w1-w10-walkthrough.md](test/operation-w1-w10-walkthrough.md)。
+**运营主功能**：SVR-25/28/26b · S-VO · DC-2/3 · **W7–W10** · **W1–W10 走查** ✅（2026-07-13）。
 
 ### 5.3 需后端配合（转发清单）
 
@@ -123,7 +125,7 @@
 
 | 类型 | 任务 ID |
 |------|---------|
-| **点验**（无新 API） | **W1–W10**、运营 §10/§16、KB-O4、KB-BROWSE-1、KB-GOV-LLM、KB-LLM-DB、KB-LINT-SCAN、407 SQL · ~~**SSO-MENU-1**~~ ✅ 2026-07-13 |
+| **点验**（无新 API） | ~~**W1–W10**~~ ✅ 2026-07-13、KB-O4、KB-BROWSE-1、KB-GOV-LLM、KB-LLM-DB、KB-LINT-SCAN、407 SQL · ~~**SSO-MENU-1**~~ ✅ 2026-07-13 |
 | **需后端开发** | **DC-4** / **KB-LINT-1/2** / **KBOPS-2**（**P3** · [p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md)） |
 | ~~**DC-BE-1**~~ | ✅ 由 `batch/task` 覆盖 |
 | **纯前端** | ~~DC-3、S-ERR-1、S-DEPLOY-1~~ ✅ 2026-07-13 |
