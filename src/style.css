@@ -2190,39 +2190,40 @@
   }
 
   .kb-wiki-import-layout {
-    @apply grid items-start gap-6 lg:grid-cols-[minmax(24rem,2fr)_minmax(16rem,1fr)];
+    @apply grid items-start gap-6 lg:grid-cols-[auto_minmax(18rem,1fr)];
   }
 
   .kb-wiki-import-form {
-    @apply min-w-0;
+    @apply w-fit min-w-0 max-w-full shrink-0;
   }
 
   .kb-wiki-import-sheet {
-    @apply w-full divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100 bg-gray-50/35 dark:divide-white/5 dark:border-white/5 dark:bg-white/[0.02];
+    @apply w-fit max-w-full divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100 bg-gray-50/35 dark:divide-white/5 dark:border-white/5 dark:bg-white/[0.02];
   }
 
   .kb-wiki-import-group {
-    @apply space-y-3 px-4 py-3.5;
+    @apply space-y-4 px-4 py-4;
   }
 
-  .kb-wiki-import-group-label {
-    @apply text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400;
+  .kb-wiki-import-row {
+    @apply grid items-start gap-x-3 gap-y-1.5;
+    grid-template-columns: 5.5rem minmax(0, 20rem);
+  }
+
+  .kb-wiki-import-row--slug-hint {
+    @apply -mt-1 mb-0.5;
+  }
+
+  .kb-wiki-import-row-spacer {
+    @apply block;
   }
 
   .kb-wiki-import-file-grid {
-    @apply grid grid-cols-2 gap-2;
-    margin-left: calc(5.5rem + 0.75rem);
-  }
-
-  .kb-wiki-import-group > .kb-wiki-import-hint,
-  .kb-wiki-import-slug-hint,
-  .kb-wiki-import-path,
-  .kb-wiki-import-warn {
-    margin-left: calc(5.5rem + 0.75rem);
+    @apply grid grid-cols-1 gap-2.5;
   }
 
   .kb-wiki-import-file-card {
-    @apply relative flex min-h-[5.5rem] w-full cursor-pointer flex-col gap-1 rounded-lg border border-dashed border-gray-200 bg-white px-3 py-2.5 transition;
+    @apply relative flex min-h-[4.75rem] w-full cursor-pointer items-start gap-2.5 rounded-lg border border-dashed border-gray-200 bg-white px-3 py-2.5 transition;
     @apply hover:border-brand-300 hover:bg-brand-50/40 hover:shadow-sm;
     @apply dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/35 dark:hover:bg-brand-500/10;
   }
@@ -2232,19 +2233,23 @@
   }
 
   .kb-wiki-import-file-card-icon {
-    @apply inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-300;
+    @apply mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-white/10 dark:text-gray-300;
   }
 
   .kb-wiki-import-file-card--filled .kb-wiki-import-file-card-icon {
     @apply bg-brand-100 text-brand-600 dark:bg-brand-500/20 dark:text-brand-200;
   }
 
+  .kb-wiki-import-file-card-body {
+    @apply min-w-0 flex-1 space-y-1 py-0.5;
+  }
+
   .kb-wiki-import-file-card-label {
-    @apply text-xs font-medium text-gray-500 dark:text-gray-400;
+    @apply block text-xs font-medium text-gray-500 dark:text-gray-400;
   }
 
   .kb-wiki-import-file-card-name {
-    @apply line-clamp-2 pr-6 text-sm font-medium leading-snug text-gray-800 dark:text-gray-100;
+    @apply pr-6 text-sm leading-relaxed text-gray-800 dark:text-gray-100;
   }
 
   .kb-wiki-import-file-clear {
@@ -2252,7 +2257,7 @@
   }
 
   .kb-wiki-import-hint {
-    @apply text-xs leading-relaxed text-gray-400 dark:text-gray-500;
+    @apply pt-0.5 text-xs leading-relaxed text-gray-400 dark:text-gray-500;
   }
 
   .kb-wiki-import-slug-hint {
@@ -2267,12 +2272,28 @@
     @apply rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-200;
   }
 
-  .kb-wiki-import-options-grid {
-    @apply grid grid-cols-2 gap-2;
+  .kb-wiki-import-conflict-row {
+    @apply grid grid-cols-2 gap-2.5;
+  }
+
+  .kb-wiki-import-check-row {
+    @apply flex flex-col gap-2.5;
+  }
+
+  .kb-wiki-import-check-row .app-checkbox--option {
+    @apply min-h-0 px-3 py-2.5;
+  }
+
+  .kb-wiki-import-check-row .app-checkbox--option .app-checkbox__label {
+    @apply text-xs leading-relaxed;
+  }
+
+  .kb-wiki-import-batch-list {
+    @apply max-h-28 space-y-1 overflow-y-auto rounded-lg border border-gray-100 p-2 text-xs dark:border-white/5;
   }
 
   .kb-wiki-import-conflict-tile {
-    @apply flex min-h-[2.75rem] w-full cursor-pointer items-center justify-center rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2 text-center transition-colors duration-150;
+    @apply flex min-h-[3rem] w-full cursor-pointer items-center justify-center rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-center transition-colors duration-150;
     @apply hover:border-brand-200 hover:bg-brand-50/40;
     @apply dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-brand-500/30 dark:hover:bg-brand-500/10;
   }
@@ -2283,23 +2304,19 @@
   }
 
   .kb-wiki-import-conflict-tile__label {
-    @apply text-xs font-medium leading-snug text-gray-600 dark:text-gray-300;
+    @apply text-xs font-medium leading-relaxed text-gray-600 dark:text-gray-300;
   }
 
   .kb-wiki-import-conflict-tile--active .kb-wiki-import-conflict-tile__label {
     @apply text-gray-800 dark:text-gray-100;
   }
 
-  .kb-wiki-import-options-grid .app-checkbox--option {
-    @apply min-h-[2.75rem];
-  }
-
   .kb-wiki-import-footer {
-    @apply flex justify-end px-4 py-3.5;
+    @apply px-4 py-4;
   }
 
   .kb-wiki-import-footer .btn-primary {
-    @apply min-w-[8.5rem];
+    @apply w-full min-w-0;
   }
 
   .kb-raw-upload-conflict-block {
@@ -2312,6 +2329,10 @@
 
   .kb-raw-upload-conflict-grid {
     @apply grid grid-cols-3 gap-2;
+  }
+
+  .kb-raw-upload-conflict-grid--2 {
+    @apply grid-cols-2;
   }
 
   .kb-raw-upload-conflict-tile {
@@ -3049,7 +3070,7 @@
   }
 
   .kb-wiki-import-sheet .form-field.form-field-horizontal {
-    grid-template-columns: 5.5rem minmax(0, 1fr);
+    grid-template-columns: 5.5rem minmax(0, 20rem);
   }
 
   .form-grid-row .form-field.form-field-horizontal {
