@@ -212,7 +212,7 @@
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-13 | **KB 点验**：`npm run kb:prd` 16/17（P0-O4/O9/browse · O5–O8 · REG-llm-on）；§8.1 O4 ✅ |
+| 2026-07-13 | **KB 点验 + P3**：`npm run kb:prd` **17/17**（含 REG-llm-off merge 探针）；KBOPS-2 · KB-LINT 前后端 ✅ |
 | 2026-07-12 | 健康体检 **O9**：质量 Tab 展示 `kb.lint.schedule-enabled`、最近 scan 落库、待处理工单数（`KbLintScanStatusBar`） |
 | 2026-07-12 | 运营管理：**S6-b+** 项目/组件列表关联列显示 `服务器名 · IP`；**SVR-21d** 端口矩阵文档对齐 |
 | 2026-07-10 | T16f Wiki 治理全链路 API 联调（lint/merge-hint/sync/auto-fix） |

@@ -67,14 +67,21 @@
 | **KB-LLM-DB** | **P1** | 平台 LLM Key 入库 / 清 DB | UI 已有 | ✅ 2026-07-13 `encryptionReady=true` |
 | **KB-LINT-SCAN** | **P2** | `GET /kb/lint/scan/status` | ✅ 8090 已部署；404 降级 | ✅ 2026-07-13 **P0-O9** · O5–O8 |
 
-### 2.2 可选增强（P3 · 8090 API 已就绪）
+### 2.2 P3 增强（2026-07-13 · 前后端 ✅）
 
 | 任务 ID | 优先级 | 前端落点 | 说明 | 阻塞 |
 |---------|--------|----------|------|------|
 | **KB-LINT-1/2** | P3 | `kbLint.ts` · `KbLintIssuesPanel.vue` | ✅ 服务端分页信任；裸数组仅 mock/降级路径客户端 slice | ✅ 2026-07-13 |
 | **KBOPS-2** | P3 | `KnowledgeOpsDashboardView.vue` | ✅ 首选 `GET /kb/ops/dashboard`；失败降级 3 请求 | ✅ 2026-07-13 |
 
-详见 [api/knowledge-ops-frontend.md](api/knowledge-ops-frontend.md) · [product/knowledge-ops-prd.md](product/knowledge-ops-prd.md) §8。
+详见 [api/knowledge-ops-frontend.md](api/knowledge-ops-frontend.md) §8 · [product/knowledge-ops-prd.md](product/knowledge-ops-prd.md) · [api/p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md) §2–§3。
+
+### 2.3 运维剩余（非前后端代码）
+
+| 项 | 负责方 | 说明 |
+|----|--------|------|
+| **`kb_llm_call_log`** | DBA | 共享/生产 MySQL 执行 monorepo [`18_kb_llm_call_log.sql`](../../moli-project-distribute/docs/sql/18_kb_llm_call_log.sql)；缺表时 dashboard 500 → 前端 legacy 降级 |
+| **共享环境部署** | 运维 | 8888 `b4ac176a` / `755abd43`；8090 `38570430` — install + 重启 jar |
 
 ---
 

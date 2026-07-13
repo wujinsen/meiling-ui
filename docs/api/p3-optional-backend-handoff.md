@@ -15,31 +15,28 @@
 
 ---
 
-## 0. 给前端一句话（可复制）
+## 0. 给前端一句话（可复制 · 2026-07-13 已完工）
 
 ```
-【meiling-ui · P3 可选 · 2026-07-13】
+【meiling-ui · P3 · 2026-07-13 ✅ 三项已接线】
 
-8090 已就绪，可开工：
-1) KBOPS-2：KnowledgeOpsDashboardView 改调 GET /kb/ops/dashboard（单请求，见 p3 handoff §3）
-2) KB-LINT：质量 Tab 已兼容服务端分页；确认 unassignedOnly + pageNum 走服务端分支即可
+① DC-4：TaskHistoryView 平铺/按项目分组 · listTaskGroupsApi
+② KBOPS-2：getKbOpsDashboardApi（失败降级 3 请求）
+③ KB-LINT：kbLint.ts 信任 current+size 服务端分页
 
-8888 仍待后端：
-3) DC-4：TaskHistoryView 分组视图 — 等 GET /operation/task/groups，暂缓
+KB 点验：npm run kb:prd 17/17（含 REG-llm-off merge 探针）
 
-详稿：meiling-ui/docs/api/p3-optional-backend-handoff.md
-缺口：meiling-ui/docs/frontend-gaps.md §1.3 · §2.2
+详稿：meiling-ui/docs/api/p3-optional-backend-handoff.md §6
 ```
 
 ---
 
-## 0.1 给后端（仅 DC-4）
+## 0.1 给后端（历史 · P3 已完工）
 
 ```
-【P3 · 仅剩 DC-4 · 8888】
+【P3 · 2026-07-13 ✅ 全部交付】
 
-请评估 GET /operation/task/groups（方案 A，见 p3-optional-backend-handoff.md §1）。
-KB-LINT / KBOPS Dashboard API 8090 已上线，前端自行接线。
+DC-4 · KBOPS-2 · KB-LINT 前后端均已接线。无待办 API。
 ```
 
 ---
@@ -144,10 +141,7 @@ GET /operation/task/list?groupBy=project
 | 层 | 状态 |
 |----|------|
 | **后端** | ✅ `GET /kb/lint/issues` 已支持 MyBatis 分页 + `unassignedOnly` SQL 过滤 |
-| **前端** | 🟡 已接 API；`kbLint.ts` 在响应含 **`current` + `size`** 时走服务端分页 |
-| **验证** | `npm run kb:prd` → P2-O5 / P2-O5-unassigned / P2-O8 ✅ |
-
-**前端可选收紧**（非阻塞）：健康体检 · 质量 Tab 拉工单时始终带 `pageNum`/`pageSize`；勿依赖裸数组全量 + 客户端 `slice`。
+| **前端** | ✅ 已收紧 — `kbLint.ts` 在 `current`+`size` 时信任服务端；`KbLintIssuesPanel` 始终带 `pageNum`/`pageSize` |
 
 ### 2.1 背景
 
@@ -205,13 +199,13 @@ GET /KnowledgeServer/kb/lint/issues?spaceId=900000000000000001&status=0&unassign
 - 继续允许短期返 **数组**（老客户端）；但 `current`+`size` 存在时不得再返全量数组。
 - `PUT /kb/lint/issue/{id}` · `PUT /kb/lint/issues/batch` 不变。
 
-### 2.5 前端接线（现状 + 可选）
+### 2.5 前端接线（✅ 2026-07-13）
 
-| 文件 | 现状 | 可选收紧 |
-|------|------|----------|
-| `src/api/knowledge/kbLint.ts` | ✅ `normalizeLintIssuesResponse` 识别 `current`+`size` | 无必改 |
-| `KbLintIssuesPanel.vue` | ✅ `AppPagination` 绑定 `total` | 确认请求始终带分页参数 |
-| `KnowledgeLintView.vue` | 同上 | 大库场景避免过大 `pageSize` |
+| 文件 | 实现 |
+|------|------|
+| `src/api/knowledge/kbLint.ts` | ✅ `current`+`size` 时信任服务端；裸数组路径才客户端 slice |
+| `KbLintIssuesPanel.vue` | ✅ 请求始终带 `pageNum`/`pageSize`/`unassignedOnly` |
+| `KnowledgeLintView.vue` | ✅ 复用 `KbLintIssuesPanel` |
 
 ### 2.6 验收
 
@@ -228,20 +222,19 @@ GET /KnowledgeServer/kb/lint/issues?spaceId=900000000000000001&status=0&unassign
 | 层 | 状态 |
 |----|------|
 | **后端** | ✅ **KBOPS-9** · `GET /kb/ops/dashboard` 已上线（`KbOpsController`） |
-| **前端** | ⬜ `KnowledgeOpsDashboardView.vue` 仍 **3 并行请求** + `kbOpsDashboard.ts` 客户端聚合 |
+| **前端** | ✅ 已接线 — `getKbOpsDashboardApi` 首选单请求；8090 500 时降级 3 请求 |
 | **权限** | `kb:ops:dashboard`（菜单 SQL：`docs/sql/13_kb_ops_dashboard_menu.sql`） |
 
-**推荐前端改动**：新增 `getKbOpsDashboardApi` → `loadDashboard()` 单请求；保留现有多请求逻辑作降级。
+**实现**：`src/api/knowledge/kbOps.ts` · `applyKbOpsDashboardVo()` · `dashboardSource` 区分 `api` / `legacy`。
 
-### 3.1 背景（现网 vs 目标）
+### 3.1 背景（目标 vs 降级）
 
 - 路由：`/knowledge/ops/dashboard` · 权限 `kb:ops:dashboard`（SQL：`docs/sql/13_kb_ops_dashboard_menu.sql`）。
-- 现网 `KnowledgeOpsDashboardView` **并行 3 请求**：
-  1. `GET /kb/ask/llm-config` → D3 LLM 指示灯
-  2. `GET /kb/lint/issues?status=0`（**无分页，全量 records**）→ D2 + D4 客户端聚合
-  3. `GET /kb/sync/logs?pageNum=1&pageSize=500` → D1 近 7 日趋势客户端聚合
-
-工单/日志量大时：首屏慢、占带宽、聚合不一致。
+- **首选**：`GET /kb/ops/dashboard?trendDays=7` 单请求映射 D1–D4 + LLM 摘要。
+- **降级**（8090 缺 `kb_llm_call_log` 等导致 500）：`loadDashboardLegacy()` 并行 3 请求：
+  1. `GET /kb/ask/llm-config` → D3
+  2. `GET /kb/lint/issues?status=0&pageNum=1&pageSize=20` → D2 + D4 客户端聚合
+  3. `GET /kb/sync/logs?pageNum=1&pageSize=500` → D1 客户端聚合
 
 ### 3.2 现网接口（权威 · 已实现）
 
@@ -333,9 +326,9 @@ export const getKbOpsDashboardApi = (params?: { spaceId?: string; trendDays?: nu
 ## 4. 建议前端排期（2026-07-13）
 
 ```text
-① KBOPS-2 前端接线（8090 API 已就绪）— 单请求 dashboard，减首屏 3 往返
-② KB-LINT 可选收紧 — 确认分页参数；无新 API
-③ DC-4 — 等 8888 GET /operation/task/groups 后再做 TaskHistoryView 分组
+① ~~KBOPS-2~~ ✅ 2026-07-13
+② ~~KB-LINT~~ ✅ 2026-07-13
+③ ~~DC-4~~ ✅ 2026-07-13
 ```
 
 ---

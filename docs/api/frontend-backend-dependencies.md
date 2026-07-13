@@ -14,7 +14,7 @@
 | 模块 | 端口 | 阻塞新 API？ | 后端现在要做什么 |
 |------|------|--------------|------------------|
 | **运营管理** | `8888` | **否** | ✅ **W1–W10 走查通过**（2026-07-13 · [operation-w1-w10-walkthrough.md](../test/operation-w1-w10-walkthrough.md)） |
-| **知识库** | `8090` | **否**（P3 接线可选） | ✅ **`npm run kb:prd` 点验通过**（2026-07-13 · 16/17 探针） |
+| **知识库** | `8090` | **否** | ✅ **点验 + P3 接线完成**（2026-07-13 · `kb:prd` **17/17**） |
 | **SSO** | user-center | **否** | **SSO-MENU-1 已交付**（走查 ✅ 2026-07-13） |
 
 ### 1.1 已与前端对齐（勿再 Breaking）
@@ -198,7 +198,7 @@ GET /kb/lint/issues?pageNum=1&pageSize=20&unassignedOnly=true&spaceId=&status=0
 
 ```text
 ① 8888：push/deploy b4ac176a（共享环境）或本地 install+重启 → W1–W10 走查
-② ~~8090：KB 点验~~ ✅ 2026-07-13（`npm run kb:prd` 16/17）
+② ~~8090：KB 点验 + P3 接线~~ ✅ 2026-07-13（`npm run kb:prd` **17/17**）
 ③ DBA：407 SQL（老库按需）
 ④ ~~SSO-MENU-1~~ ✅ 2026-07-13
 ⑤ ~~可选 P3：KBOPS-2 · KB-LINT · DC-4~~ ✅ 2026-07-13
@@ -260,7 +260,7 @@ DC-BE-1：已由 batch/task 覆盖，可关闭
 | 项 | 状态 |
 |----|------|
 | 功能 API | facet · Lint 分页 · chunk ask ✅ |
-| **本地 P0** | secret + O4 样本 · `encryptionReady=true` ✅ · **`kb:prd` 16/17** ✅ 2026-07-13 |
+| **本地 P0** | secret + O4 样本 · `encryptionReady=true` ✅ · **`kb:prd` 17/17** ✅ 2026-07-13 |
 | **生产** | 运维注入真实 secret + 定时任务 |
 
 ### 8.4 ③ 下迭代（后端已回复）
