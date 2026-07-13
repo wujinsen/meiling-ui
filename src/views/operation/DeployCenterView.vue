@@ -41,7 +41,7 @@ import {
   type UploadPostMode,
 } from '@/types/operation'
 import { resolveDeployServiceKey } from '@/utils/operationPort'
-import { formatProjectPickHint, projectNameCounts } from '@/utils/operationProject'
+import { formatProjectPickHint, projectNameCounts, resolveProjectDisplayName } from '@/utils/operationProject'
 import { matchesServerKeyword } from '@/utils/operationServerSearch'
 import { GitBranch, Loader2, Play, Plus, RefreshCw, RotateCcw, Search, Square, Terminal, Upload, List, X } from 'lucide-vue-next'
 
@@ -95,7 +95,7 @@ const projectOptions = computed(() =>
     .filter((p) => p.id != null)
     .map((p) => ({
       value: String(p.id),
-      label: p.projectName || `#${p.id}`,
+      label: resolveProjectDisplayName(p),
       hint: formatProjectPickHint(p, t, projectNameDupCounts.value),
     })),
 )
