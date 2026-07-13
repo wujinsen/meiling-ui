@@ -6,6 +6,7 @@
 
 - [docs/sso-frontend-dev-guide.md](docs/sso-frontend-dev-guide.md)（中文完整说明）
 - [docs/sso-frontend-dev-guide.en.md](docs/sso-frontend-dev-guide.en.md)（英文摘要）
+- **SSO-MENU-1 开工**：[docs/api/sso-menu-frontend-handoff.md](docs/api/sso-menu-frontend-handoff.md) · 走查 [docs/test/sso-menu-frontend-walkthrough.md](docs/test/sso-menu-frontend-walkthrough.md)
 - Agent Skill：`.cursor/skills/meiling-sso-system-page/SKILL.md`
 
 做 **运营管理 `operation_*`**（服务器/项目/组件/部署/拓扑/关联）相关需求时，**必须先阅读**：

@@ -5,7 +5,7 @@ import { useSystemPortal } from '@/composables/useSystemPortal'
 import {
   getPermissionMenus,
   isUsingBackendMenus,
-  loadDynamicRoutes,
+  reloadRoutesFromServer,
   resetDynamicRoutes,
 } from '@/composables/usePermission'
 import { LAYOUT_ROUTE_NAME } from '@/router/constants'
@@ -78,7 +78,11 @@ router.beforeEach(async (to) => {
   // 选系统页不依赖动态菜单路由
   if (to.name !== 'system-select') {
     try {
-      await Promise.all([ensurePermissionsLoaded(), loadDynamicRoutes()])
+      await ensurePermissionsLoaded()
+      const reload = await reloadRoutesFromServer()
+      if (!reload.ok && reload.needsSystemSelect) {
+        return { path: '/system-select' }
+      }
     } catch {
       clearAuthSession()
       await resetDynamicRoutes()

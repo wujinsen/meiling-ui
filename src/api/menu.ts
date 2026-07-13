@@ -5,6 +5,9 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import type { MenuQuery, SysMenu } from '@/types/menu'
 import { jsonEntityBody } from '@/utils/id'
 
+/** 后端未就绪时 getRouters 的 dev fallback 标记（与 Q3 空树 `[]` 区分） */
+export const MENU_DEV_FALLBACK_MSG = '使用前端默认菜单'
+
 /**
  * 当前用户可访问的路由菜单。
  * 用于：侧栏导航 + 动态路由注册。
@@ -21,7 +24,7 @@ export async function getRoutersApi(): Promise<MoliResult<MenuVo[]>> {
 
   return {
     code: API_SUCCESS_CODE,
-    msg: '使用前端默认菜单',
+    msg: MENU_DEV_FALLBACK_MSG,
     data: getDefaultMenus(),
   }
 }

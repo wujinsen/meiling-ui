@@ -5,7 +5,7 @@ import {
   hasPermissionsPayload,
   savePermissions,
 } from '@/composables/useActionPermissions'
-import { loadDynamicRoutes, resetDynamicRoutes, getPermissionMenus } from '@/composables/usePermission'
+import { reloadRoutesFromServer, resetDynamicRoutes, getPermissionMenus } from '@/composables/usePermission'
 import { resetPageTabs } from '@/composables/usePageTabs'
 import type { LoginVo } from '@/types/api'
 import { API_SUCCESS_CODE } from '@/types/api'
@@ -70,12 +70,13 @@ export function useSystemPortal() {
     await resetDynamicRoutes()
     resetPageTabs()
     try {
-      await Promise.all([
-        hasPermissionsPayload(data.permissions, data.fullPermission)
-          ? Promise.resolve()
-          : ensurePermissionsLoaded(),
-        loadDynamicRoutes(true),
-      ])
+      if (!hasPermissionsPayload(data.permissions, data.fullPermission)) {
+        await ensurePermissionsLoaded()
+      }
+      const reload = await reloadRoutesFromServer({ force: true })
+      if (!reload.ok) {
+        throw new Error('加载系统菜单失败')
+      }
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : '加载系统菜单失败')
     }
@@ -96,10 +97,8 @@ export function useSystemPortal() {
 
     if (!enabled) {
       await resetDynamicRoutes()
-      await Promise.all([
-        hasPayload ? Promise.resolve() : ensurePermissionsLoaded(),
-        loadDynamicRoutes(true),
-      ])
+      if (!hasPayload) await ensurePermissionsLoaded()
+      await reloadRoutesFromServer({ force: true })
       return '/'
     }
 
@@ -107,16 +106,15 @@ export function useSystemPortal() {
       throw new Error('NO_SYSTEM_ASSIGNED')
     }
 
-    if (loginData.currentSystem) {
+    if (!loginData.currentSystem) {
       await resetDynamicRoutes()
-      await Promise.all([
-        hasPayload ? Promise.resolve() : ensurePermissionsLoaded(),
-        loadDynamicRoutes(true),
-      ])
-      return resolveDefaultPath(getPermissionMenus())
+      return '/system-select'
     }
 
-    return '/system-select'
+    await resetDynamicRoutes()
+    if (!hasPayload) await ensurePermissionsLoaded()
+    await reloadRoutesFromServer({ force: true })
+    return resolveDefaultPath(getPermissionMenus())
   }
 
   async function enterSystem(systemId: number | string) {

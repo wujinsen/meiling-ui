@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 import type { MenuVo } from '@/types/api'
-import { getRoutersApi } from '@/api/menu'
+import { API_SUCCESS_CODE } from '@/types/api'
+import { getRoutersApi, MENU_DEV_FALLBACK_MSG } from '@/api/menu'
 import { getDefaultMenus, mergeSidebarMenus, excludeStaticMenuRoutes } from '@/router/defaultMenus'
 import { LAYOUT_ROUTE_NAME } from '@/router/constants'
 import { STATIC_ROUTE_NAMES } from '@/router/staticRoutes'
@@ -10,7 +11,13 @@ import { mergeKnowledgeSupplementRoutes, mergeKnowledgeSupplementMenus } from '@
 import { mergeOperationSupplementRoutes, mergeOperationSupplementMenus } from '@/router/operationSupplementRoutes'
 import { mergeSystemSupplementRoutes } from '@/router/systemSupplementRoutes'
 import { sortMenuTree } from '@/utils/tree'
-import { clearMenus, getToken, saveMenus } from '@/utils/authSession'
+import { clearMenus, getStoredCurrentSystem, getToken, isPortalEnabledStored, saveMenus } from '@/utils/authSession'
+
+export type ReloadRoutesResult = {
+  ok: boolean
+  /** Q3-A：门户开启且未 enter，getRouters 返回空树 */
+  needsSystemSelect?: boolean
+}
 
 /** 侧栏菜单（来自 getRouters） */
 const menus = ref<MenuVo[]>(resolveInitialMenus())
@@ -18,7 +25,7 @@ const routesLoaded = ref(false)
 const addedRouteNames = ref<string[]>([])
 const usingBackendMenus = ref(false)
 
-let loadingPromise: Promise<boolean> | null = null
+let loadingPromise: Promise<ReloadRoutesResult> | null = null
 
 function resolveInitialMenus() {
   // 已登录时不在本地缓存中恢复旧菜单，避免菜单结构调整后侧栏不更新
@@ -116,6 +123,58 @@ async function applyMenusToRouter(menuSource: MenuVo[], options: { fromBackend: 
   routesLoaded.value = true
 }
 
+/**
+ * SSO-MENU-1 · F-SSO-1：统一拉 getRouters 并注册动态路由（enter/switch/守卫唯一入口）。
+ */
+export async function reloadRoutesFromServer(options: { force?: boolean } = {}): Promise<ReloadRoutesResult> {
+  const force = options.force ?? false
+  if (routesLoaded.value && !force) {
+    return { ok: true }
+  }
+  if (loadingPromise && !force) {
+    return loadingPromise
+  }
+
+  if (force) {
+    clearMenus()
+  }
+
+  loadingPromise = (async (): Promise<ReloadRoutesResult> => {
+    const portalOn = isPortalEnabledStored()
+    const current = getStoredCurrentSystem()
+
+    const result = await getRoutersApi()
+    const isFallback = result.msg === MENU_DEV_FALLBACK_MSG
+
+    if (result.code !== API_SUCCESS_CODE && !isFallback) {
+      throw new Error(result.msg || '加载菜单失败')
+    }
+
+    const menuSource = isFallback ? getDefaultMenus() : (result.data ?? [])
+
+    if (!menuSource.length && portalOn && !current?.id && !isFallback) {
+      await resetDynamicRoutes()
+      return { ok: false, needsSystemSelect: true }
+    }
+
+    if (force) {
+      const { router } = await import('@/router')
+      for (const name of addedRouteNames.value) {
+        if (router.hasRoute(name)) router.removeRoute(name)
+      }
+      addedRouteNames.value = []
+      routesLoaded.value = false
+    }
+
+    await applyMenusToRouter(menuSource, { fromBackend: true, isFallback })
+    return { ok: true }
+  })().finally(() => {
+    loadingPromise = null
+  })
+
+  return loadingPromise
+}
+
 export async function loadDynamicRoutesFromMenus(menuList: MenuVo[]) {
   clearMenus()
   const { router } = await import('@/router')
@@ -129,24 +188,8 @@ export async function loadDynamicRoutesFromMenus(menuList: MenuVo[]) {
 }
 
 export async function loadDynamicRoutes(force = false) {
-  if (routesLoaded.value && !force) return true
-  if (loadingPromise && !force) return loadingPromise
-
-  if (force) {
-    clearMenus()
-  }
-
-  loadingPromise = (async () => {
-    const result = await getRoutersApi()
-    const isFallback = result.msg === '使用前端默认菜单'
-    const menuSource = isFallback ? getDefaultMenus() : (result.data ?? [])
-    await applyMenusToRouter(menuSource, { fromBackend: true, isFallback })
-    return true
-  })().finally(() => {
-    loadingPromise = null
-  })
-
-  return loadingPromise
+  const result = await reloadRoutesFromServer({ force })
+  return result.ok
 }
 
 export async function resetDynamicRoutes() {
@@ -174,6 +217,7 @@ export function usePermission() {
     menus,
     routesLoaded,
     usingBackendMenus,
+    reloadRoutesFromServer,
     loadDynamicRoutes,
     loadDynamicRoutesFromMenus,
     resetDynamicRoutes,

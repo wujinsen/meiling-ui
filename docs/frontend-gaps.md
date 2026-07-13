@@ -82,9 +82,9 @@
 | 任务 ID | 优先级 | 项 | 前端动作 | 阻塞 |
 |---------|--------|-----|----------|------|
 | **SSO-REG** | — | 系统注册 `SystemManageView` | ✅ 已完成 | — |
-| **SSO-MENU-1** | **P2** | 按系统隔离菜单 | **下迭代**；需后端 `getRouters` + `system_id` | distribute [sso-menu-system-isolation.md](../../moli-project-distribute/docs/design/sso-menu-system-isolation.md) |
+| **SSO-MENU-1** | **P2** | 按系统隔离菜单 | ✅ **F-SSO-1～6 已落地**（`reloadRoutesFromServer`）；待后端 `system_id` + [走查](test/sso-menu-frontend-walkthrough.md) | distribute [sso-menu-system-isolation.md](../../moli-project-distribute/docs/design/sso-menu-system-isolation.md) |
 
-见 [sso-frontend-dev-guide.md](sso-frontend-dev-guide.md) · [per-system-menu-isolation.md](per-system-menu-isolation.md)。
+见 [sso-frontend-dev-guide.md](sso-frontend-dev-guide.md) · [per-system-menu-isolation.md](per-system-menu-isolation.md) · 走查 [sso-menu-frontend-walkthrough.md](test/sso-menu-frontend-walkthrough.md)。
 
 ---
 
@@ -113,7 +113,7 @@
 | 1 | **DC-4** | 任务历史 project 聚合 | 待做 · P3 可选 |
 | 2 | **KB-LINT-1** · **KB-LINT-2** | Lint 分页收紧 | 待做 · P3 可选 |
 | 3 | **KBOPS-2** | 运维 Dashboard 专用 API | 待做 · P3 可选 |
-| — | **SSO-MENU-1** | 按系统隔离菜单 | **下迭代 P2**（后端） |
+| — | **SSO-MENU-1** | 按系统隔离菜单 | 前端 ✅ · **待联合走查**（后端 P0/P1） |
 
 **运营主功能**：SVR-25/28/26b · S-VO · DC-2/3 · **W7–W10** 均已落地；联合走查见 [operation-w1-w10-walkthrough.md](test/operation-w1-w10-walkthrough.md)。
 
@@ -123,7 +123,7 @@
 
 | 类型 | 任务 ID |
 |------|---------|
-| **点验**（无新 API） | **W1–W10**、运营 §10/§16、KB-O4、KB-BROWSE-1、KB-GOV-LLM、KB-LLM-DB、KB-LINT-SCAN、407 SQL |
-| **需后端开发** | **SSO-MENU-1**（**P2 下迭代**）· **DC-4** / **KB-LINT-1/2** / **KBOPS-2**（**P3 可选**） |
+| **点验**（无新 API） | **W1–W10**、运营 §10/§16、KB-O4、KB-BROWSE-1、KB-GOV-LLM、KB-LLM-DB、KB-LINT-SCAN、407 SQL · **SSO-MENU-1 走查**（待后端） |
+| **需后端开发** | **SSO-MENU-1** 后端过滤 · **DC-4** / **KB-LINT-1/2** / **KBOPS-2**（**P3 可选**） |
 | ~~**DC-BE-1**~~ | ✅ 由 `batch/task` 覆盖 |
 | **纯前端** | ~~DC-3、S-ERR-1、S-DEPLOY-1~~ ✅ 2026-07-13 |

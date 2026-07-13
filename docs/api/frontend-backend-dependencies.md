@@ -185,6 +185,8 @@ GET /kb/lint/issues?pageNum=&pageSize=&unassignedOnly=
 |----|------|
 | 需求 | 门户进入 INTERNAL 系统后，侧栏**仅**该系统菜单 |
 | 权威设计 | distribute [sso-menu-system-isolation.md](../../moli-project-distribute/docs/design/sso-menu-system-isolation.md) · SQL `30_sso_menu_system_id.sql` |
+| **前端开工** | [sso-menu-frontend-handoff.md](sso-menu-frontend-handoff.md)（F-SSO-1～6 · Q3/Q5 · `reloadRoutesFromServer`） |
+| **走查** | [sso-menu-frontend-walkthrough.md](../test/sso-menu-frontend-walkthrough.md) |
 | 本仓摘要 | [per-system-menu-isolation.md](../per-system-menu-isolation.md) |
 | 排期 | **✅ 纳入下迭代 P2**（约 2–3 人日，§8.4③） |
 | 阻塞度 | **不挡**运营/KB 主流程 |
