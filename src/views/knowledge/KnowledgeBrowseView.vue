@@ -174,13 +174,38 @@ function rebuildSlugLookup(groups: KbIndexGroup[]) {
   slugLookup.value = map
 }
 
+function registerSlugAliases(slug: string, title?: string) {
+  if (!slug) return
+  const map = new Map(slugLookup.value)
+  map.set(slug, slug)
+  const stem = slug.includes('/') ? slug.split('/').pop()! : slug
+  if (!map.has(stem)) map.set(stem, slug)
+  if (title?.trim() && !map.has(title.trim())) map.set(title.trim(), slug)
+  slugLookup.value = map
+}
+
+function registerPageLinkAliases(detail?: KbPage | null) {
+  if (!detail) return
+  registerSlugAliases(detail.slug, detail.title)
+  for (const ref of [...(detail.outLinks ?? []), ...(detail.backLinks ?? [])]) {
+    registerSlugAliases(ref.slug, ref.title)
+  }
+}
+
 function firstIndexSlug() {
   if (browseItems.value.length) return browseItems.value[0].slug
   return ''
 }
 
 function resolveSlug(slug: string) {
-  return slugLookup.value.get(slug) ?? slug
+  const direct = slugLookup.value.get(slug)
+  if (direct) return direct
+  for (const ref of [...(page.value?.outLinks ?? []), ...(page.value?.backLinks ?? [])]) {
+    if (ref.slug === slug) return ref.slug
+    const stem = ref.slug.includes('/') ? ref.slug.split('/').pop()! : ref.slug
+    if (stem === slug || ref.title === slug) return ref.slug
+  }
+  return slug
 }
 
 function preferredSlug(explicit?: string) {
@@ -219,6 +244,12 @@ watch(
   () => page.value?.content,
   (content) => scheduleMarkdownRender(content),
   { immediate: true },
+)
+
+watch(
+  () => page.value,
+  (detail) => registerPageLinkAliases(detail),
+  { immediate: true, deep: true },
 )
 
 const visibleDocCount = computed(() => {
@@ -584,7 +615,11 @@ async function fetchPage(resolved: string, sid?: string) {
     pending = (async () => {
       const res = await getKbPageApi(resolved, sid)
       if (res.code === API_SUCCESS_CODE && res.data) {
-        pageCache.set(cacheKey, res.data)
+        pageCache.set(pageCacheKey(res.data.slug, sid), res.data)
+        if (resolved !== res.data.slug) {
+          pageCache.set(pageCacheKey(resolved, sid), res.data)
+        }
+        registerPageLinkAliases(res.data)
         return res.data
       }
       return undefined
@@ -664,7 +699,7 @@ function onContentClick(event: MouseEvent) {
   const target = (event.target as HTMLElement)?.closest('[data-slug]') as HTMLElement | null
   if (target?.dataset.slug) {
     event.preventDefault()
-    void openSlug(target.dataset.slug, undefined, true)
+    void openSlug(target.dataset.slug, page.value?.spaceId ?? preferredSpaceId(), true)
   }
 }
 
