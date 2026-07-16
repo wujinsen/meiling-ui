@@ -1,6 +1,7 @@
 # meiling-ui 前端缺口清单
 
-> 更新：2026-07-13 · 与 **monorepo** `frontend-backend-dependencies` / 走查稿 **互相同步**。  
+> 更新：2026-07-15 · 与 **monorepo** `frontend-backend-dependencies` / 走查稿 **互相同步**。  
+> **最近交付摘要**：[recent-feature-updates.md](recent-feature-updates.md)（Ingest Tab3 UI · P3 KB · W1–W10 · SSO-MENU-1）。  
 > **给后端**：monorepo [frontend-backend-dependencies.md](../../moli-project-distribute/docs/api/frontend-backend-dependencies.md) · 本仓 [api/frontend-backend-dependencies.md](api/frontend-backend-dependencies.md) §7。  
 > **运营关联服务器**（列表 + 新增/编辑弹窗）前端已完成，依赖后端 §15.1 契约。  
 > **SVR-25 / SVR-28 / SVR-26b** · **S-VO** · **DC-2** 前端已落地（见 §1.1）。

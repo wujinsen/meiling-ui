@@ -180,28 +180,34 @@ export type RawUploadResultVo = {
 
 ## 6. Tab3 · Wiki 成品导入
 
-### 6.1 UI 布局（2026-07-10）
+### 6.1 UI 布局（2026-07-13）
 
-`KbWikiImportPanel.vue` 采用 **左侧表单卡 + 右侧结果区**（大屏约 **2:1**）：
+`KbWikiImportPanel.vue` 与 Tab1 `KbRawUploadPanel` **共用同一套左右分栏与控件**，大屏 `lg:grid-cols-2`：
 
 ```text
-kb-wiki-import-layout
-├─ form · kb-wiki-import-sheet（单卡分区，非三块散卡）
-│   ├─ 组1：分类 + Markdown/zip 双列上传卡 + zip 说明
-│   ├─ 组2：slug / 标题（标签左、控件右）+ 琥珀色 slug 说明 + 路径预览
-│   ├─ 组3：slug 冲突 + Sync + Lint（2×2 选项格）
-│   └─ footer：确认导入
-└─ aside：导入结果 + KbWorkflowNextSteps
+grid gap-4 lg:grid-cols-2
+├─ form · grid gap-3（左栏）
+│   ├─ 分类（form-field-horizontal）
+│   ├─ slug 冲突（kb-raw-upload-conflict-block · grid--2）
+│   ├─ Sync / Lint 复选框
+│   ├─ 成品 Markdown · app-upload-dropzone（可拖拽）
+│   ├─ 插图包 zip · app-upload-dropzone（单文件模式）
+│   ├─ 已选文件列表
+│   ├─ slug / 标题 + 说明 + 路径预览（单文件）
+│   └─ 确认导入 btn-primary
+└─ 右栏：结果标题 + 空状态 + 导入结果 + KbWorkflowNextSteps
 ```
 
 | 样式类 | 说明 |
 |--------|------|
-| `.kb-wiki-import-sheet` | 单卡容器，`divide-y` 分组 |
-| `.form-field-horizontal` | 标签 `5.5rem` + 控件 `1fr`（sheet 内随列宽伸展） |
-| `.kb-wiki-import-file-grid` | 上传区双列，与控件列左对齐 |
-| `.kb-wiki-import-options-grid` | 冲突 FAIL/OVERWRITE + Sync/Lint 四格 |
+| `app-upload-dropzone` | 与 Tab1 相同拖放区（Markdown / zip 各一块） |
+| `kb-raw-upload-conflict-block` | 冲突标签 + 选项格 |
+| `kb-raw-upload-conflict-grid--2` | Tab3 双列（FAIL / OVERWRITE） |
+| `btn-upload-pick` | 选择文件按钮 |
 
-Tab1 `KbRawUploadPanel`：冲突策略 **SKIP / OVERWRITE / RENAME** 三列横排（`.kb-raw-upload-conflict-grid`）。
+Tab1 `KbRawUploadPanel`：冲突策略 **SKIP / OVERWRITE / RENAME** 三列（`.kb-raw-upload-conflict-grid` 默认 `grid-cols-3`）。
+
+> 2026-07-10 旧版 `kb-wiki-import-sheet` 单卡栅格已废弃，见 [recent-feature-updates.md](../recent-feature-updates.md) §1。
 
 ### 6.2 UI 步骤（交互）
 
@@ -403,7 +409,7 @@ export function importWikiPageApi(payload: WikiImportForm) {
 | `src/api/knowledge/kbIngest.ts` | `uploadRawApi` |
 | `src/api/knowledge/kbWiki.ts` | `importWikiPageApi` |
 | `src/utils/kbImport.ts` | Raw/Wiki 导入校验、冲突文案判定 |
-| `src/style.css` | `.kb-wiki-import-*`、`.kb-raw-upload-conflict-*` 排版 |
+| `src/style.css` | `app-upload-dropzone`、`.kb-raw-upload-conflict-*`（含 `--2` 双列） |
 | `src/components/knowledge/KbWorkflowNextSteps.vue` | 已有，Tab3 复用 |
 
 ---
