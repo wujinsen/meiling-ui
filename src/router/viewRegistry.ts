@@ -48,6 +48,7 @@ const CRM_VIEWS: Record<string, () => Promise<Component>> = {
   // 企业知识库：作为茉莉后台菜单模块，菜单在「菜单管理」维护、由 getRouters 下发到左侧菜单树
   'knowledge/browse/index': () => import('@/views/knowledge/KnowledgeBrowseView.vue'),
   'knowledge/ask/index': () => import('@/views/knowledge/KnowledgeAskView.vue'),
+  'knowledge/research/index': () => import('@/views/knowledge/KnowledgeResearchView.vue'),
   'knowledge/graph/index': () => import('@/views/knowledge/KnowledgeGraphView.vue'),
   'knowledge/lint/index': () => import('@/views/knowledge/KnowledgeLintView.vue'),
   'knowledge/ingest/index': () => import('@/views/knowledge/KnowledgeIngestWorkbenchView.vue'),

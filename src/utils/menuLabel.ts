@@ -42,6 +42,7 @@ const MENU_COMPONENT_TITLE_KEYS: Record<string, string> = {
   'knowledge/index/index': 'knowledge.browse.title',
   'knowledge/docs/index': 'knowledge.browse.title',
   'knowledge/ask/index': 'knowledge.ask.title',
+  'knowledge/research/index': 'knowledge.research.title',
   'knowledge/query/index': 'knowledge.ask.title',
   'knowledge/graph/index': 'knowledge.graph.title',
   'knowledge/lint/index': 'knowledge.lint.title',

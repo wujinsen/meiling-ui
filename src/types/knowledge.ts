@@ -143,6 +143,62 @@ export type KbAskResponse = {
   qaLogId?: number | string
 }
 
+// ---------------------------------------------------------------------------
+// 3.1 DeepResearch /kb/research（AI-10）
+// ---------------------------------------------------------------------------
+
+export type KbResearchRequest = {
+  topic: string
+  spaceId?: number | string
+  spaceIds?: Array<number | string>
+  writeback?: boolean
+  slug?: string
+  agentic?: boolean
+  graphExpand?: boolean
+  retrievalStrategy?: string
+  maxSections?: number
+  maxRetrieveRounds?: number
+  latencyBudgetMs?: number
+  topK?: number
+}
+
+export type KbResearchStart = {
+  runId: string
+  status?: string
+}
+
+export type KbResearchCitation = {
+  slug: string
+  title?: string
+  sectionIds?: string[]
+}
+
+export type KbResearchProgress = {
+  phase?: string
+  sectionId?: string
+  message?: string
+  pct?: number
+}
+
+export type KbResearchResult = {
+  runId?: string
+  status?: string
+  topic?: string
+  title?: string
+  slug?: string
+  outline?: Record<string, unknown>
+  reportMd?: string
+  citations?: KbResearchCitation[]
+  coverage?: number | null
+  unsupportedStatements?: string[]
+  degraded?: boolean
+  degradeReason?: string | null
+  ingestJobId?: number | string | null
+  outputPath?: string | null
+  latencyMs?: number
+  guard?: Record<string, unknown> | null
+}
+
 /** GET /kb/ask/llm-config — 后端 LLM 能力探测 */
 export type KbLlmConfig = {
   available: boolean

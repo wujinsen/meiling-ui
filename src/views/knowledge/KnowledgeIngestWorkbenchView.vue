@@ -99,11 +99,26 @@ const importTabOptions = computed(() => [
 
 const canSyncTrigger = computed(() => assertAction(PERM.KB_SYNC_TRIGGER))
 
-const jobId = computed(() => {
-  const raw = route.query.id
+function pickRouteQuery(key: string): string | undefined {
+  const raw = route.query[key]
   const v = Array.isArray(raw) ? raw[0] : raw
-  return toEntityId(typeof v === 'string' ? v : undefined) ?? undefined
+  return typeof v === 'string' && v.trim() ? v.trim() : undefined
+}
+
+/** 批次详情：canonical `?id=`；DeepResearch 等外链可用别名 `?jobId=` */
+const jobId = computed(() => {
+  const fromId = toEntityId(pickRouteQuery('id'))
+  if (fromId) return fromId
+  return toEntityId(pickRouteQuery('jobId')) ?? undefined
 })
+
+function normalizeIngestJobRouteQuery() {
+  const alias = pickRouteQuery('jobId')
+  const canonical = pickRouteQuery('id')
+  if (!alias || canonical) return
+  const { jobId: _drop, ...rest } = route.query
+  void router.replace({ path: route.path, query: { ...rest, id: alias } })
+}
 
 const expressMode = computed(() => {
   const raw = route.query.express
@@ -1549,6 +1564,7 @@ watch(() => spaces.value.length, () => {
 })
 
 onMounted(async () => {
+  normalizeIngestJobRouteQuery()
   await ensureSpacesLoaded()
   initIngestSpace()
   if (jobId.value) await loadJob()

@@ -1276,6 +1276,7 @@ export async function triggerKbSyncApi(params?: {
 
 export * from './knowledge/kbWiki'
 export * from './knowledge/kbIngest'
+export * from './knowledge/kbResearch'
 
 // 平台 LLM 配置（系统管理 → 知识库 LLM）
 // ---------------------------------------------------------------------------

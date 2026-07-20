@@ -57,12 +57,24 @@ export const KNOWLEDGE_OPS_DASHBOARD_ROUTE: RouteRecordRaw = {
   },
 }
 
+/** AI-10：DeepResearch 主题调研（SSE + 可选 Ingest 回写） */
+export const KNOWLEDGE_RESEARCH_ROUTE: RouteRecordRaw = {
+  path: 'research',
+  name: 'KnowledgeResearch',
+  component: () => import('@/views/knowledge/KnowledgeResearchView.vue'),
+  meta: {
+    titleKey: 'knowledge.research.title',
+    perms: 'kb:ask:list',
+  },
+}
+
 const SUPPLEMENT_ROUTES: RouteRecordRaw[] = [
   KNOWLEDGE_DOCUMENTS_ROUTE,
   KNOWLEDGE_DOCUMENT_EDIT_ROUTE,
   KNOWLEDGE_WIKI_EDIT_ROUTE,
   KNOWLEDGE_WIKI_GOVERN_ROUTE,
   KNOWLEDGE_OPS_DASHBOARD_ROUTE,
+  KNOWLEDGE_RESEARCH_ROUTE,
 ]
 
 /** 后端未执行 06_knowledge_document_menu.sql 时，补全「文档管理」侧栏与路由 */
@@ -111,6 +123,22 @@ const KNOWLEDGE_OPS_DASHBOARD_MENU: MenuVo = {
   perms: 'kb:ops:dashboard',
   orderNum: 6,
   meta: { titleKey: 'knowledge.opsDashboard.title', icon: 'dashboard' },
+}
+
+/** 后端未执行 37_kb_research_menu.sql 时，补全「主题调研」侧栏 */
+const KNOWLEDGE_RESEARCH_MENU: MenuVo = {
+  id: 'kb-supplement-research',
+  menuName: '主题调研',
+  menuNameEn: 'Deep Research',
+  menuNameJa: 'テーマ調査',
+  name: 'KnowledgeResearch',
+  path: 'research',
+  component: 'knowledge/research/index',
+  menuType: 'C',
+  icon: 'search',
+  perms: 'kb:ask:list',
+  orderNum: 8,
+  meta: { titleKey: 'knowledge.research.title', icon: 'search' },
 }
 
 function normalizeMenuPath(path?: string) {
@@ -162,6 +190,19 @@ function hasOpsDashboardMenu(children: MenuVo[]) {
   })
 }
 
+function hasResearchMenu(children: MenuVo[]) {
+  return children.some((child) => {
+    const path = normalizeMenuPath(child.path)
+    const component = (child.component || '').replace(/\/index$/i, '')
+    return (
+      path === 'research'
+      || component === 'knowledge/research'
+      || child.name === 'KnowledgeResearch'
+      || child.routeName === 'KnowledgeResearch'
+    )
+  })
+}
+
 function sortMenuChildren(children: MenuVo[]) {
   return [...children].sort((a, b) => (a.orderNum ?? 999) - (b.orderNum ?? 999))
 }
@@ -175,6 +216,7 @@ export function mergeKnowledgeSupplementMenus(menus: MenuVo[]): MenuVo[] {
       if (!hasDocumentsMenu(children)) extras.push(KNOWLEDGE_DOCUMENTS_MENU)
       if (!hasWikiGovernMenu(children)) extras.push(KNOWLEDGE_WIKI_GOVERN_MENU)
       if (!hasOpsDashboardMenu(children)) extras.push(KNOWLEDGE_OPS_DASHBOARD_MENU)
+      if (!hasResearchMenu(children)) extras.push(KNOWLEDGE_RESEARCH_MENU)
       if (extras.length) {
         return {
           ...menu,
