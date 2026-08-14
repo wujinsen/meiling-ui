@@ -116,13 +116,16 @@ export async function getKbLintApi(spaceId?: number | string) {
   return request<KbLintReport>(`${KB_BASE}/lint${buildQuery({ spaceId })}`, { method: 'GET' })
 }
 
-/** POST /kb/lint/scan —— 扫描并落库 */
+/** POST /kb/lint/scan —— 扫描并落库（全库扫描 + 写 kb_lint_issue，大空间可能 >8s） */
 export async function scanKbLintApi(spaceId?: number | string) {
   if (USE_MOCK) {
     await delay(700)
     return ok<KbLintReport>(mockLint())
   }
-  return request<KbLintReport>(`${KB_BASE}/lint/scan${buildQuery({ spaceId })}`, { method: 'POST' })
+  return request<KbLintReport>(`${KB_BASE}/lint/scan${buildQuery({ spaceId })}`, {
+    method: 'POST',
+    timeoutMs: 120_000,
+  })
 }
 
 /** GET /kb/lint/scan/status —— 定时 scan 状态（O9，只读） */
