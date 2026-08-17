@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useKbSpace } from '@/composables/useKbSpace'
-import KbSpaceDropdown from '@/components/knowledge/KbSpaceDropdown.vue'
+import KbSpaceScopePicker from '@/components/knowledge/KbSpaceScopePicker.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -12,18 +12,11 @@ const props = withDefaults(
   { editableOnly: false, hideAllOption: false },
 )
 
-const { spaces, selectedSpaceCode, hasMultipleSpaces, setSelectedSpaceCode } = useKbSpace()
+const { spaces, hasMultipleSpaces } = useKbSpace()
 
 const displaySpaces = computed(() =>
   props.editableOnly ? spaces.value.filter((s) => s.canEdit === true) : spaces.value,
 )
-
-const selectValue = computed({
-  get: () => selectedSpaceCode.value ?? 'all',
-  set: (v: string) => {
-    setSelectedSpaceCode(v === 'all' ? null : v)
-  },
-})
 
 const visible = computed(() =>
   props.editableOnly
@@ -33,10 +26,10 @@ const visible = computed(() =>
 </script>
 
 <template>
-  <KbSpaceDropdown
+  <KbSpaceScopePicker
     v-if="visible"
-    v-model="selectValue"
-    :editable-only="editableOnly"
+    single-select
+    :writable-only="editableOnly"
     :hide-all-option="hideAllOption"
   />
 </template>

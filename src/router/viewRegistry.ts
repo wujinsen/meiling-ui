@@ -31,6 +31,8 @@ const CRM_VIEWS: Record<string, () => Promise<Component>> = {
   'system/post/index': () => import('@/views/system/PostManageView.vue'),
   'system/dept/index': () => import('@/views/system/DeptManageView.vue'),
   'system/dict/index': () => import('@/views/system/DictManageView.vue'),
+  'system/config/index': () => import('@/views/system/ConfigManageView.vue'),
+  'system/notice/index': () => import('@/views/system/NoticeManageView.vue'),
   'system/kb-llm/index': () => import('@/views/system/kb-llm/index.vue'),
   'knowledge/kb-llm/index': () => import('@/views/system/kb-llm/index.vue'),
   'system/operlog/index': () => import('@/views/system/OperLogManageView.vue'),

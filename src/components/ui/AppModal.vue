@@ -32,14 +32,14 @@ useEscapeClose(toRef(props, 'open'), () => emit('close'))
       <div
         v-if="open"
         :class="[
-          'fixed inset-0 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-8 backdrop-blur-sm',
+          'fixed inset-0 flex items-center justify-center overflow-hidden bg-black/40 p-4 backdrop-blur-sm sm:p-8',
           elevated ? 'z-[90]' : 'z-[80]',
         ]"
         @click.self="closeOnBackdrop && emit('close')"
       >
         <div
           :class="[
-            'w-full rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-surface-dark-card',
+            'flex max-h-[min(calc(100dvh-2rem),100%)] w-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-white/10 dark:bg-surface-dark-card',
             extraWide ? 'max-w-6xl' : wide ? 'max-w-3xl' : 'max-w-lg',
           ]"
           role="dialog"
@@ -48,7 +48,7 @@ useEscapeClose(toRef(props, 'open'), () => emit('close'))
         >
           <div
             v-if="!hideHeader"
-            class="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-white/5"
+            class="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-white/5"
           >
             <h3 v-if="title" class="page-title text-base">{{ title }}</h3>
             <div v-else class="flex-1" />
@@ -60,10 +60,18 @@ useEscapeClose(toRef(props, 'open'), () => emit('close'))
               ✕
             </button>
           </div>
-          <div :class="hideHeader ? 'px-6 py-6' : 'px-5 py-5'">
+          <div
+            :class="[
+              'min-h-0 flex-1 overflow-y-auto overscroll-contain',
+              hideHeader ? 'px-6 py-6' : 'px-5 py-5',
+            ]"
+          >
             <slot />
           </div>
-          <div v-if="$slots.footer" class="flex justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-white/5">
+          <div
+            v-if="$slots.footer"
+            class="flex shrink-0 justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-white/5"
+          >
             <slot name="footer" />
           </div>
         </div>

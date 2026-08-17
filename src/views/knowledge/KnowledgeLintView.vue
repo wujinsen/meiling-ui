@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { FileWarning, Link2Off, Loader2, Play, RefreshCw, ScanLine } from 'lucide-vue-next'
 import KbLintIssuesPanel from '@/components/knowledge/KbLintIssuesPanel.vue'
-import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
+import KbSpaceScopePicker from '@/components/knowledge/KbSpaceScopePicker.vue'
 import KbLintScanStatusBar from '@/components/knowledge/KbLintScanStatusBar.vue'
 import KbSyncPanel from '@/components/knowledge/KbSyncPanel.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
@@ -125,7 +125,7 @@ watch(activeTab, async (tab) => {
     </nav>
 
     <div class="kb-doc-manage-toolbar">
-      <KbSpaceSelector :hide-all-option="activeTab === 'sync'" />
+      <KbSpaceScopePicker single-select :hide-all-option="activeTab === 'sync'" />
       <template v-if="activeTab === 'lint'">
         <button type="button" class="btn-ghost shrink-0" :disabled="loading" @click="loadReport">
           <RefreshCw class="h-4 w-4" :class="loading && 'animate-spin'" /> {{ t('knowledge.lint.recheck') }}

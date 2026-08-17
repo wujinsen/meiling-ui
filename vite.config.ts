@@ -74,6 +74,8 @@ export default defineConfig(({ command }) => ({
       '/action': apiProxy(),
       '/auth': apiProxy(),
       '/dict': apiProxy(),
+      '/config': apiProxy(),
+      '/notice': apiProxy(),
       '/log': apiProxy(),
       '/operation': apiProxy(),
       '/cockpit': apiProxy(),

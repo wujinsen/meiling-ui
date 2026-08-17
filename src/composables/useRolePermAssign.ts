@@ -327,7 +327,16 @@ export function useRolePermAssign() {
   function scrollToPermPanel(menuId: string) {
     activePermMenuId.value = menuId
     const el = document.getElementById(`role-perm-panel-${menuId}`)
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const container = el?.closest('.role-perm-panels-flat') ?? el?.closest('.role-perm-pane-body--page')
+    if (!el || !container) return
+    const pad = 12
+    const eRect = el.getBoundingClientRect()
+    const cRect = container.getBoundingClientRect()
+    if (eRect.top < cRect.top + pad) {
+      container.scrollTop += eRect.top - cRect.top - pad
+    } else if (eRect.bottom > cRect.bottom - pad) {
+      container.scrollTop += eRect.bottom - cRect.bottom + pad
+    }
   }
 
   function resetState() {

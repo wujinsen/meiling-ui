@@ -3,7 +3,7 @@ import { onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import RolePermActionBlock from '@/components/system/RolePermActionBlock.vue'
 import AppCheckbox from '@/components/ui/AppCheckbox.vue'
-import { useRolePermAssign, isPageMenu } from '@/composables/useRolePermAssign'
+import { useRolePermAssign, isPageMenu, type MenuTreeNode } from '@/composables/useRolePermAssign'
 import { ChevronDown, ChevronRight, CheckSquare, FoldVertical, Square, UnfoldVertical } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -76,6 +76,14 @@ function selectPermPanel(menuId: string) {
 function onPermPanelClick(menuId: string) {
   if (props.mode === 'page') scrollToPermPanel(menuId)
   else selectPermPanel(menuId)
+}
+
+async function onMenuCheck(row: MenuTreeNode, checked: boolean) {
+  await toggleMenuCheck(row, checked)
+  // 避免 checkbox 获焦后浏览器 scrollIntoView 连带滚动弹窗遮罩层
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
 }
 
 async function handleSave() {
@@ -157,7 +165,7 @@ async function handleSave() {
               standalone
               size="sm"
               :model-value="checkedMenuIds.has(String(row.id))"
-              @update:model-value="(v) => toggleMenuCheck(row, v)"
+              @update:model-value="(v) => onMenuCheck(row, v)"
             />
             <span class="text-gray-800 dark:text-gray-200">{{ row.menuName }}</span>
             <span

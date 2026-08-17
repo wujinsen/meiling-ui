@@ -72,7 +72,7 @@ server {
     }
 
     # API（不含 login）
-    location ~ ^/(logout|captchaImage|menu|user|system|sso|dept|post|role|action|auth|dict|log|operation|cockpit|bi|persona)(/|$) {
+    location ~ ^/(logout|captchaImage|menu|user|system|sso|dept|post|role|action|auth|dict|config|notice|log|operation|cockpit|bi|persona)(/|$) {
         set $spa_fallback 0;
         if ($request_method ~ ^(GET|HEAD)$) {
             set $spa_fallback 1;

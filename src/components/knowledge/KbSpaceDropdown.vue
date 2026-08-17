@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ChevronDown } from 'lucide-vue-next'
+import { ChevronDown, Layers } from 'lucide-vue-next'
 import { useEscapeClose } from '@/composables/useEscapeClose'
 import { useKbSpace } from '@/composables/useKbSpace'
 import type { KbAccessibleSpace } from '@/types/knowledge'
@@ -19,8 +19,12 @@ const props = withDefaults(
     editableOnly?: boolean
     /** v-model 绑定 spaceCode（默认）或 spaceId */
     valueField?: 'code' | 'id'
+    /** 侧栏/工具栏紧凑尺寸（同文档浏览 KbSpaceScopePicker） */
+    compact?: boolean
+    /** 占满父容器宽度 */
+    block?: boolean
   }>(),
-  { hideAllOption: false, writableOnly: false, editableOnly: false, valueField: 'code' },
+  { hideAllOption: false, writableOnly: false, editableOnly: false, valueField: 'code', compact: false, block: false },
 )
 
 /** 单选：'all' 或空间 code/id */
@@ -138,41 +142,56 @@ onUnmounted(() => document.removeEventListener('click', onDocumentClick))
   <p v-else-if="!displaySpaces.length" class="text-xs text-gray-400">
     {{ writableOnly ? t('knowledge.docManage.noEditableSpace') : t('knowledge.accessDenied.emptyTitle') }}
   </p>
-  <div v-else ref="rootRef" class="kb-space-dropdown">
-    <button
-      type="button"
-      class="field-input kb-space-dropdown-trigger"
-      :class="open && 'kb-space-dropdown-trigger-open'"
-      :aria-expanded="open"
-      @click.stop="toggleOpen"
-    >
-      <span class="kb-space-dropdown-value truncate">{{ triggerLabel }}</span>
-      <ChevronDown
-        class="h-4 w-4 shrink-0 text-gray-400 transition"
-        :class="open && 'rotate-180'"
-      />
-    </button>
-    <div v-if="open" class="kb-space-dropdown-panel" @click.stop>
+  <div
+    v-else
+    class="kb-space-scope-picker"
+    :class="[
+      compact && 'kb-space-scope-picker--compact',
+      block && 'kb-space-scope-picker--block',
+      open && 'kb-space-scope-picker--open',
+    ]"
+  >
+    <div ref="rootRef" class="kb-space-dropdown">
       <button
-        v-if="!hideAll"
         type="button"
-        class="kb-space-dropdown-item"
-        :class="isAllActive() && 'kb-space-dropdown-item-active'"
-        @click="selectAll"
+        class="kb-space-scope-trigger"
+        :class="open && 'kb-space-scope-trigger-open'"
+        :aria-expanded="open"
+        @click.stop="toggleOpen"
       >
-        {{ t('knowledge.space.allAccessible') }}
+        <span class="kb-space-scope-trigger-icon" aria-hidden="true">
+          <Layers class="h-4 w-4" />
+        </span>
+        <span class="kb-space-scope-trigger-body">
+          <span class="kb-space-scope-trigger-value truncate">{{ triggerLabel }}</span>
+        </span>
+        <ChevronDown
+          class="kb-space-scope-chevron h-4 w-4 shrink-0 text-gray-400 transition"
+          :class="open && 'rotate-180'"
+        />
       </button>
-      <div v-if="!hideAll" class="kb-space-dropdown-divider" />
-      <button
-        v-for="s in displaySpaces"
-        :key="spaceOptionValue(s)"
-        type="button"
-        class="kb-space-dropdown-item"
-        :class="isSpaceActive(spaceOptionValue(s)) && 'kb-space-dropdown-item-active'"
-        @click="selectSpace(spaceOptionValue(s))"
-      >
-        <span class="truncate">{{ spaceLabel(s) }}</span>
-      </button>
+      <div v-if="open" class="kb-space-dropdown-panel kb-space-scope-panel" @click.stop>
+        <button
+          v-if="!hideAll"
+          type="button"
+          class="kb-space-dropdown-item"
+          :class="isAllActive() && 'kb-space-dropdown-item-active'"
+          @click="selectAll"
+        >
+          {{ t('knowledge.space.allAccessible') }}
+        </button>
+        <div v-if="!hideAll" class="kb-space-dropdown-divider" />
+        <button
+          v-for="s in displaySpaces"
+          :key="spaceOptionValue(s)"
+          type="button"
+          class="kb-space-dropdown-item"
+          :class="isSpaceActive(spaceOptionValue(s)) && 'kb-space-dropdown-item-active'"
+          @click="selectSpace(spaceOptionValue(s))"
+        >
+          <span class="truncate">{{ spaceLabel(s) }}</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>

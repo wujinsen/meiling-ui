@@ -11,7 +11,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useKbSpace } from '@/composables/useKbSpace'
 import { showToast } from '@/composables/useToast'
 import KbDocPreviewModal from '@/components/knowledge/KbDocPreviewModal.vue'
-import KbSpaceSelector from '@/components/knowledge/KbSpaceSelector.vue'
+import KbSpaceScopePicker from '@/components/knowledge/KbSpaceScopePicker.vue'
 import SegmentControl from '@/components/ui/SegmentControl.vue'
 import AppCheckbox from '@/components/ui/AppCheckbox.vue'
 import { getKbGraphApi, getKbGraphEgoApi, getKbWikiGraphApi } from '@/api/knowledge'
@@ -458,8 +458,8 @@ watch(selectedSpaceId, () => loadGraph())
   <div class="page-stack">
     <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('knowledge.graph.subtitle') }}</p>
 
-    <div class="flex flex-wrap items-center gap-2">
-      <KbSpaceSelector :hide-all-option="isWikiFileMode" />
+    <div class="kb-doc-manage-toolbar">
+      <KbSpaceScopePicker single-select :hide-all-option="isWikiFileMode" />
       <SegmentControl
         :model-value="dataSource"
         :options="sourceOptions"

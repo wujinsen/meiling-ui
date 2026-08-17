@@ -60,6 +60,20 @@ export const PERM = {
 
   DICT_REMOVE: 'system:dict:remove',
 
+  CONFIG_LIST: 'system:config:list',
+
+  CONFIG_EDIT: 'system:config:edit',
+
+  CONFIG_REMOVE: 'system:config:remove',
+
+  NOTICE_LIST: 'system:notice:list',
+
+  NOTICE_ADD: 'system:notice:add',
+
+  NOTICE_EDIT: 'system:notice:edit',
+
+  NOTICE_REMOVE: 'system:notice:remove',
+
   SYSTEM_LIST: 'system:system:list',
 
   SYSTEM_ADD: 'system:system:add',

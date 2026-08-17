@@ -1990,7 +1990,10 @@
 
   .kb-knowledge-toolbar .kb-space-scope-picker,
   .kb-ask-toolbar .kb-space-scope-picker,
-  .kb-doc-manage-toolbar .kb-space-scope-picker {
+  .kb-doc-manage-toolbar .kb-space-scope-picker,
+  .kb-knowledge-toolbar .kb-space-dropdown,
+  .kb-ask-toolbar .kb-space-dropdown,
+  .kb-doc-manage-toolbar .kb-space-dropdown {
     @apply shrink-0;
   }
 
@@ -2576,31 +2579,43 @@
   }
 
   .role-perm-pane-body--modal .role-perm-page-grid {
-    @apply min-h-[11rem] max-h-[min(42vh,340px)] flex-1 overflow-y-auto overscroll-contain;
+    @apply min-h-[9rem] max-h-[min(34vh,300px)] shrink-0 overflow-y-auto overscroll-contain;
   }
 
   .role-perm-pane-body--modal .role-perm-action-card {
-    @apply max-h-[10.5rem] shrink-0 overflow-y-auto border-t border-gray-100 bg-gray-50/40 px-3 py-2.5 dark:border-white/5 dark:bg-white/[0.02];
+    @apply min-h-[13rem] max-h-none flex-1 overflow-y-auto border-t border-gray-100 bg-gray-50/40 px-4 py-3 dark:border-white/5 dark:bg-white/[0.02];
   }
 
   .role-perm-pane-body--modal .role-perm-action-head {
-    @apply mb-2 gap-2;
+    @apply mb-3 gap-3;
   }
 
   .role-perm-pane-body--modal .role-perm-action-title {
-    @apply text-xs;
+    @apply text-sm font-semibold text-gray-900 dark:text-gray-100;
+  }
+
+  .role-perm-pane-body--modal .role-perm-action-grid--tiled {
+    @apply gap-2.5;
   }
 
   .role-perm-pane-body--modal .role-perm-action-item.app-checkbox--option {
-    @apply gap-1.5 px-2 py-1.5;
+    @apply min-h-[4.75rem] gap-2.5 px-3.5 py-3;
   }
 
   .role-perm-pane-body--modal .role-perm-action-label {
-    @apply line-clamp-1 text-[11px];
+    @apply line-clamp-2 text-sm leading-snug;
   }
 
   .role-perm-pane-body--modal .role-perm-action-code {
-    @apply text-[9px];
+    @apply text-[11px] leading-snug;
+  }
+
+  .role-perm-pane-body--modal .role-perm-action-item .app-checkbox__control {
+    @apply h-5 w-5;
+  }
+
+  .role-perm-pane-body--modal .role-perm-action-item .app-checkbox__icon {
+    @apply h-3.5 w-3.5;
   }
 
   .role-perm-layout:not(.role-perm-layout--page) .role-perm-pane:last-child {

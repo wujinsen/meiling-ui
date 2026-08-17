@@ -6,7 +6,7 @@ import { useRoute } from 'vue-router'
 
 import { useI18n } from 'vue-i18n'
 
-import { Search, Bell, Plus, Share2, Filter, ChevronDown, Upload, Sparkles, Menu } from 'lucide-vue-next'
+import { Search, Plus, Share2, Filter, ChevronDown, Upload, Sparkles, Menu } from 'lucide-vue-next'
 
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 
@@ -16,6 +16,7 @@ import LanguageSwitcher from '@/components/ui/LanguageSwitcher.vue'
 
 import AppBreadcrumb from '@/components/layout/AppBreadcrumb.vue'
 import AppUserMenu from '@/components/layout/AppUserMenu.vue'
+import NoticeFeedPanel from '@/components/layout/NoticeFeedPanel.vue'
 import SystemSwitcher from '@/components/layout/SystemSwitcher.vue'
 
 import OperationTaskHeaderBadge from '@/components/operation/OperationTaskHeaderBadge.vue'
@@ -226,11 +227,7 @@ const isPulse = computed(() => route.name === 'pulse')
 
         </button>
 
-        <button class="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5">
-
-          <Bell class="h-5 w-5" />
-
-        </button>
+        <NoticeFeedPanel />
 
         <button class="btn-primary">
 
