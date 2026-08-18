@@ -32,7 +32,7 @@ import { API_SUCCESS_CODE } from '@/types/api'
 import { OPERATION_ERR_SERVER_TASK_RUNNING } from '@/constants/operationErrors'
 import { resolveComponentRelationCount, resolveProjectRelationCount } from '@/utils/operationServerLinks'
 import { createEmptyServer, type OperationServer } from '@/types/operation'
-import { Activity, GitBranch, KeyRound, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-vue-next'
+import { Activity, GitBranch, KeyRound, Pencil, Plus, RefreshCw, Search, Stethoscope, Trash2 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -59,6 +59,7 @@ const sshServerName = ref('')
 const tagOptions = ref<string[]>([])
 
 const canSshManage = computed(() => assertAction(PERM.OP_SSH_MANAGE))
+const canAiopsDiagnose = computed(() => assertAction(PERM.OP_AIOPS_DIAGNOSE))
 
 const query = reactive({ pageNum: 1, pageSize: DEFAULT_PAGE_SIZE, serverName: '', ip: '', environment: '' as number | '', serverRole: '' as string, tag: '' as string, projectId: '', componentId: '' })
 
@@ -273,6 +274,19 @@ async function openTopology(row: OperationServer) {
   await openRelationDrawer(row, 'projects')
 }
 
+function openAiopsDiagnosis(row: OperationServer) {
+  if (!guardAction(PERM.OP_AIOPS_DIAGNOSE)) return
+  const name = row.serverName || String(row.id ?? '')
+  router.push({
+    name: 'OperationAiopsDiagnosis',
+    query: {
+      target: name,
+      title: t('operation.server.aiopsPrefillTitle', { name }),
+      ...(row.ip ? { description: t('operation.server.aiopsPrefillDesc', { ip: row.ip }) } : {}),
+    },
+  })
+}
+
 async function loadTagOptions() {
   try {
     const result = await getServerTagOptionsApi()
@@ -384,6 +398,9 @@ onMounted(() => {
                     <Activity class="h-3.5 w-3.5" />{{ checkingId === row.id ? t('operation.health.checking') : t('operation.health.check') }}
                   </button>
                   <button type="button" class="btn-action-edit" @click="openTopology(row)"><GitBranch class="h-3.5 w-3.5" />{{ t('operation.server.topology') }}</button>
+                  <button v-if="canAiopsDiagnose" type="button" class="btn-action-edit" @click="openAiopsDiagnosis(row)">
+                    <Stethoscope class="h-3.5 w-3.5" />{{ t('operation.server.aiopsDiagnose') }}
+                  </button>
                   <button v-if="canSshManage" type="button" class="btn-action-edit" @click="openSsh(row)">
                     <KeyRound class="h-3.5 w-3.5" />{{ t('operation.ssh.configure') }}
                   </button>

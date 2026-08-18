@@ -19,6 +19,7 @@ const backendTarget = 'http://127.0.0.1:8888'
 const knowledgeDirectTarget = 'http://127.0.0.1:8090'
 const knowledgeGatewayTarget = 'http://127.0.0.1:21000'
 const knowledgeTarget = process.env.VITE_KB_PROXY_GATEWAY === 'true' ? knowledgeGatewayTarget : knowledgeDirectTarget
+const aiopsTarget = process.env.VITE_AIOPS_PROXY_TARGET ?? 'http://127.0.0.1:8099'
 
 function apiProxy() {
   return {
@@ -34,6 +35,15 @@ function knowledgeProxy() {
     target: knowledgeTarget,
     changeOrigin: true,
     ...(useGateway ? {} : { rewrite: (path: string) => path.replace(/^\/KnowledgeServer/, '') }),
+    bypass: spaBypass,
+  } as const
+}
+
+function aiopsProxy() {
+  return {
+    target: aiopsTarget,
+    changeOrigin: true,
+    rewrite: (path: string) => path.replace(/^\/AiOpsServer/, ''),
     bypass: spaBypass,
   } as const
 }
@@ -82,6 +92,7 @@ export default defineConfig(({ command }) => ({
       '/bi': apiProxy(),
       '/persona': apiProxy(),
       '/KnowledgeServer': knowledgeProxy(),
+      '/AiOpsServer': aiopsProxy(),
     },
   },
   build: {

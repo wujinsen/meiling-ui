@@ -143,6 +143,13 @@ export const PERM = {
   /** 删除端口矩阵 */
   OP_PORT_MATRIX_REMOVE: 'operation:port-matrix:remove',
 
+  /** AIOps 故障诊断列表 */
+  OP_AIOPS_LIST: 'operation:aiops:list',
+  /** 发起诊断 */
+  OP_AIOPS_DIAGNOSE: 'operation:aiops:diagnose',
+  /** 审批处置预案 */
+  OP_AIOPS_APPROVE: 'operation:aiops:approve',
+
   KB_SPACE_ADMIN: 'kb:space:admin',
   KB_SPACE_ADD: 'kb:space:add',
   KB_SPACE_EDIT: 'kb:space:edit',

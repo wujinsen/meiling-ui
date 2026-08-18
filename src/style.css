@@ -452,6 +452,110 @@
     @apply dark:hover:border-white/10;
   }
 
+  .aiops-subnav {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .aiops-subnav-item {
+    @apply inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm transition;
+    @apply hover:border-brand-200 hover:bg-brand-50/40 hover:text-brand-700;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/35 focus-visible:ring-offset-1;
+    @apply dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-300;
+    @apply dark:hover:border-brand-500/35 dark:hover:bg-brand-500/10 dark:hover:text-brand-200;
+  }
+
+  .aiops-subnav-item--active {
+    @apply border-brand-400 bg-brand-600 text-white shadow-md;
+    @apply hover:border-brand-500 hover:bg-brand-600 hover:text-white;
+    @apply dark:border-brand-500 dark:bg-brand-600 dark:text-white;
+    @apply dark:hover:border-brand-400 dark:hover:bg-brand-600;
+  }
+
+  .aiops-status-badge {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide;
+  }
+
+  .aiops-status-badge--md {
+    @apply px-2.5 py-1 text-xs normal-case tracking-normal;
+  }
+
+  .aiops-status-badge--success {
+    @apply bg-emerald-500/15 text-emerald-700 dark:text-emerald-300;
+  }
+
+  .aiops-status-badge--running {
+    @apply bg-blue-500/15 text-blue-700 dark:text-blue-300;
+  }
+
+  .aiops-status-badge--pending {
+    @apply bg-amber-500/15 text-amber-700 dark:text-amber-300;
+  }
+
+  .aiops-status-badge--danger {
+    @apply bg-red-500/15 text-red-700 dark:text-red-300;
+  }
+
+  .aiops-status-badge--idle {
+    @apply bg-gray-500/10 text-gray-600 dark:text-gray-400;
+  }
+
+  .aiops-status-badge--neutral {
+    @apply bg-muted text-muted-foreground;
+  }
+
+  .aiops-section-head {
+    @apply mb-4 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white;
+  }
+
+  .aiops-section-icon {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-400;
+  }
+
+  .aiops-run-card {
+    @apply cursor-pointer rounded-lg border border-transparent px-3 py-2.5 transition;
+    @apply hover:border-brand-200 hover:bg-brand-50/40 dark:hover:border-brand-500/30 dark:hover:bg-brand-500/5;
+  }
+
+  .aiops-run-card--active {
+    @apply border-brand-300 bg-brand-50/60 ring-1 ring-brand-200/60 dark:border-brand-500/40 dark:bg-brand-500/10 dark:ring-brand-500/20;
+  }
+
+  .aiops-timeline {
+    @apply relative ml-3 border-l-2 border-gray-200 pl-5 dark:border-white/10;
+  }
+
+  .aiops-timeline-item {
+    @apply relative pb-4 last:pb-0;
+  }
+
+  .aiops-timeline-dot {
+    @apply absolute -left-[1.35rem] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-brand-500 dark:border-gray-900;
+  }
+
+  .aiops-empty {
+    @apply flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/50 px-6 py-10 text-center dark:border-white/10 dark:bg-white/[0.02];
+  }
+
+  .aiops-empty-icon {
+    @apply mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400 dark:bg-white/5 dark:text-gray-500;
+  }
+
+  .aiops-progress-track {
+    @apply h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10;
+  }
+
+  .aiops-progress-bar {
+    @apply h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-500;
+  }
+
+  .aiops-flow-steps {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .aiops-flow-step {
+    @apply rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-gray-400;
+  }
+
   .operation-topology-entity-search {
     @apply absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-100 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-gray-900;
   }

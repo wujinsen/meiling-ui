@@ -34,10 +34,34 @@ export const OPERATION_TASK_HISTORY_ROUTE: RouteRecordRaw = {
   },
 }
 
+/** AIOps 故障诊断控制台 */
+export const OPERATION_AIOPS_DIAGNOSIS_ROUTE: RouteRecordRaw = {
+  path: 'aiops',
+  name: 'OperationAiopsDiagnosis',
+  component: () => import('@/views/operation/AiopsDiagnosisView.vue'),
+  meta: {
+    titleKey: 'operation.aiops.title',
+    perms: 'operation:aiops:list',
+  },
+}
+
+/** AIOps 诊断历史列表 */
+export const OPERATION_AIOPS_RUNS_ROUTE: RouteRecordRaw = {
+  path: 'aiops-runs',
+  name: 'OperationAiopsRuns',
+  component: () => import('@/views/operation/AiopsRunsView.vue'),
+  meta: {
+    titleKey: 'operation.aiopsRuns.title',
+    perms: 'operation:aiops:list',
+  },
+}
+
 const SUPPLEMENT_ROUTES: RouteRecordRaw[] = [
   OPERATION_PORT_MATRIX_ROUTE,
   OPERATION_TOPOLOGY_ROUTE,
   OPERATION_TASK_HISTORY_ROUTE,
+  OPERATION_AIOPS_DIAGNOSIS_ROUTE,
+  OPERATION_AIOPS_RUNS_ROUTE,
 ]
 
 const OPERATION_PORT_MATRIX_MENU: MenuVo = {
@@ -83,6 +107,36 @@ const OPERATION_TASK_HISTORY_MENU: MenuVo = {
   perms: 'operation:server:list',
   orderNum: 7,
   meta: { titleKey: 'operation.taskHistory.title', icon: 'log' },
+}
+
+const OPERATION_AIOPS_DIAGNOSIS_MENU: MenuVo = {
+  id: 'op-supplement-aiops',
+  menuName: '故障诊断',
+  menuNameEn: 'Fault Diagnosis',
+  menuNameJa: '障害診断',
+  name: 'OperationAiopsDiagnosis',
+  path: 'aiops',
+  component: 'operation/aiops/index',
+  menuType: 'C',
+  icon: 'stethoscope',
+  perms: 'operation:aiops:list',
+  orderNum: 8,
+  meta: { titleKey: 'operation.aiops.title', icon: 'stethoscope' },
+}
+
+const OPERATION_AIOPS_RUNS_MENU: MenuVo = {
+  id: 'op-supplement-aiops-runs',
+  menuName: '诊断历史',
+  menuNameEn: 'Diagnosis History',
+  menuNameJa: '診断履歴',
+  name: 'OperationAiopsRuns',
+  path: 'aiops-runs',
+  component: 'operation/aiops-runs/index',
+  menuType: 'C',
+  icon: 'history',
+  perms: 'operation:aiops:list',
+  orderNum: 9,
+  meta: { titleKey: 'operation.aiopsRuns.title', icon: 'history' },
 }
 
 function normalizeMenuPath(path?: string) {
@@ -133,6 +187,32 @@ function hasTaskHistoryMenu(children: MenuVo[]) {
   })
 }
 
+function hasAiopsDiagnosisMenu(children: MenuVo[]) {
+  return children.some((child) => {
+    const path = normalizeMenuPath(child.path)
+    const component = (child.component || '').replace(/\/index$/i, '')
+    return (
+      path === 'aiops'
+      || component === 'operation/aiops'
+      || child.name === 'OperationAiopsDiagnosis'
+      || child.routeName === 'OperationAiopsDiagnosis'
+    )
+  })
+}
+
+function hasAiopsRunsMenu(children: MenuVo[]) {
+  return children.some((child) => {
+    const path = normalizeMenuPath(child.path)
+    const component = (child.component || '').replace(/\/index$/i, '')
+    return (
+      path === 'aiops-runs'
+      || component === 'operation/aiops-runs'
+      || child.name === 'OperationAiopsRuns'
+      || child.routeName === 'OperationAiopsRuns'
+    )
+  })
+}
+
 function sortMenuChildren(children: MenuVo[]) {
   return [...children].sort((a, b) => (a.orderNum ?? 999) - (b.orderNum ?? 999))
 }
@@ -146,6 +226,8 @@ export function mergeOperationSupplementMenus(menus: MenuVo[]): MenuVo[] {
       if (!hasPortMatrixMenu(children)) extras.push(OPERATION_PORT_MATRIX_MENU)
       if (!hasTopologyMenu(children)) extras.push(OPERATION_TOPOLOGY_MENU)
       if (!hasTaskHistoryMenu(children)) extras.push(OPERATION_TASK_HISTORY_MENU)
+      if (!hasAiopsDiagnosisMenu(children)) extras.push(OPERATION_AIOPS_DIAGNOSIS_MENU)
+      if (!hasAiopsRunsMenu(children)) extras.push(OPERATION_AIOPS_RUNS_MENU)
       if (extras.length) {
         return {
           ...menu,
