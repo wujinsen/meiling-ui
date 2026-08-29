@@ -28,7 +28,7 @@
 - Vue 3 + Vite + TypeScript + Tailwind
 - 状态：composables，不用 Pinia
 - 不用 Element UI
-- API 代理见 `vite.config.ts` → `http://127.0.0.1:8888`
+- API 代理见 `vite.config.ts` → `http://127.0.0.1:28101`（知识库 `28104`，网关 `28100`，AIOps `28105`）
 - 联调：`VITE_USE_MOCK_AUTH=false`
 
 ## 知识库 Ingest 三 Tab 联调
@@ -57,7 +57,7 @@ Tab3 权限：空间 **editor** + 内嵌 Sync 需 `kb:sync:trigger`（默认勾�
 ### T16f / T20f 端到端联调脚本
 
 ```powershell
-# 1) 启动 knowledge-server（8090 被占用时可改 8091，并设 KB_BASE）
+# 1) 启动 knowledge-server（28104；被占用时可改端口并设 KB_BASE）
 cd ..\moli-project-distribute\moli-knowledge\moli-knowledge-server
 $bytes = New-Object byte[] 32
 [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
@@ -66,7 +66,7 @@ mvn spring-boot:run "-Dspring-boot.run.profiles=dev" `
   "-Dspring-boot.run.workingDirectory=D:/work/moli_project/moli-project-distribute"
 
 # 2) 在 meiling-ui 根目录（另开终端）
-$env:KB_BASE = 'http://127.0.0.1:8090'   # 若改端口则同步
+$env:KB_BASE = 'http://127.0.0.1:28104'   # 若改端口则同步
 $env:KB_E2E_LLM_API_KEY = '<有效智谱/DeepSeek Key>'  # 可选，默认 dev yml 占位
 npm run kb:e2e
 npm run kb:e2e:extended   # T16f AI 写盘 · Tab3 冲突 · zhangsan rawUpload 权限

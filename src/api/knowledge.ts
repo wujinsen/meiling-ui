@@ -251,7 +251,7 @@ const MOCK_PAGES: KbPage[] = [
     updateTime: '2026-06-22 14:00:00',
     tags: ['部署', '入门'],
     content:
-      '# 本地启动指南\n\n## 前置\n- JDK 17、MySQL 8、Node 18\n\n## 步骤\n1. 启动网关（21000）\n2. 启动用户中心（8888）\n3. 启动知识库服务（8090）\n\n相关：[[services/用户中心]]',
+      '# 本地启动指南\n\n## 前置\n- JDK 17、MySQL 8、Node 18\n\n## 步骤\n1. 启动网关（28100）\n2. 启动用户中心（28101）\n3. 启动知识库服务（28104）\n\n相关：[[services/用户中心]]',
     outLinks: [{ docId: 90010, slug: 'services/用户中心', title: '用户中心', relationType: 'links_to' }],
     backLinks: [],
   },

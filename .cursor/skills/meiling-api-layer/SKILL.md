@@ -22,14 +22,14 @@ request<T>(path, { method, body, timeoutMs? }): Promise<MoliResult<T>>
 | 成功码 | `API_SUCCESS_CODE`（检查 `result.code`） |
 | 401 token | 清 session → 跳登录 |
 | 403 | `showToast` 无权限 |
-| 超时默认 | **8s**；超时文案区分 `/KnowledgeServer`（8090）与其它（8888） |
+| 超时默认 | **8s**；超时文案区分 `/KnowledgeServer`（28104）与其它（28101） |
 
 ## 两套后端
 
 | 前缀 | 服务 | 默认端口 |
 |------|------|----------|
-| `/operation` `/login` `/system` `/menu` … | user-center (moli-server) | 8888 |
-| `/KnowledgeServer/kb` | moli-knowledge-server | 8090 |
+| `/operation` `/login` `/system` `/menu` … | user-center (moli-server) | 28101 |
+| `/KnowledgeServer/kb` | moli-knowledge-server | 28104 |
 
 知识库 API 用 `KB_BASE = '/KnowledgeServer/kb'`（`src/api/knowledge/core.ts`）。
 
@@ -82,7 +82,7 @@ if (result.code !== API_SUCCESS_CODE || !result.data) {
 
 | 现象 | 原因 |
 |------|------|
-| HTML 响应 | 未反代到 8888/8090 |
+| HTML 响应 | 未反代到 28101/28104 |
 | ID 精度丢失 | 未走 bigint 安全解析 |
 | 8s 超时 | KB/部署接口未加大 `timeoutMs` |
 | 405 | nginx 未转发 API |

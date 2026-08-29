@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Seed W9 dual-server test data (user-center :8888 + MySQL moli).
+ * Seed W9 dual-server test data (user-center :28101 + MySQL moli).
  *
  * Creates:
  *   - server `w9-smoke-b` (SSH cloned from 201)
@@ -8,7 +8,7 @@
  *   - N:N links [201, w9-smoke-b] + SQL clears primary server_id for multi-machine batch
  *
  * Env:
- *   UC_BASE (default http://127.0.0.1:8888)
+ *   UC_BASE (default http://127.0.0.1:28101)
  *   MYSQL_HOST / MYSQL_PORT / MYSQL_USER / MYSQL_PASSWORD / MYSQL_DATABASE
  *   MYSQL_BIN (default Windows MySQL 8.0 path)
  */
@@ -16,7 +16,7 @@ import http from 'node:http'
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
-const UC_BASE = process.env.UC_BASE ?? 'http://127.0.0.1:8888'
+const UC_BASE = process.env.UC_BASE ?? 'http://127.0.0.1:28101'
 const USER = process.env.OP_E2E_USER ?? 'admin'
 const PASS = process.env.OP_E2E_PASS ?? '123456'
 const MYSQL_BIN =
@@ -151,9 +151,9 @@ async function ensureW9Project(token, serverA, serverB, primary) {
       projectName: W9_PROJECT_SERVICE_NAME,
       remark: `${W9_PROJECT_NAME} · W9 多机 batch 联调（勿删）`,
       environment: 1,
-      url: 'http://localhost:8888',
+      url: 'http://localhost:28101',
       deployPath: '/opt/moli/moli-server',
-      port: '8888',
+      port: '28101',
       serverId: serverA,
       serverIds: [serverA, serverB],
       serverIp: primary.ip,

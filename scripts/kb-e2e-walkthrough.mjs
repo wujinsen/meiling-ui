@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * T16f + T20f 端到端联调（knowledge-server :8090 + user-center :8888）
+ * T16f + T20f 端到端联调（knowledge-server :28104 + user-center :28101）
  *
  * KB_E2E_LLM_API_KEY — 有效 LLM Key（默认用 dev yml 智谱占位，可能已失效）
  * KB_LLM_CONFIG_SECRET — 可选，配置后平台 LLM 可入库
@@ -10,8 +10,8 @@ import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const KB_BASE = process.env.KB_BASE ?? 'http://127.0.0.1:8090'
-const UC_BASE = process.env.UC_BASE ?? 'http://127.0.0.1:8888'
+const KB_BASE = process.env.KB_BASE ?? 'http://127.0.0.1:28104'
+const UC_BASE = process.env.UC_BASE ?? 'http://127.0.0.1:28101'
 const USER = process.env.KB_E2E_USER ?? 'admin'
 const PASS = process.env.KB_E2E_PASS ?? '123456'
 const DEFAULT_GLM_KEY = 'e3cce3056c10404cb27bd7bc9bfe6cfa.h8eD7w474NtdLzM0'

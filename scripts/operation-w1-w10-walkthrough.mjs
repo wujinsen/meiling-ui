@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Operation W1–W10 API walkthrough (user-center :8888)
+ * Operation W1–W10 API walkthrough (user-center :28101)
  * Usage: node scripts/operation-w1-w10-walkthrough.mjs
  */
 import http from 'node:http'
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
-const UC_BASE = process.env.UC_BASE ?? 'http://127.0.0.1:8888'
+const UC_BASE = process.env.UC_BASE ?? 'http://127.0.0.1:28101'
 const USER = process.env.OP_E2E_USER ?? 'admin'
 const PASS = process.env.OP_E2E_PASS ?? '123456'
 const SKIP_MUTATING = process.env.OP_E2E_SKIP_MUTATING === '1'

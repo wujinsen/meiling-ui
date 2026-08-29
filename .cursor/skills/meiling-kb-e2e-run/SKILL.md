@@ -11,8 +11,8 @@ description: >-
 ## 架构
 
 - **前端**：`meiling-ui`（本仓库）
-- **KB 服务**：`../moli-project-distribute/moli-knowledge/moli-knowledge-server`（默认 `8090`）
-- **user-center**：`8888`（登录 / 菜单；非 KB 脚本主依赖）
+- **KB 服务**：`../moli-project-distribute/moli-knowledge/moli-knowledge-server`（默认 `28104`）
+- **user-center**：`28101`（登录 / 菜单；非 KB 脚本主依赖）
 
 ## 脚本
 
@@ -37,7 +37,7 @@ mvn spring-boot:run "-Dspring-boot.run.profiles=dev" `
 ## 运行 E2E（终端 2 · meiling-ui 根目录）
 
 ```powershell
-$env:KB_BASE = 'http://127.0.0.1:8090'   # 若改端口须同步
+$env:KB_BASE = 'http://127.0.0.1:28104'   # 若改端口须同步
 $env:KB_E2E_LLM_API_KEY = '<有效 Key>'    # 可选
 npm run kb:e2e
 npm run kb:e2e:extended

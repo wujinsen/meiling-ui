@@ -5,8 +5,8 @@
  */
 import http from 'node:http'
 
-const KB_BASE = process.env.KB_BASE ?? 'http://127.0.0.1:8090'
-const UC_BASE = process.env.UC_BASE ?? 'http://127.0.0.1:8888'
+const KB_BASE = process.env.KB_BASE ?? 'http://127.0.0.1:28104'
+const UC_BASE = process.env.UC_BASE ?? 'http://127.0.0.1:28101'
 
 const SPACES = [
   { id: '900000000000000001', code: 'enterprise-kb' },

@@ -82,7 +82,7 @@ VITE_USE_MOCK_KNOWLEDGE=false
 VITE_MOCK_KB_IMPORT=false
 ```
 
-KB 服务：`8090`（见 `meiling-kb-e2e-run`）
+KB 服务：`28104`（见 `meiling-kb-e2e-run`）
 
 ## 常见错误
 

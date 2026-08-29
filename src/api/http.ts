@@ -80,7 +80,7 @@ export async function request<T>(
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       const sec = Math.round(timeoutMs / 1000)
-      throw new Error(`请求超时（${sec}s）：${path.startsWith('/KnowledgeServer') ? '请确认知识库服务 (8090) 已启动' : '请确认后端 user-center (8888) 已启动'}`)
+      throw new Error(`请求超时（${sec}s）：${path.startsWith('/KnowledgeServer') ? '请确认知识库服务 (28104) 已启动' : '请确认后端 user-center (28101) 已启动'}`)
     }
     throw error
   } finally {
@@ -100,7 +100,7 @@ export async function request<T>(
     const contentType = response.headers.get('content-type') ?? ''
     if (contentType.includes('text/html')) {
       throw new Error(
-        `接口返回 HTML（HTTP ${response.status}），请检查部署：静态站点需反代 /login 等到后端 8888`,
+        `接口返回 HTML（HTTP ${response.status}），请检查部署：静态站点需反代 /login 等到后端 28101`,
       )
     }
     throw new Error('Invalid response')

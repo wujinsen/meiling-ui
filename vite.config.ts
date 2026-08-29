@@ -12,14 +12,15 @@ function spaBypass(req: IncomingMessage) {
   }
 }
 
-const backendTarget = 'http://127.0.0.1:8888'
-// const backendTarget = 'http://localhost:21000/UserCenter'
+/** 与 moli-project-distribute docs/ops/local-dev-ports.md 对齐 */
+const backendTarget = 'http://127.0.0.1:28101'
+// const backendTarget = 'http://localhost:28100/UserCenter'
 
-/** 知识库：默认直连 :8090（StripPrefix 在 rewrite 里做）；设 VITE_KB_PROXY_GATEWAY=true 走网关 :21000 */
-const knowledgeDirectTarget = 'http://127.0.0.1:8090'
-const knowledgeGatewayTarget = 'http://127.0.0.1:21000'
+/** 知识库：默认直连 :28104（StripPrefix 在 rewrite 里做）；设 VITE_KB_PROXY_GATEWAY=true 走网关 :28100 */
+const knowledgeDirectTarget = 'http://127.0.0.1:28104'
+const knowledgeGatewayTarget = 'http://127.0.0.1:28100'
 const knowledgeTarget = process.env.VITE_KB_PROXY_GATEWAY === 'true' ? knowledgeGatewayTarget : knowledgeDirectTarget
-const aiopsTarget = process.env.VITE_AIOPS_PROXY_TARGET ?? 'http://127.0.0.1:8099'
+const aiopsTarget = process.env.VITE_AIOPS_PROXY_TARGET ?? 'http://127.0.0.1:28105'
 
 function apiProxy() {
   return {

@@ -13,7 +13,7 @@
 
 **联调关系：**
 
-- 开发环境由 Vite 代理将 `/login`、`/user`、`/role`、`/system` 等路径转发到后端（默认 `http://127.0.0.1:8888`，见 `vite.config.ts`）
+- 开发环境由 Vite 代理将 `/login`、`/user`、`/role`、`/system` 等路径转发到后端（默认 `http://127.0.0.1:28101`，见 `vite.config.ts`）
 - 登录成功后保存 Shiro `token`（Session ID），后续请求在 `Authorization` 头中携带
 - 菜单路由由 `GET /menu/getRouters` 动态注册；按钮级权限由 `permissions` + `guardAction` 预检，后端接口兜底
 
@@ -38,7 +38,7 @@
 ### 环境要求
 
 - Node.js 18+
-- 后端 `moli-server` 已启动（默认端口 `8888`）
+- 后端 `moli-user-center-server` 已启动（默认端口 `28101`；端口表见 `../moli-project-distribute/docs/ops/local-dev-ports.md`）
 
 ### 安装与运行
 

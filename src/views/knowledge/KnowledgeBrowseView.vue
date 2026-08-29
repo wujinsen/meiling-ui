@@ -598,7 +598,7 @@ async function loadIndex(preferred?: string) {
       await fetchBrowseList(1)
     }
   } catch (e) {
-    loadError.value = e instanceof Error ? e.message : '加载失败，请确认知识库服务(8090)与网关(21000)已启动'
+    loadError.value = e instanceof Error ? e.message : '加载失败，请确认知识库服务(28104)与网关(28100)已启动'
   } finally {
     suppressAutoCategory.value = false
     loading.value = false

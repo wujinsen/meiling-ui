@@ -19,13 +19,13 @@ description: >-
 ## 联调
 
 ```bash
-# 后端 8888，sso.enabled: true
+# 后端 28101，sso.enabled: true
 # 前端
 VITE_USE_MOCK_AUTH=false
 npm run dev   # http://127.0.0.1:5141
 ```
 
-`vite.config.ts` 代理：`/login` `/system` `/sso` `/menu` `/user` → 8888
+`vite.config.ts` 代理：`/login` `/system` `/sso` `/menu` `/user` → 28101
 
 ## 主流程（勿破坏）
 
