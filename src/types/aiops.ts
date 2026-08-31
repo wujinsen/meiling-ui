@@ -93,6 +93,7 @@ export type AiopsRunDetail = {
   values?: {
     report?: { markdown?: string }
     status?: string
+    progress?: Array<{ phase?: string; message?: string; pct?: number }>
   }
   trace?: AiopsTraceRow[]
   trace_summary?: AiopsTraceSummary
