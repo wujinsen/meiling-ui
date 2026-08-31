@@ -73,6 +73,7 @@ const retrievalQuality = ref<KbOpsEvalSummary | null>(null)
 const driftSummary = ref<KbOpsDriftSummary | null>(null)
 const driftSummaryLoaded = ref(false)
 const driftLoading = ref(false)
+const driftFallbackError = ref('')
 const unresolvedRelationCount = ref(0)
 const syncLogTotal = ref(0)
 const dashboardSource = ref<'api' | 'legacy'>('api')
@@ -166,22 +167,50 @@ function resetExtendedFields() {
   retrievalQuality.value = null
   driftSummary.value = null
   driftSummaryLoaded.value = false
+  driftFallbackError.value = ''
   unresolvedRelationCount.value = 0
 }
 
 async function loadDriftFallback() {
   if (driftLoading.value || driftSummaryLoaded.value) return
-  const spaceIds = spaces.value.map((s) => s.id).filter((id) => id != null && id !== '')
-  if (!spaceIds.length) return
+  driftFallbackError.value = ''
+
+  let spaceIds = spaces.value
+    .map((s) => (s.id != null ? String(s.id) : ''))
+    .filter((id) => id !== '')
+
+  if (!spaceIds.length) {
+    const logsRes = await getKbSyncLogsApi({ pageNum: 1, pageSize: 20 })
+    if (logsRes.code === API_SUCCESS_CODE) {
+      const ids = new Set<string>()
+      for (const row of logsRes.data?.records ?? []) {
+        if (row.spaceId != null && String(row.spaceId) !== '') {
+          ids.add(String(row.spaceId))
+        }
+      }
+      spaceIds = [...ids]
+    }
+  }
+
+  if (!spaceIds.length) {
+    driftFallbackError.value = t('knowledge.opsDashboard.d7NoSpaceIds')
+    return
+  }
 
   driftLoading.value = true
+  const errors: string[] = []
   try {
     const reports = await Promise.all(
       spaceIds.slice(0, 5).map(async (spaceId) => {
         try {
           const res = await getKbSyncDriftApi(spaceId, 5)
-          return res.code === API_SUCCESS_CODE && res.data ? res.data : null
-        } catch {
+          if (res.code === API_SUCCESS_CODE && res.data) {
+            return res.data
+          }
+          errors.push(res.msg || `spaceId=${spaceId}`)
+          return null
+        } catch (e) {
+          errors.push(e instanceof Error ? e.message : String(e))
           return null
         }
       }),
@@ -190,6 +219,8 @@ async function loadDriftFallback() {
     if (valid.length) {
       driftSummary.value = aggregateDriftReports(valid)
       driftSummaryLoaded.value = true
+    } else if (errors.length) {
+      driftFallbackError.value = errors[0] ?? t('knowledge.opsDashboard.d7FallbackFailed')
     }
   } finally {
     driftLoading.value = false
@@ -242,7 +273,14 @@ function applyDashboardPayload(data: KbOpsDashboardVo) {
   syncLogTotal.value = mapped.openCount
   retrievalQuality.value = mapped.retrievalQuality ?? { strategies: [] }
   driftSummary.value = mapped.driftSummary ?? null
-  driftSummaryLoaded.value = data.driftSummary != null
+  driftSummaryLoaded.value = Boolean(
+    data.driftSummary
+    && (
+      (data.driftSummary.spacesScanned ?? 0) > 0
+      || (data.driftSummary.spaces?.length ?? 0) > 0
+      || data.driftSummary.checkedAt
+    ),
+  )
   unresolvedRelationCount.value = mapped.unresolvedRelationCount
   llmOps.value = mapped.llm ?? null
   const llm = data.llm
@@ -263,6 +301,9 @@ async function loadDashboard() {
   const seq = ++loadGen
   loading.value = true
   renderError.value = ''
+  driftFallbackError.value = ''
+
+  await ensureSpacesLoaded().catch(() => undefined)
 
   const dashPromise = getKbOpsDashboardApi({ trendDays: 7 })
   void dashPromise.catch(() => undefined)
@@ -726,7 +767,12 @@ if (canView.value) {
               class="mb-4 flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-700 dark:border-white/10 dark:bg-white/5 dark:text-gray-300"
             >
               <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" />
-              <p>{{ t('knowledge.opsDashboard.d7NotLoadedHint') }}</p>
+              <div>
+                <p>{{ t('knowledge.opsDashboard.d7NotLoadedHint') }}</p>
+                <p v-if="driftFallbackError" class="mt-1 text-rose-600 dark:text-rose-400">
+                  {{ driftFallbackError }}
+                </p>
+              </div>
             </div>
             <div
               v-else-if="driftNoSpacesScanned"
