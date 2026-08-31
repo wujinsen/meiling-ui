@@ -59,6 +59,7 @@ type LlmStatusKind = 'disabled' | 'ready' | 'needsKey'
 
 const form = reactive({
   enabled: false,
+  callLogEnabled: true,
   provider: 'glm' as LlmProvider,
   baseUrl: '',
   model: '',
@@ -88,6 +89,7 @@ const isFormDirty = computed(() => {
     || form.model !== (loaded.model ?? '')
     || form.temperature !== (loaded.temperature ?? 0.3)
     || form.timeoutSeconds !== (loaded.timeoutSeconds ?? 90)
+    || form.callLogEnabled !== (loaded.callLogEnabled ?? true)
     || JSON.stringify(form.extraModels) !== JSON.stringify(loaded.extraModels ?? [])
     || Boolean(apiKeyInput.value.trim())
   )
@@ -132,6 +134,7 @@ function applyConfig(data: KbPlatformLlmConfig) {
   }
   skipProviderPreset.value = true
   form.enabled = coerceKbLlmEnabled(data.enabled)
+  form.callLogEnabled = data.callLogEnabled ?? true
   form.provider = (PROVIDER_OPTIONS.includes(data.provider as LlmProvider)
     ? data.provider
     : 'custom') as LlmProvider
@@ -150,6 +153,7 @@ function applyConfig(data: KbPlatformLlmConfig) {
 function buildSavePayload(clearApiKey = false): KbPlatformLlmConfigSaveRequest {
   const payload: KbPlatformLlmConfigSaveRequest = {
     enabled: coerceKbLlmEnabled(form.enabled),
+    callLogEnabled: form.callLogEnabled,
     provider: form.provider,
     baseUrl: form.baseUrl.trim(),
     model: form.model.trim(),
@@ -337,6 +341,18 @@ async function onEnabledChange(next: boolean) {
   })
 }
 
+async function onCallLogEnabledChange(next: boolean) {
+  if (saving.value) return
+  const previous = form.callLogEnabled
+  form.callLogEnabled = next
+  const ok = await persistConfig({
+    successToast: t(next ? 'system.kbLlm.callLogEnabledSaveOk' : 'system.kbLlm.callLogDisabledSaveOk'),
+  })
+  if (!ok) {
+    form.callLogEnabled = previous
+  }
+}
+
 async function clearDbKey() {
   if (!guardAction(PERM.KB_PLATFORM_LLM)) return
   if (!(await confirm({ message: t('system.kbLlm.action.clearKeyConfirm') }))) return
@@ -467,6 +483,33 @@ onMounted(loadConfig)
                   {{ t('system.kbLlm.toggleAutoSaveHint') }}
                 </span>
               </div>
+            </FormField>
+          </div>
+
+          <div class="form-grid-row">
+            <FormField :label="t('system.kbLlm.field.callLogEnabled')" horizontal class="form-field-span-2">
+              <div class="flex flex-wrap items-center gap-3">
+                <AppSwitch
+                  v-model="form.callLogEnabled"
+                  :label="t('system.kbLlm.field.callLogEnabled')"
+                  :disabled="saving"
+                  confirm-before-change
+                  @change="onCallLogEnabledChange"
+                />
+                <span class="text-sm text-gray-500 dark:text-gray-400">
+                  {{
+                    form.callLogEnabled
+                      ? t('system.kbLlm.callLogEnabledOn')
+                      : t('system.kbLlm.callLogEnabledOff')
+                  }}
+                </span>
+                <span class="text-xs text-gray-400 dark:text-gray-500">
+                  {{ t('system.kbLlm.callLogToggleAutoSaveHint') }}
+                </span>
+              </div>
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('system.kbLlm.field.callLogEnabledHint') }}
+              </p>
             </FormField>
           </div>
 

@@ -52,6 +52,17 @@ function parseResponseJson<T>(text: string): T {
   return JSON.parse(safe) as T
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
+function timeoutError(path: string, timeoutMs: number): Error {
+  const sec = Math.round(timeoutMs / 1000)
+  return new Error(
+    `请求超时（${sec}s）：${path.startsWith('/KnowledgeServer') ? '请确认知识库服务 (28104) 已启动' : '请确认后端 user-center (28101) 已启动'}`,
+  )
+}
+
 export async function request<T>(
   path: string,
   options: RequestInit & { timeoutMs?: number } = {},
@@ -71,39 +82,39 @@ export async function request<T>(
   const timer = window.setTimeout(() => controller.abort(), timeoutMs)
 
   let response: Response
+  let result!: MoliResult<T>
   try {
-    response = await fetch(`${BASE_URL}${path}`, {
-      ...fetchOptions,
-      headers,
-      signal: controller.signal,
-    })
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      const sec = Math.round(timeoutMs / 1000)
-      throw new Error(`请求超时（${sec}s）：${path.startsWith('/KnowledgeServer') ? '请确认知识库服务 (28104) 已启动' : '请确认后端 user-center (28101) 已启动'}`)
+    try {
+      response = await fetch(`${BASE_URL}${path}`, {
+        ...fetchOptions,
+        headers,
+        signal: controller.signal,
+      })
+    } catch (error) {
+      if (isAbortError(error)) throw timeoutError(path, timeoutMs)
+      throw error
     }
-    throw error
+
+    try {
+      const text = await response.text()
+      result = parseResponseJson<MoliResult<T>>(text)
+    } catch (error) {
+      if (isAbortError(error)) throw timeoutError(path, timeoutMs)
+      if (response.status === 405) {
+        throw new Error(
+          '接口 405：nginx 未将 API 转发到后端。请配置反向代理（见 deploy/nginx.conf.example），或构建时设置 VITE_API_BASE_URL 指向 moli-server',
+        )
+      }
+      const contentType = response.headers.get('content-type') ?? ''
+      if (contentType.includes('text/html')) {
+        throw new Error(
+          `接口返回 HTML（HTTP ${response.status}），请检查部署：静态站点需反代 /login 等到后端 28101`,
+        )
+      }
+      throw new Error('Invalid response')
+    }
   } finally {
     window.clearTimeout(timer)
-  }
-
-  let result: MoliResult<T>
-  try {
-    const text = await response.text()
-    result = parseResponseJson<MoliResult<T>>(text)
-  } catch {
-    if (response.status === 405) {
-      throw new Error(
-        '接口 405：nginx 未将 API 转发到后端。请配置反向代理（见 deploy/nginx.conf.example），或构建时设置 VITE_API_BASE_URL 指向 moli-server',
-      )
-    }
-    const contentType = response.headers.get('content-type') ?? ''
-    if (contentType.includes('text/html')) {
-      throw new Error(
-        `接口返回 HTML（HTTP ${response.status}），请检查部署：静态站点需反代 /login 等到后端 28101`,
-      )
-    }
-    throw new Error('Invalid response')
   }
 
   if (result.code === API_TOKEN_INVALID_CODE) {

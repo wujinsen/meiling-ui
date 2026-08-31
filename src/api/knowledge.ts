@@ -28,6 +28,7 @@ import type {
   KbTagSaveRequest,
   KbIndexTypesResult,
   KbMetaKbTypeOption,
+  KbOpsDriftSpaceSample,
   KbPlatformLlmConfig,
   KbPlatformLlmConfigSaveRequest,
   KbPlatformLlmConfigTestRequest,
@@ -908,7 +909,7 @@ export {
   updateKbLintIssueApi,
 } from './knowledge/kbLint'
 
-export { getKbOpsDashboardApi } from './knowledge/kbOps'
+export { getKbOpsDashboardApi, getKbOpsEvalRunsApi, getKbOpsEvalTrendApi } from './knowledge/kbOps'
 
 // ---------------------------------------------------------------------------
 // 3.2 问答历史与反馈
@@ -1249,6 +1250,28 @@ export async function getKbSyncLogsApi(params?: {
   return request<MoliPage<KbSyncLog>>(`${KB_BASE}/sync/logs${buildQuery(params as Record<string, string | number | undefined>)}`, {
     method: 'GET',
   })
+}
+
+/** GET /kb/sync/drift — 单空间 wiki↔DB 漂移（Dashboard D7 回退） */
+export async function getKbSyncDriftApi(spaceId: number | string, sampleLimit = 5) {
+  if (USE_MOCK) {
+    await delay(120)
+    return ok<KbOpsDriftSpaceSample>({
+      spaceId,
+      spaceCode: 'enterprise-kb',
+      wikiPageCount: 12,
+      dbKbPageCount: 12,
+      inSyncCount: 10,
+      wikiOnlyCount: 1,
+      dbOnlyCount: 0,
+      hashMismatchCount: 1,
+      drifted: true,
+    })
+  }
+  return request<KbOpsDriftSpaceSample>(
+    `${KB_BASE}/sync/drift${buildQuery({ spaceId, sampleLimit })}`,
+    { method: 'GET', timeoutMs: 20_000 },
+  )
 }
 
 export async function triggerKbSyncApi(params?: {

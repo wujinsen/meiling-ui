@@ -428,9 +428,12 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 | D2 待处理工单 | 首选 `lintSummary.openByType`；降级 `GET /kb/lint/issues?status=0&pageNum=1&pageSize=20` |
 | D3 LLM 可用 | 首选 `dashboard.llm`；映射为 `KbLlmConfig` 指示灯 |
 | D4 断链 Top | 首选 `lintSummary.topBrokenLinks`；降级 `topBrokenLinkIssues` |
+| **D5 检索质量** | `retrievalQuality.strategies[]`；空态提示 `eval_ask.py --emit-db`；「查看历史」懒加载 `GET /kb/ops/eval-runs` + `eval-trend` |
+| **D6 LLM 成本** | 同 D3 卡片：`totalCalls` / `cacheHitRate` / `estimatedCostUsd` / `costTrend`；无调用日志时「未启用调用日志」 |
+| **D7 Wiki↔DB 漂移** | `driftSummary` 四格 + 最多 5 条空间采样；`unresolvedRelationCount` 链图谱 |
 
 **实现**：`src/api/knowledge/kbOps.ts` · `getKbOpsDashboardApi` · `applyKbOpsDashboardVo()`。  
-**降级条件**：8090 缺 `kb_llm_call_log` 等导致 dashboard 500 时自动走 legacy 三请求。  
+**加载策略**：先走 legacy 三请求渲染 D1–D4，避免 `driftSummary` 扫描把聚合接口拖死导致整页转圈；聚合接口稍后返回时再补 D5/D6/D7。超时/500/映射失败则停留在 legacy。  
 **详稿**：[p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §3。
 
 菜单 SQL：`docs/sql/13_kb_ops_dashboard_menu.sql`；未执行时由 `knowledgeSupplementRoutes` 补侧栏。
@@ -463,6 +466,7 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 | T19d | LLM | 见 kb-llm-platform | P1 | ✅ |
 | T20f | Ingest | 见 kb-import-entry §10 | P1 | ✅ |
 | D1–D4 | Dashboard | §8 四区块 | P2 | ✅ |
+| **D5–D7** | Dashboard | 检索质量 / LLM 成本 / 漂移 | P2 | ✅ KBOPS-9 二期 |
 | O5 | Lint 工单 | issueType / status / 未指派筛选 | P2 | ✅ |
 | O6 | Lint 工单 | 指派人列 + PUT assigneeId | P2 | ✅ |
 | O7 | Lint 工单 | 多选批量（`PUT /kb/lint/issues/batch`） | P2 | ✅ |
@@ -489,7 +493,7 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 | `src/components/knowledge/govern/GovernFixPanel.vue` | W2/W4/W5；LLM 关闭时 AI/一键禁用 + 仅-AI 选中提示 |
 | `src/components/knowledge/govern/GovernSyncPanel.vue` | 治理页 Sync（可复用 Ops 面板） |
 | `src/views/system/kb-llm/index.vue` | T19d |
-| `src/views/knowledge/KnowledgeOpsDashboardView.vue` | KBOPS-9 运维看板 D1–D4 |
+| `src/views/knowledge/KnowledgeOpsDashboardView.vue` | KBOPS-9 运维看板 D1–D7 |
 | `src/utils/kbOpsDashboard.ts` | Dashboard 前端聚合（Sync 趋势 / 工单 / 断链 Top N） |
 | `src/components/knowledge/KbOpsSyncTrendChart.vue` | D1 近 7 日堆叠柱状图 |
 | `scripts/kb-e2e-walkthrough.mjs` | T19d + T16f + T20f 主链路 E2E（`npm run kb:e2e`） |
@@ -535,6 +539,7 @@ getKbLintScanStatusApi(spaceId?)  // GET /kb/lint/scan/status
 
 | 日期 | 说明 |
 |------|------|
+| 2026-08-31 | **KBOPS-9 二期**：看板补 D5 检索质量 / D6 LLM 成本 / D7 Wiki↔DB 漂移；eval-runs/trend 仅点开懒加载 |
 | 2026-07-13 | **KB 点验 + P3**：`kb:prd` **17/17**（含 REG-llm-off）；KBOPS-2 dashboard · KB-LINT 分页收紧 |
 | 2026-07-12（晚） | O4 fail-only 筛选；`kbLint` 分页信任 + scan/status 404-only 降级；`GovernFixPanel` LLM-off 提示；`kb:prd` 探针扩展；浏览多选 facet 文档 §7 结案 |
 | 2026-07-12 | O7 改调 `PUT /kb/lint/issues/batch`（去掉并行 PUT 兜底）；§3.7.1/§10 对齐；与 distribute `TASKS.md` 同步 |

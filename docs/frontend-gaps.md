@@ -73,7 +73,7 @@
 | 任务 ID | 优先级 | 前端落点 | 说明 | 阻塞 |
 |---------|--------|----------|------|------|
 | **KB-LINT-1/2** | P3 | `kbLint.ts` · `KbLintIssuesPanel.vue` | ✅ 服务端分页信任；裸数组仅 mock/降级路径客户端 slice | ✅ 2026-07-13 |
-| **KBOPS-2** | P3 | `KnowledgeOpsDashboardView.vue` | ✅ 首选 `GET /kb/ops/dashboard`；失败降级 3 请求 | ✅ 2026-07-13 |
+| **KBOPS-2** | P3 | `KnowledgeOpsDashboardView.vue` | ✅ 先 legacy 渲染 D1–D4，聚合接口稍后补 **D5/D6/D7**（避免 drift 扫描卡死转圈） | ✅ 2026-08-31 |
 
 详见 [api/knowledge-ops-frontend.md](api/knowledge-ops-frontend.md) §8 · [product/knowledge-ops-prd.md](product/knowledge-ops-prd.md) · [api/p3-optional-backend-handoff.md](api/p3-optional-backend-handoff.md) §2–§3。
 

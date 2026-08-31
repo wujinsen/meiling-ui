@@ -178,7 +178,7 @@ GET /kb/lint/issues?pageNum=1&pageSize=20&unassignedOnly=true&spaceId=&status=0
 
 **详稿**：[p3-optional-backend-handoff.md](p3-optional-backend-handoff.md) §3
 
-`KnowledgeOpsDashboardView` 首选 **`GET /kb/ops/dashboard`**（`getKbOpsDashboardApi`）；若 8090 缺 `kb_llm_call_log` 等导致 500，自动降级原 3 请求聚合。
+`KnowledgeOpsDashboardView` 首选 **`GET /kb/ops/dashboard`**（`getKbOpsDashboardApi`）；若 8090 缺 `kb_llm_call_log` 等导致 500，自动降级原 3 请求聚合。D5/D6/D7 使用同一次 dashboard 响应；`eval-trend` / `eval-runs` 仅用户点开「查看历史」时请求。
 
 ---
 

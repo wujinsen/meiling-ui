@@ -24,6 +24,13 @@ export function kbWikiGovernRoute(spaceId?: string | number | null) {
   return { path: '/knowledge/wiki-govern', query }
 }
 
+export function kbGraphRoute(spaceId?: string | number | null) {
+  const query: Record<string, string> = {}
+  const sid = spaceId != null ? String(spaceId) : ''
+  if (sid) query.spaceId = sid
+  return { path: '/knowledge/graph', query }
+}
+
 /** 平台 LLM 配置（菜单 SQL：parent 900 · path kb-llm · name KbPlatformLlmSettings） */
 export function kbLlmSettingsRoute() {
   return { name: 'KbPlatformLlmSettings' as const }

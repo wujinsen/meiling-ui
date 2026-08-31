@@ -211,6 +211,8 @@ export type KbLlmConfig = {
 /** GET /kb/platform/llm-config — 平台 LLM 管理视图 */
 export type KbPlatformLlmConfig = {
   enabled: boolean
+  /** 是否记录 LLM 调用（运维看板 D6 成本统计） */
+  callLogEnabled: boolean
   provider: string
   baseUrl: string
   apiKeyConfigured: boolean
@@ -231,6 +233,7 @@ export type KbPlatformLlmConfig = {
 /** PUT /kb/platform/llm-config */
 export type KbPlatformLlmConfigSaveRequest = {
   enabled: boolean
+  callLogEnabled: boolean
   provider: string
   baseUrl: string
   /** 空字符串 = 不修改已有 key */
@@ -1208,14 +1211,123 @@ export type KbOpsLintSummary = {
   topBrokenLinks?: string[]
 }
 
+export type KbOpsLlmCallTrendPoint = {
+  date: string
+  successCalls?: number
+  failCalls?: number
+  /** 兼容旧字段 */
+  count?: number
+}
+
+export type KbOpsLlmCostTrendPoint = {
+  date: string
+  estimatedCostUsd?: number
+  cacheHits?: number
+  calls?: number
+}
+
 export type KbOpsLlmSummary = {
   enabled?: boolean
   available?: boolean
   provider?: string
   model?: string
   source?: string
-  successRate?: number
+  callLogEnabled?: boolean
+  trendDays?: number
   totalCalls?: number
+  successCalls?: number
+  failCalls?: number
+  successRate?: number
+  failRate?: number
+  callsByScene?: Record<string, number>
+  callTrend?: KbOpsLlmCallTrendPoint[]
+  cacheHitRate?: number
+  estimatedCostUsd?: number
+  failoverCount?: number
+  estimatedCostSavedUsd?: number
+  estimatedTokensSaved?: number
+  costTrend?: KbOpsLlmCostTrendPoint[]
+}
+
+export type KbOpsEvalStrategySummary = {
+  strategy: string
+  hit3?: number
+  mrr?: number
+  hit1?: number
+  hit5?: number
+  baselineHit3?: number
+  deltaHit3?: number
+  gatePass?: boolean
+  latestRunAt?: string
+  errors?: number
+  p95Ms?: number
+}
+
+export type KbOpsEvalSummary = {
+  goldenTotal?: number
+  strategies?: KbOpsEvalStrategySummary[]
+}
+
+export type KbOpsEvalTrendPoint = {
+  date: string
+  strategy?: string
+  hit3?: number
+  mrr?: number
+}
+
+export type KbOpsEvalRun = {
+  id?: number | string
+  runAt?: string
+  strategy?: string
+  useLlm?: number
+  goldenTotal?: number
+  answerableTotal?: number
+  negativeTotal?: number
+  errors?: number
+  hit1?: number
+  hit3?: number
+  hit5?: number
+  hit8?: number
+  mrr?: number
+  coverage?: number
+  refusalAccuracy?: number
+  p95Ms?: number
+  byDifficultyJson?: string
+  reportPath?: string
+  gitSha?: string
+  gatePass?: boolean
+  createTime?: string
+}
+
+export type KbOpsDriftSpaceSample = {
+  spaceId?: number | string
+  spaceCode?: string
+  wikiDir?: string
+  checkedAt?: string
+  wikiPageCount?: number
+  dbKbPageCount?: number
+  inSyncCount?: number
+  wikiOnlyCount?: number
+  dbOnlyCount?: number
+  hashMismatchCount?: number
+  drifted?: boolean
+  wikiOnly?: Array<{ detail?: string; slug?: string }>
+}
+
+export type KbOpsDriftSummary = {
+  drifted?: boolean
+  wikiOnlyTotal?: number
+  dbOnlyTotal?: number
+  hashMismatchTotal?: number
+  inSyncTotal?: number
+  wikiPageTotal?: number
+  dbKbPageTotal?: number
+  scanFailedCount?: number
+  scanEmpty?: boolean
+  spacesWithDrift?: number
+  spacesScanned?: number
+  checkedAt?: string
+  spaces?: KbOpsDriftSpaceSample[]
 }
 
 export type KbOpsDashboardVo = {
@@ -1224,4 +1336,6 @@ export type KbOpsDashboardVo = {
   lintSummary?: KbOpsLintSummary
   unresolvedRelationCount?: number
   llm?: KbOpsLlmSummary
+  retrievalQuality?: KbOpsEvalSummary
+  driftSummary?: KbOpsDriftSummary
 }

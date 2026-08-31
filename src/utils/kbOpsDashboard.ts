@@ -1,4 +1,14 @@
-import type { KbAccessibleSpace, KbLintIssue, KbOpsDashboardVo, KbOpsLintSummary, KbOpsSyncTrendPoint, KbSyncLog } from '@/types/knowledge'
+import type {
+  KbAccessibleSpace,
+  KbLintIssue,
+  KbOpsDashboardVo,
+  KbOpsDriftSummary,
+  KbOpsEvalSummary,
+  KbOpsLintSummary,
+  KbOpsLlmSummary,
+  KbOpsSyncTrendPoint,
+  KbSyncLog,
+} from '@/types/knowledge'
 import { isKbSyncLogFailed } from '@/utils/kbSyncStatus'
 
 export type KbSyncTrendDay = {
@@ -46,9 +56,14 @@ export function buildLastNDayKeys(days = 7, now = new Date()): string[] {
   return keys
 }
 
-export function formatDayLabel(dateKey: string, locale = 'zh-CN'): string {
-  const [y, m, d] = dateKey.split('-').map(Number)
-  const dt = new Date(y, m - 1, d)
+export function formatDayLabel(dateKey?: string | null, locale = 'zh-CN'): string {
+  if (dateKey == null || dateKey === '') return ''
+  const key = String(dateKey)
+  const m = key.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  const dt = m
+    ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+    : new Date(key)
+  if (Number.isNaN(dt.getTime())) return key
   return dt.toLocaleDateString(locale, { month: 'numeric', day: 'numeric' })
 }
 
@@ -215,5 +230,142 @@ export function applyKbOpsDashboardVo(
   const pendingBuckets = mapOpsDashboardPendingIssues(vo.lintSummary, spaces, allSpacesLabel)
   const brokenTop = mapOpsDashboardBrokenTop(vo.lintSummary?.topBrokenLinks, allSpacesLabel)
   const openCount = Number(vo.lintSummary?.openCount) || pendingBuckets.reduce((s, r) => s + r.count, 0)
-  return { syncTrend, pendingBuckets, brokenTop, openCount, llm: vo.llm }
+  return {
+    syncTrend,
+    pendingBuckets,
+    brokenTop,
+    openCount,
+    llm: vo.llm,
+    retrievalQuality: vo.retrievalQuality,
+    driftSummary: vo.driftSummary,
+    unresolvedRelationCount: Number(vo.unresolvedRelationCount) || 0,
+  }
+}
+
+export function toNumberOrNull(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+/** hit@k / 成功率：后端 0~1 → 百分比 1 位小数 */
+export function formatHitPct(value: unknown): string {
+  const n = toNumberOrNull(value)
+  if (n == null) return '—'
+  return `${(n * 100).toFixed(1)}%`
+}
+
+export function formatMrr(value: unknown): string {
+  const n = toNumberOrNull(value)
+  if (n == null) return '—'
+  return n.toFixed(3)
+}
+
+export function formatDeltaHit(value: unknown): string {
+  const n = toNumberOrNull(value)
+  if (n == null) return '—'
+  const pct = n * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(1)}pp`
+}
+
+export function formatUsd(value: unknown): string {
+  const n = toNumberOrNull(value)
+  if (n == null) return '—'
+  return `$${n.toFixed(4)}`
+}
+
+export function hasRetrievalEvalData(summary?: KbOpsEvalSummary | null): boolean {
+  return Boolean(summary?.strategies?.some((row) => row.latestRunAt || row.hit3 != null))
+}
+
+/** 有调用日志字段时展示 D6；legacy / 缺表仅基础 LLM 配置时降级 */
+export function hasLlmCallLogMetrics(llm?: KbOpsLlmSummary | null): boolean {
+  if (!llm) return false
+  if (llm.callLogEnabled === false) return false
+  if (llm.callLogEnabled === true) return true
+  return (
+    llm.totalCalls != null
+    || llm.successCalls != null
+    || llm.cacheHitRate != null
+    || llm.estimatedCostUsd != null
+    || (llm.costTrend?.length ?? 0) > 0
+    || (llm.callsByScene != null && Object.keys(llm.callsByScene).length > 0)
+  )
+}
+
+export function driftSpaceSamples(summary?: KbOpsDriftSummary | null, limit = 5) {
+  return (summary?.spaces ?? []).slice(0, limit)
+}
+
+/** 汇总 wiki/DB 页数（优先后端合计，旧版从 spaces 累加） */
+export function resolveDriftPageTotals(summary?: KbOpsDriftSummary | null): { wiki: number; db: number } {
+  if (!summary) return { wiki: 0, db: 0 }
+  if (summary.wikiPageTotal != null || summary.dbKbPageTotal != null) {
+    return {
+      wiki: Number(summary.wikiPageTotal) || 0,
+      db: Number(summary.dbKbPageTotal) || 0,
+    }
+  }
+  return (summary.spaces ?? []).reduce(
+    (acc, row) => ({
+      wiki: acc.wiki + (Number(row.wikiPageCount) || 0),
+      db: acc.db + (Number(row.dbKbPageCount) || 0),
+    }),
+    { wiki: 0, db: 0 },
+  )
+}
+
+export function driftScanFailureDetail(space: KbOpsDriftSpaceSample): string | null {
+  const detail = space.wikiOnly?.[0]?.detail?.trim()
+  return detail?.startsWith('扫描失败:') ? detail.replace(/^扫描失败:\s*/, '') : detail || null
+}
+
+function isDriftScanFailedSpace(space: KbOpsDriftSpaceSample): boolean {
+  const detail = space.wikiOnly?.[0]?.detail?.trim()
+  return Boolean(detail?.startsWith('扫描失败'))
+}
+
+/** 将 GET /kb/sync/drift 多空间结果聚合为 dashboard driftSummary 形态 */
+export function aggregateDriftReports(spaces: KbOpsDriftSpaceSample[]): KbOpsDriftSummary {
+  const summary: KbOpsDriftSummary = {
+    spaces,
+    spacesScanned: spaces.length,
+    spacesWithDrift: 0,
+    wikiOnlyTotal: 0,
+    dbOnlyTotal: 0,
+    hashMismatchTotal: 0,
+    inSyncTotal: 0,
+    wikiPageTotal: 0,
+    dbKbPageTotal: 0,
+    scanFailedCount: 0,
+    scanEmpty: false,
+    drifted: false,
+    checkedAt: new Date().toISOString(),
+  }
+  for (const row of spaces) {
+    summary.wikiOnlyTotal! += Number(row.wikiOnlyCount) || 0
+    summary.dbOnlyTotal! += Number(row.dbOnlyCount) || 0
+    summary.hashMismatchTotal! += Number(row.hashMismatchCount) || 0
+    summary.inSyncTotal! += Number(row.inSyncCount) || 0
+    summary.wikiPageTotal! += Number(row.wikiPageCount) || 0
+    summary.dbKbPageTotal! += Number(row.dbKbPageCount) || 0
+    if (isDriftScanFailedSpace(row)) {
+      summary.scanFailedCount! += 1
+    }
+    if (row.drifted) {
+      summary.spacesWithDrift! += 1
+    }
+  }
+  summary.drifted = Boolean(
+    (summary.spacesWithDrift ?? 0) > 0
+    || (summary.wikiOnlyTotal ?? 0) + (summary.dbOnlyTotal ?? 0) + (summary.hashMismatchTotal ?? 0) > 0,
+  )
+  summary.scanEmpty = Boolean(
+    (summary.spacesScanned ?? 0) > 0
+    && (summary.scanFailedCount ?? 0) === 0
+    && (summary.wikiPageTotal ?? 0) === 0
+    && (summary.dbKbPageTotal ?? 0) === 0,
+  )
+  return summary
 }
